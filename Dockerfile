@@ -1,46 +1,58 @@
-FROM python:3.9-slim
+# Railway uchun Dockerfile
+FROM python:3.11-slim
 
-# Playwright dependencies
+# Kerakli system packages o'rnatish
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
-    ca-certificates \
-    procps \
+    unzip \
+    curl \
+    fonts-liberation \
+    libappindicator3-1 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libatspi2.0-0 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    xdg-utils \
     libxss1 \
     libgconf-2-4 \
-    libxrandr2 \
-    libasound2 \
-    libpangocairo-1.0-0 \
-    libatk1.0-0 \
-    libcairo-gobject2 \
-    libgtk-3-0 \
-    libgdk-pixbuf2.0-0 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrender1 \
-    libxtst6 \
-    libglib2.0-0 \
-    libnss3 \
-    libxss1 \
-    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
+# Google Chrome o'rnatish
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
+
+# Working directory yaratish
 WORKDIR /app
 
-# Requirements o'rnatish
+# Requirements faylini copy qilish va dependencies o'rnatish
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Playwright browserlarini o'rnatish
-RUN playwright install chromium
-RUN playwright install-deps chromium
+# Playwright browser o'rnatish
+RUN python -m playwright install chromium
+RUN python -m playwright install-deps
 
-# Kodingizni copy qilish
+# Barcha fayllarni copy qilish
 COPY . .
 
-# Botni ishga tushirish
+# Port expose qilish (Railway uchun)
+EXPOSE $PORT
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV DISPLAY=:99
+
+# Bot ishga tushirish
 CMD ["python", "main.py"]
