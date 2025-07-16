@@ -799,7 +799,7 @@ class InstagramMonitoringSystem:
                 ]
                 
                 self.browser = await playwright.chromium.launch(
-                    headless=False,
+                    headless=True,
                     args=[
                         '--no-sandbox',
                         '--disable-blink-features=AutomationControlled',
