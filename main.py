@@ -1390,7 +1390,7 @@ async def main():
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=False,
+            headless=True,
             channel='chrome',
             args=[
                 '--start-maximized',
@@ -1694,3 +1694,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
