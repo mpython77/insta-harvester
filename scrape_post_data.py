@@ -111,51 +111,53 @@ class InstagramPostDataScraper:
 
     def _get_likes_count(self):
         """Likes sonini olish"""
-        # Debug: "likes" matni bormi tekshirish
+        # Method 1: Link orqali (to'g'ri usul - a[href*="/liked_by/"])
         try:
-            page_content = self.page.content()
-            if ' likes</span>' not in page_content and '>likes<' not in page_content:
-                # Likes ko'rsatilmagan post (likes yashirilgan)
-                return 'Hidden'
-        except Exception:
-            pass
-
-        # Method 1: "likes" so'zi bor span ichidan raqamni topish
-        try:
-            # "likes" matnini o'z ichiga olgan span
-            likes_span = self.page.locator('span:has-text("likes")').first
-            # Count qilish (nechta "likes" span bor)
-            likes_count = self.page.locator('span:has-text("likes")').count()
-
-            # Agar ko'p bo'lsa, to'g'risini topish
-            for i in range(likes_count):
-                try:
-                    span = self.page.locator('span:has-text("likes")').nth(i)
-                    number = span.locator('span.html-span').first
-                    text = number.inner_text(timeout=2000)
-                    # Raqam ekanligini tekshirish
-                    if text.replace(',', '').isdigit():
-                        return text.strip().replace(',', '')
-                except Exception:
-                    continue
+            # <a href="/p/.../liked_by/"> ni topish
+            likes_link = self.page.locator('a[href*="/liked_by/"]').first
+            # Ichidan span.html-span ni topish
+            likes_number = likes_link.locator('span.html-span').first
+            likes_text = likes_number.inner_text(timeout=3000)
+            # Raqam ekanligini tekshirish
+            if likes_text.replace(',', '').isdigit():
+                return likes_text.strip().replace(',', '')
         except Exception as e:
             pass
 
-        # Method 2: Section ichidan topish
+        # Method 2: Section > a[href*="liked_by"] (aniqroq)
         try:
-            # Instagram post likes odatda section > div strukturasida
             section = self.page.locator('section').first
-            likes_text = section.locator('span:has-text("likes") span.html-span').first.inner_text(timeout=2000)
+            likes_link = section.locator('a[href*="/liked_by/"]').first
+            likes_text = likes_link.locator('span.html-span').first.inner_text(timeout=2000)
             if likes_text.replace(',', '').isdigit():
                 return likes_text.strip().replace(',', '')
         except Exception:
             pass
 
-        # Method 3: Link orqali (eski usul)
+        # Method 3: "likes" matni bilan (fallback)
         try:
-            likes_link = self.page.locator('a[href*="liked_by"]').first
-            likes_text = likes_link.locator('span.html-span').first.inner_text(timeout=2000)
-            return likes_text.strip().replace(',', '')
+            # "likes" matnini o'z ichiga olgan span
+            likes_count = self.page.locator('span:has-text("likes")').count()
+
+            for i in range(likes_count):
+                try:
+                    span = self.page.locator('span:has-text("likes")').nth(i)
+                    number = span.locator('span.html-span').first
+                    text = number.inner_text(timeout=2000)
+                    if text.replace(',', '').isdigit():
+                        return text.strip().replace(',', '')
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # Agar hech narsa topilmasa - likes yashirilgan yoki yo'q
+        try:
+            page_content = self.page.content()
+            if ' likes</span>' in page_content or '>likes<' in page_content:
+                return 'N/A'  # Likes bor lekin selector muammosi
+            else:
+                return 'Hidden'  # Likes yashirilgan
         except Exception:
             pass
 
