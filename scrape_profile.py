@@ -110,11 +110,11 @@ class InstagramScraper:
     def _get_posts_count(self):
         """Posts sonini olish"""
         try:
-            # "posts" so'zini topish va oldidagi raqamni olish
+            # "posts" so'zini topish va ichidagi raqamni olish
             posts_element = self.page.locator('span:has-text("posts")').first
             if posts_element:
-                # Parent div ichidan span.html-span ni topish
-                posts_text = posts_element.locator('xpath=preceding::span[contains(@class, "html-span")]').first.inner_text()
+                # Element ichidan span.html-span ni topish
+                posts_text = posts_element.locator('span.html-span').first.inner_text()
                 return posts_text.strip().replace(',', '')
         except Exception as e:
             print(f'⚠️  Posts olishda xatolik: {e}')
