@@ -1,0 +1,17 @@
+{
+  "name": "instagram-tag-scraper",
+  "version": "1.0.0",
+  "description": "Instagram postlardan tag scraping qilish dasturi",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "save-session": "node save_session.js",
+    "scrape": "node scrape_tags.js"
+  },
+  "keywords": ["instagram", "scraper", "tags", "playwright"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "playwright": "^1.48.0"
+  }
+}
