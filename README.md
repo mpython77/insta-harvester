@@ -5,8 +5,8 @@ Instagram postlardan taglarni scraping qilish dasturi.
 ## O'rnatish
 
 ```bash
-npm install
-npx playwright install chromium
+pip install -r requirements.txt
+playwright install chromium
 ```
 
 ## 1. Session saqlash
@@ -14,7 +14,7 @@ npx playwright install chromium
 Birinchi marta foydalanishdan oldin Instagram sessiyasini saqlash kerak:
 
 ```bash
-npm run save-session
+python save_session.py
 ```
 
 **Qadamlar:**
@@ -29,13 +29,13 @@ npm run save-session
 Session saqlangandan keyin tag scraping qilish mumkin (keyingi qadamda qo'shiladi):
 
 ```bash
-npm run scrape
+python scrape_tags.py
 ```
 
 ## Fayllar
 
-- `save_session.js` - Instagram sessiyasini saqlash
-- `scrape_tags.js` - Taglarni scraping qilish (keyingi qadamda)
+- `save_session.py` - Instagram sessiyasini saqlash
+- `scrape_tags.py` - Taglarni scraping qilish (keyingi qadamda)
 - `instagram_session.json` - Saqlangan session ma'lumotlari (git ignore)
 
 ## Eslatma
