@@ -111,34 +111,54 @@ class InstagramPostDataScraper:
 
     def _get_likes_count(self):
         """Likes sonini olish"""
-        # Method 1: Link orqali (to'g'ri usul - a[href*="/liked_by/"])
+        # Method 1: Section ichidan span[role="button"] (yangi Instagram struktura)
         try:
-            # <a href="/p/.../liked_by/"> ni topish
-            likes_link = self.page.locator('a[href*="/liked_by/"]').first
-            # Ichidan span.html-span ni topish
-            likes_number = likes_link.locator('span.html-span').first
-            likes_text = likes_number.inner_text(timeout=3000)
-            # Raqam ekanligini tekshirish
-            if likes_text.replace(',', '').isdigit():
-                return likes_text.strip().replace(',', '')
-        except Exception as e:
+            # Section ichidan like SVG iconidan keyin kelgan span
+            section = self.page.locator('section').first
+            # aria-label="Like" bor SVG ni topish
+            like_svg = section.locator('svg[aria-label="Like"]').first
+            # SVG dan keyin kelgan span[role="button"] ni topish
+            # Bu spans orasida birinchisi - likes soni
+            spans = section.locator('span[role="button"]').all()
+
+            for span in spans[:2]:  # Birinchi 2 ta span (likes va comments)
+                try:
+                    text = span.inner_text(timeout=2000).strip()
+                    # Raqam ekanligini tekshirish
+                    if text and text.replace(',', '').replace('.', '').replace('K', '').replace('M', '').isdigit():
+                        return text.replace(',', '')
+                    # Agar K yoki M bilan bo'lsa (44K, 2.5M)
+                    if text and ('K' in text or 'M' in text):
+                        return text
+                except Exception:
+                    continue
+        except Exception:
             pass
 
-        # Method 2: Section > a[href*="liked_by"] (aniqroq)
+        # Method 2: Direct span selector
         try:
+            # Like icon yonidagi span
             section = self.page.locator('section').first
-            likes_link = section.locator('a[href*="/liked_by/"]').first
+            # x1ypdohk x1s688f class kombinatsiyasi
+            likes_span = section.locator('span.x1ypdohk.x1s688f').first
+            likes_text = likes_span.inner_text(timeout=2000).strip()
+            if likes_text and likes_text.replace(',', '').isdigit():
+                return likes_text.replace(',', '')
+        except Exception:
+            pass
+
+        # Method 3: Link orqali (eski struktura)
+        try:
+            likes_link = self.page.locator('a[href*="/liked_by/"]').first
             likes_text = likes_link.locator('span.html-span').first.inner_text(timeout=2000)
             if likes_text.replace(',', '').isdigit():
                 return likes_text.strip().replace(',', '')
         except Exception:
             pass
 
-        # Method 3: "likes" matni bilan (fallback)
+        # Method 4: "likes" matni bilan (fallback)
         try:
-            # "likes" matnini o'z ichiga olgan span
             likes_count = self.page.locator('span:has-text("likes")').count()
-
             for i in range(likes_count):
                 try:
                     span = self.page.locator('span:has-text("likes")').nth(i)
@@ -148,16 +168,6 @@ class InstagramPostDataScraper:
                         return text.strip().replace(',', '')
                 except Exception:
                     continue
-        except Exception:
-            pass
-
-        # Agar hech narsa topilmasa - likes yashirilgan yoki yo'q
-        try:
-            page_content = self.page.content()
-            if ' likes</span>' in page_content or '>likes<' in page_content:
-                return 'N/A'  # Likes bor lekin selector muammosi
-            else:
-                return 'Hidden'  # Likes yashirilgan
         except Exception:
             pass
 
