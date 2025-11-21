@@ -74,7 +74,14 @@ class InstagramPostDataScraper:
         """Post sahifasiga o'tish"""
         try:
             self.page.goto(url, wait_until='domcontentloaded', timeout=60000)
-            time.sleep(2)  # Sahifa yuklanishi uchun
+            time.sleep(3)  # Sahifa yuklanishi uchun
+
+            # Likes elementini kutish
+            try:
+                self.page.wait_for_selector('span:has-text("likes")', timeout=5000)
+            except Exception:
+                pass  # Agar likes bo'lmasa davom etish
+
             return True
         except Exception as e:
             print(f'⚠️  Post ochishda xatolik: {e}')
@@ -104,22 +111,30 @@ class InstagramPostDataScraper:
 
     def _get_likes_count(self):
         """Likes sonini olish"""
+        # Method 1: "likes" so'zi bor span ichidan raqamni topish
         try:
-            # a[href*="liked_by"] ni topish
-            likes_link = self.page.locator('a[href*="liked_by"]').first
-            if likes_link:
-                # span.html-span ichidan raqamni olish
-                likes_text = likes_link.locator('span.html-span').first.inner_text()
-                return likes_text.strip().replace(',', '')
+            # "likes" matnini o'z ichiga olgan span
+            likes_span = self.page.locator('span:has-text("likes")').first
+            # Ichidan span.html-span ni topish
+            likes_number = likes_span.locator('span.html-span').first
+            likes_text = likes_number.inner_text(timeout=3000)
+            return likes_text.strip().replace(',', '')
+        except Exception as e:
+            pass
+
+        # Method 2: Direct selector (CSS)
+        try:
+            likes_number = self.page.locator('span:has-text("likes") span.html-span').first
+            likes_text = likes_number.inner_text(timeout=3000)
+            return likes_text.strip().replace(',', '')
         except Exception:
             pass
 
-        # Agar yuqoridagi ishlamasa, "likes" so'zi bilan topish
+        # Method 3: Link orqali (eski usul)
         try:
-            likes_element = self.page.locator('span:has-text("likes")').first
-            if likes_element:
-                likes_text = likes_element.locator('span.html-span').first.inner_text()
-                return likes_text.strip().replace(',', '')
+            likes_link = self.page.locator('a[href*="liked_by"]').first
+            likes_text = likes_link.locator('span.html-span').first.inner_text(timeout=3000)
+            return likes_text.strip().replace(',', '')
         except Exception:
             pass
 
