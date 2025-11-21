@@ -11,6 +11,8 @@ from .config import ScraperConfig
 from .profile import ProfileScraper, ProfileData
 from .post_links import PostLinksScraper
 from .post_data import PostDataScraper, PostData
+from .parallel_scraper import ParallelPostDataScraper
+from .excel_export import ExcelExporter
 from .logger import setup_logger
 
 
@@ -133,6 +135,208 @@ class InstagramOrchestrator:
             post_links,
             delay_between_posts=True
         )
+
+    def scrape_complete_profile_advanced(
+        self,
+        username: str,
+        parallel: Optional[int] = None,
+        save_excel: bool = False,
+        export_json: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Advanced complete scraping with parallel processing and Excel export
+
+        Args:
+            username: Instagram username
+            parallel: Number of parallel contexts (None = sequential, 3 = 3 tabs)
+            save_excel: Save to Excel in real-time
+            export_json: Export to JSON file
+
+        Returns:
+            Dictionary with all scraped data
+
+        Example:
+            >>> orchestrator = InstagramOrchestrator()
+            >>> results = orchestrator.scrape_complete_profile_advanced(
+            ...     'cristiano',
+            ...     parallel=3,
+            ...     save_excel=True
+            ... )
+        """
+        username = username.strip().lstrip('@')
+        self.logger.info(f"\n{'='*60}")
+        self.logger.info(f"ADVANCED PROFILE SCRAPE: @{username}")
+        self.logger.info(f"Parallel: {parallel if parallel else 'Sequential'}")
+        self.logger.info(f"Excel Export: {save_excel}")
+        self.logger.info(f"{'='*60}\n")
+
+        results = {
+            'username': username,
+            'profile': None,
+            'post_links': [],
+            'posts_data': []
+        }
+
+        # Initialize Excel exporter if needed
+        excel_exporter = None
+        if save_excel:
+            excel_filename = f"instagram_data_{username}.xlsx"
+            excel_exporter = ExcelExporter(excel_filename, self.logger)
+            self.logger.info(f"Excel exporter initialized: {excel_filename}")
+
+        # STEP 1: Scrape profile stats
+        self.logger.info("STEP 1: Scraping profile stats...")
+        profile_data = self._scrape_profile_stats(username)
+        results['profile'] = profile_data.to_dict()
+        self.logger.info(
+            f"✓ Profile: {profile_data.posts} posts, "
+            f"{profile_data.followers} followers, "
+            f"{profile_data.following} following"
+        )
+
+        # STEP 2: Collect post links
+        self.logger.info("\nSTEP 2: Collecting post links...")
+        post_links = self._collect_post_links(username)
+        results['post_links'] = post_links
+        self.logger.info(f"✓ Collected {len(post_links)} post links")
+
+        # STEP 3: Scrape post data (parallel or sequential)
+        if post_links:
+            self.logger.info(
+                f"\nSTEP 3: Scraping {len(post_links)} posts "
+                f"({'parallel=' + str(parallel) if parallel else 'sequential'})..."
+            )
+
+            if parallel and parallel > 1:
+                # Parallel scraping
+                posts_data = self._scrape_posts_parallel(
+                    post_links,
+                    parallel,
+                    excel_exporter
+                )
+            else:
+                # Sequential scraping
+                posts_data = self._scrape_posts_sequential(
+                    post_links,
+                    excel_exporter
+                )
+
+            results['posts_data'] = [p.to_dict() for p in posts_data]
+            self.logger.info(f"✓ Scraped {len(posts_data)} posts")
+
+        # Finalize Excel
+        if excel_exporter:
+            excel_exporter.finalize()
+            self.logger.info(f"✓ Excel file finalized: {excel_exporter.filename}")
+
+        # Export JSON
+        if export_json:
+            self.logger.info("\nExporting JSON...")
+            self._export_results(results)
+
+        self.logger.info(f"\n{'='*60}")
+        self.logger.info("ADVANCED SCRAPING COMPLETE!")
+        self.logger.info(f"{'='*60}")
+        self.logger.info(f"Profile: {results['profile']}")
+        self.logger.info(f"Post links: {len(results['post_links'])}")
+        self.logger.info(f"Posts scraped: {len(results['posts_data'])}")
+        self.logger.info(f"{'='*60}\n")
+
+        return results
+
+    def _scrape_posts_parallel(
+        self,
+        post_links: List[str],
+        parallel: int,
+        excel_exporter: Optional[ExcelExporter] = None
+    ) -> List[PostData]:
+        """
+        Scrape posts in parallel
+
+        Args:
+            post_links: List of post URLs
+            parallel: Number of parallel contexts
+            excel_exporter: Optional Excel exporter for real-time save
+
+        Returns:
+            List of PostData objects
+        """
+        scraper = ParallelPostDataScraper(self.config)
+        posts_data = scraper.scrape_multiple(
+            post_links,
+            parallel=parallel,
+            session_file=self.config.session_file
+        )
+
+        # Save to Excel if enabled
+        if excel_exporter:
+            self.logger.info("Saving to Excel...")
+            for data in posts_data:
+                excel_exporter.add_row(
+                    post_url=data.url,
+                    tagged_accounts=data.tagged_accounts,
+                    likes=data.likes,
+                    post_date=data.timestamp
+                )
+
+        return posts_data
+
+    def _scrape_posts_sequential(
+        self,
+        post_links: List[str],
+        excel_exporter: Optional[ExcelExporter] = None
+    ) -> List[PostData]:
+        """
+        Scrape posts sequentially with real-time Excel export
+
+        Args:
+            post_links: List of post URLs
+            excel_exporter: Optional Excel exporter
+
+        Returns:
+            List of PostData objects
+        """
+        posts_data = []
+
+        scraper = PostDataScraper(self.config)
+        scraper.load_session()
+        scraper.setup_browser(scraper.load_session())
+
+        try:
+            for i, url in enumerate(post_links, 1):
+                self.logger.info(f"[{i}/{len(post_links)}] Scraping: {url}")
+
+                try:
+                    data = scraper.scrape(url)
+                    posts_data.append(data)
+
+                    # Save to Excel immediately
+                    if excel_exporter:
+                        excel_exporter.add_row(
+                            post_url=data.url,
+                            tagged_accounts=data.tagged_accounts,
+                            likes=data.likes,
+                            post_date=data.timestamp
+                        )
+
+                except Exception as e:
+                    self.logger.error(f"Failed to scrape {url}: {e}")
+                    posts_data.append(PostData(
+                        url=url,
+                        tagged_accounts=[],
+                        likes='ERROR',
+                        timestamp='N/A'
+                    ))
+
+                # Delay
+                if i < len(post_links):
+                    import random
+                    time.sleep(random.uniform(2, 4))
+
+        finally:
+            scraper.close()
+
+        return posts_data
 
     def _export_results(self, results: Dict[str, Any]) -> None:
         """Export results to JSON file"""
