@@ -6,6 +6,7 @@ Scrape multiple posts simultaneously with multiple browser contexts
 import time
 import random
 import json
+import signal
 from typing import List, Optional, Dict, Any
 from multiprocessing import Pool, cpu_count
 from bs4 import BeautifulSoup
@@ -15,6 +16,17 @@ from playwright.sync_api import sync_playwright, Page
 from .config import ScraperConfig
 from .post_data import PostData
 from .logger import setup_logger
+
+# Global flag for graceful shutdown in worker processes
+_shutdown_requested = False
+
+
+def _worker_signal_handler(signum, frame):
+    """Signal handler for worker processes"""
+    global _shutdown_requested
+    _shutdown_requested = True
+    print(f"\n[Worker] Shutdown signal received, finishing current post...")
+
 
 
 def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -27,6 +39,10 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     Returns:
         List of post data dictionaries
     """
+    # Register signal handler for this worker process
+    signal.signal(signal.SIGINT, _worker_signal_handler)
+    signal.signal(signal.SIGTERM, _worker_signal_handler)
+
     urls_batch = args['urls_batch']
     worker_id = args['worker_id']
     session_data = args['session_data']
@@ -63,6 +79,12 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
         page.set_default_timeout(config.default_timeout)
 
         for url in urls_batch:
+            # Check for shutdown request
+            global _shutdown_requested
+            if _shutdown_requested:
+                print(f"[Worker {worker_id}] Shutdown requested, stopping...")
+                break
+
             try:
                 # Navigate to post
                 page.goto(url, wait_until='domcontentloaded', timeout=60000)
