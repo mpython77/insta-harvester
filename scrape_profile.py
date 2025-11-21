@@ -57,13 +57,22 @@ class InstagramScraper:
         )
 
         self.page = self.context.new_page()
+
+        # Timeout ni oshirish
+        self.page.set_default_timeout(60000)  # 60 sekund
+
         print('✅ Session yuklandi!')
 
     def goto_profile(self):
         """Profile sahifasiga o'tish"""
         print(f'🔍 Profile ochilmoqda: {self.username}')
-        self.page.goto(self.profile_url, wait_until='networkidle')
-        time.sleep(2)  # Sahifa to'liq yuklanishi uchun
+
+        # networkidle o'rniga domcontentloaded ishlatamiz (tezroq)
+        self.page.goto(self.profile_url, wait_until='domcontentloaded', timeout=60000)
+
+        print('⏳ Sahifa yuklanishi kutilmoqda...')
+        # Sahifa elementlari yuklanishi uchun biroz kutish
+        time.sleep(3)
 
         # Profile mavjudligini tekshirish
         if 'Page Not Found' in self.page.content() or 'Sorry, this page' in self.page.content():
@@ -74,6 +83,13 @@ class InstagramScraper:
     def extract_profile_data(self):
         """Profile ma'lumotlarini olish"""
         print('📊 Ma\'lumotlar olinmoqda...\n')
+
+        # Profile statslarini kutish
+        try:
+            self.page.wait_for_selector('span:has-text("posts")', timeout=10000)
+        except Exception:
+            print('⚠️  Profile ma\'lumotlari yuklanmadi, qayta urinilmoqda...')
+            time.sleep(2)
 
         # Posts sonini olish
         posts = self._get_posts_count()
