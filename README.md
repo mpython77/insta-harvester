@@ -72,12 +72,34 @@ Instagram username kiriting: cristiano
 💾 Linklar saqlandi: post_links.txt
 ```
 
-## 4. Tag scraping qilish
+## 4. Post ma'lumotlarini scraping qilish
 
-Postlardan tag scraping qilish (keyingi qadamda qo'shiladi):
+`post_links.txt` dagi har bir postdan ma'lumotlar olish:
 
 ```bash
-python scrape_tags.py
+python scrape_post_data.py
+```
+
+**Har bir postdan olinadi:**
+- 👥 Tagged akkauntlar
+- ❤️ Likes soni
+- 🕐 Post vaqti
+
+**Xususiyatlari:**
+- 🔄 Har bir linkni ketma-ket ochadi
+- ⏳ Instagram limiting uchun 2-4s kutish
+- 📊 Real-time ma'lumotlar ko'rsatish
+
+**Misol chiqish:**
+```
+[1/38] 🔍 Scraping: https://instagram.com/dindinku__/p/DNf6enYgUym/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔗 URL: https://instagram.com/dindinku__/p/DNf6enYgUym/
+👥 Tagged: santiagobelizon, v_vovk, marieclairespain, generation.models
+❤️  Likes: 44
+🕐 Time: Nov 17, 2025
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 ## Fayllar
@@ -85,7 +107,7 @@ python scrape_tags.py
 - `save_session.py` - Instagram sessiyasini saqlash
 - `scrape_profile.py` - Profile ma'lumotlarini olish
 - `scrape_post_links.py` - Post linklarini yig'ish (scroll bilan)
-- `scrape_tags.py` - Taglarni scraping qilish (keyingi qadamda)
+- `scrape_post_data.py` - Postlardan ma'lumotlar olish
 - `instagram_session.json` - Saqlangan session ma'lumotlari (git ignore)
 - `post_links.txt` - To'plangan post linklar (git ignore)
 
