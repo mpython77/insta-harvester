@@ -14,8 +14,9 @@ def save_session():
     print('🚀 Instagram session saqlash dasturi ishga tushdi...')
 
     with sync_playwright() as p:
-        # Browser ochish (headless=False - ko'rinishi uchun)
+        # Browser ochish (Real Chrome ishlatish)
         browser = p.chromium.launch(
+            channel='chrome',  # Real Chrome ishlatish
             headless=False,
             args=['--start-maximized']
         )

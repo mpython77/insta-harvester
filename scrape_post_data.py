@@ -111,30 +111,63 @@ class InstagramPostDataScraper:
 
     def _get_likes_count(self):
         """Likes sonini olish"""
-        # Method 1: "likes" so'zi bor span ichidan raqamni topish
+        # Method 1: Section ichidan span[role="button"] (yangi Instagram struktura)
         try:
-            # "likes" matnini o'z ichiga olgan span
-            likes_span = self.page.locator('span:has-text("likes")').first
-            # Ichidan span.html-span ni topish
-            likes_number = likes_span.locator('span.html-span').first
-            likes_text = likes_number.inner_text(timeout=3000)
-            return likes_text.strip().replace(',', '')
-        except Exception as e:
-            pass
+            # Section ichidan like SVG iconidan keyin kelgan span
+            section = self.page.locator('section').first
+            # aria-label="Like" bor SVG ni topish
+            like_svg = section.locator('svg[aria-label="Like"]').first
+            # SVG dan keyin kelgan span[role="button"] ni topish
+            # Bu spans orasida birinchisi - likes soni
+            spans = section.locator('span[role="button"]').all()
 
-        # Method 2: Direct selector (CSS)
-        try:
-            likes_number = self.page.locator('span:has-text("likes") span.html-span').first
-            likes_text = likes_number.inner_text(timeout=3000)
-            return likes_text.strip().replace(',', '')
+            for span in spans[:2]:  # Birinchi 2 ta span (likes va comments)
+                try:
+                    text = span.inner_text(timeout=2000).strip()
+                    # Raqam ekanligini tekshirish
+                    if text and text.replace(',', '').replace('.', '').replace('K', '').replace('M', '').isdigit():
+                        return text.replace(',', '')
+                    # Agar K yoki M bilan bo'lsa (44K, 2.5M)
+                    if text and ('K' in text or 'M' in text):
+                        return text
+                except Exception:
+                    continue
         except Exception:
             pass
 
-        # Method 3: Link orqali (eski usul)
+        # Method 2: Direct span selector
         try:
-            likes_link = self.page.locator('a[href*="liked_by"]').first
-            likes_text = likes_link.locator('span.html-span').first.inner_text(timeout=3000)
-            return likes_text.strip().replace(',', '')
+            # Like icon yonidagi span
+            section = self.page.locator('section').first
+            # x1ypdohk x1s688f class kombinatsiyasi
+            likes_span = section.locator('span.x1ypdohk.x1s688f').first
+            likes_text = likes_span.inner_text(timeout=2000).strip()
+            if likes_text and likes_text.replace(',', '').isdigit():
+                return likes_text.replace(',', '')
+        except Exception:
+            pass
+
+        # Method 3: Link orqali (eski struktura)
+        try:
+            likes_link = self.page.locator('a[href*="/liked_by/"]').first
+            likes_text = likes_link.locator('span.html-span').first.inner_text(timeout=2000)
+            if likes_text.replace(',', '').isdigit():
+                return likes_text.strip().replace(',', '')
+        except Exception:
+            pass
+
+        # Method 4: "likes" matni bilan (fallback)
+        try:
+            likes_count = self.page.locator('span:has-text("likes")').count()
+            for i in range(likes_count):
+                try:
+                    span = self.page.locator('span:has-text("likes")').nth(i)
+                    number = span.locator('span.html-span').first
+                    text = number.inner_text(timeout=2000)
+                    if text.replace(',', '').isdigit():
+                        return text.strip().replace(',', '')
+                except Exception:
+                    continue
         except Exception:
             pass
 
