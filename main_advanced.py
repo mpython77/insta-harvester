@@ -3,11 +3,14 @@ Instagram Scraper - Advanced Main Example
 Complete workflow with parallel processing and Excel export
 """
 
+import multiprocessing
 from instagram_scraper import InstagramOrchestrator, ScraperConfig
 
 
 def main():
     """Main function - advanced scraping with all features"""
+    # Required for Windows multiprocessing support
+    multiprocessing.freeze_support()
 
     print("=" * 70)
     print("Instagram Scraper - ADVANCED (Parallel + Excel)")
