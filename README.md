@@ -47,7 +47,32 @@ Instagram username kiriting: castawaymodelmanagement
 ➕ Following: 5,447
 ```
 
-## 3. Tag scraping qilish
+## 3. Post linklarini yig'ish
+
+Profile dagi barcha post linklarini yig'ish (scroll qilish bilan):
+
+```bash
+python scrape_post_links.py
+```
+
+**Xususiyatlari:**
+- 🔄 Avtomatik scroll qilish (odamga o'xshab)
+- 📊 Real-time progress ko'rsatish
+- 💾 Linklar `post_links.txt` ga saqlanadi
+- ✅ Posts soniga yetganda yoki yangi content yuklanmasa to'xtaydi
+
+**Misol:**
+```
+Instagram username kiriting: cristiano
+
+📸 Jami postlar: 3,970
+📜 Scroll qilib linklar yig'ish...
+📊 To'plangan linklar: 3970/3970
+✅ Barcha postlar to'plandi!
+💾 Linklar saqlandi: post_links.txt
+```
+
+## 4. Tag scraping qilish
 
 Postlardan tag scraping qilish (keyingi qadamda qo'shiladi):
 
@@ -59,8 +84,10 @@ python scrape_tags.py
 
 - `save_session.py` - Instagram sessiyasini saqlash
 - `scrape_profile.py` - Profile ma'lumotlarini olish
+- `scrape_post_links.py` - Post linklarini yig'ish (scroll bilan)
 - `scrape_tags.py` - Taglarni scraping qilish (keyingi qadamda)
 - `instagram_session.json` - Saqlangan session ma'lumotlari (git ignore)
+- `post_links.txt` - To'plangan post linklar (git ignore)
 
 ## Eslatma
 

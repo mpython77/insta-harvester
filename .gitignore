@@ -1,4 +1,5 @@
 node_modules/
 instagram_session.json
+post_links.txt
 *.log
 .env
