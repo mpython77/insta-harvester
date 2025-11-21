@@ -98,12 +98,13 @@ class BaseScraper(ABC):
         if self.playwright is None:
             self.playwright = sync_playwright().start()
 
-        # Launch browser
+        # Launch browser with real Chrome
         self.browser = self.playwright.chromium.launch(
+            channel='chrome',  # Use real Chrome instead of Chromium
             headless=self.config.headless,
             args=['--start-maximized'] if not self.config.headless else []
         )
-        self.logger.debug(f"Browser launched (headless={self.config.headless})")
+        self.logger.debug(f"Browser launched (Chrome, headless={self.config.headless})")
 
         # Create context
         context_options = {
