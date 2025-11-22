@@ -323,18 +323,26 @@ class InstagramOrchestrator:
                 excel_exporter.finalize()
             return results
 
-        # STEP 3.5: Scrape REEL data (SEPARATE from posts)
+        # STEP 3.5: Scrape REEL data (SEPARATE from posts) - NOW WITH PARALLEL!
         if reel_links:
             self.logger.info(
                 f"\nSTEP 3.5: Scraping {len(reel_links)} REELS "
-                f"(sequential - reels only)..."
+                f"({'parallel=' + str(parallel) if parallel and parallel > 1 else 'sequential'})..."
             )
 
-            # Note: Reels are always scraped sequentially using ReelDataScraper
-            reels_data = self._scrape_reels_sequential(
-                reel_links,
-                excel_exporter
-            )
+            if parallel and parallel > 1:
+                # Parallel scraping for reels (NEW!)
+                reels_data = self._scrape_reels_parallel(
+                    reel_links,
+                    parallel,
+                    excel_exporter
+                )
+            else:
+                # Sequential scraping for reels
+                reels_data = self._scrape_reels_sequential(
+                    reel_links,
+                    excel_exporter
+                )
 
             results['reels_data'] = [r.to_dict() for r in reels_data]
             self.logger.info(f"✓ Scraped {len(reels_data)} reels")
@@ -533,6 +541,55 @@ class InstagramOrchestrator:
 
         finally:
             scraper.close()
+
+        return reels_data
+
+    def _scrape_reels_parallel(
+        self,
+        reel_links: List[str],
+        parallel: int,
+        excel_exporter: Optional[ExcelExporter] = None
+    ) -> List[ReelData]:
+        """
+        Scrape REELS in parallel with REAL-TIME Excel writing (NEW!)
+
+        Args:
+            reel_links: List of reel URLs
+            parallel: Number of parallel contexts
+            excel_exporter: Optional Excel exporter for real-time save
+
+        Returns:
+            List of ReelData objects
+        """
+        self.logger.info(f"🚀 Starting parallel scraping for REELS with {parallel} workers...")
+        self.logger.info(f"📊 Real-time Excel writing: {'ENABLED' if excel_exporter else 'DISABLED'}")
+
+        # Convert reel URLs to dict format (required by ParallelPostDataScraper)
+        reel_links_dict = [{'url': url, 'type': 'Reel'} for url in reel_links]
+
+        # Use ParallelPostDataScraper (it handles both posts and reels!)
+        scraper = ParallelPostDataScraper(self.config)
+        results = scraper.scrape_multiple(
+            reel_links_dict,  # Pass as dictionaries with type='Reel'
+            parallel=parallel,
+            session_file=self.config.session_file,
+            excel_exporter=excel_exporter  # Pass to enable real-time writing!
+        )
+
+        # Convert PostData to ReelData (they have same structure)
+        reels_data = []
+        for post_data in results:
+            reel_data = ReelData(
+                url=post_data.url,
+                tagged_accounts=post_data.tagged_accounts,
+                likes=post_data.likes,
+                timestamp=post_data.timestamp,
+                content_type='Reel'
+            )
+            reels_data.append(reel_data)
+
+        if excel_exporter:
+            self.logger.info("✓ Excel writing completed in real-time")
 
         return reels_data
 

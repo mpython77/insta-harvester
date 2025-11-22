@@ -130,9 +130,9 @@ class ReelLinksScraper(BaseScraper):
 
     def _scroll_and_collect(self) -> List[str]:
         """
-        Scroll through reels page and collect all reel links
+        Scroll through reels page and collect all reel links (IMPROVED for Instagram lazy loading)
 
-        Smart stopping: If 2-3 scrolls with NO new reels → DONE
+        Smart stopping: If 5 scrolls with NO new reels → DONE
 
         Returns:
             List of unique reel URLs
@@ -142,7 +142,7 @@ class ReelLinksScraper(BaseScraper):
         all_reel_links: Set[str] = set()
         scroll_attempts = 0
         no_new_reels_count = 0
-        MAX_NO_NEW_REELS = 3  # Stop after 3 scrolls with no new reels
+        MAX_NO_NEW_REELS = 5  # Increased from 3 to 5 for better coverage
 
         while True:
             # Extract current reel links
@@ -169,7 +169,7 @@ class ReelLinksScraper(BaseScraper):
                 # Reset counter if new reels found
                 no_new_reels_count = 0
 
-            # Stopping condition: 2-3 scrolls with no new reels
+            # Stopping condition: 5 scrolls with no new reels
             if no_new_reels_count >= MAX_NO_NEW_REELS:
                 self.logger.info(
                     f"✓ Finished! No new reels after {MAX_NO_NEW_REELS} scroll attempts. "
@@ -178,14 +178,14 @@ class ReelLinksScraper(BaseScraper):
                 break
 
             # Safety: Max scroll attempts
-            if scroll_attempts >= 100:  # Very high limit for reels
+            if scroll_attempts >= 150:  # Increased limit for better coverage
                 self.logger.warning(
-                    f"Max scroll attempts (100) reached"
+                    f"Max scroll attempts (150) reached"
                 )
                 break
 
-            # Scroll down (human-like)
-            self._human_like_scroll()
+            # IMPROVED: Scroll to bottom and wait for lazy loading
+            self._aggressive_scroll()
 
             scroll_attempts += 1
 
@@ -193,12 +193,20 @@ class ReelLinksScraper(BaseScraper):
         result = sorted(list(all_reel_links))
         return result
 
-    def _human_like_scroll(self) -> None:
-        """Scroll down with human-like behavior"""
-        # Scroll 80% of viewport height
-        self.page.evaluate('window.scrollBy(0, window.innerHeight * 0.8)')
+    def _aggressive_scroll(self) -> None:
+        """Aggressive scrolling to ensure all content loads (Instagram lazy loading fix)"""
+        # Scroll to bottom of page
+        self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
 
-        # Random delay
+        # Wait for lazy loading (Instagram needs more time)
+        time.sleep(1.5)
+
+        # Small scroll up and down to trigger loading
+        self.page.evaluate('window.scrollBy(0, -200)')
+        time.sleep(0.3)
+        self.page.evaluate('window.scrollBy(0, 200)')
+
+        # Additional wait with random delay
         delay = random.uniform(
             self.config.scroll_delay_min,
             self.config.scroll_delay_max
