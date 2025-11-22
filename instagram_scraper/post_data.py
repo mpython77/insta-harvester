@@ -301,12 +301,11 @@ class PostDataScraper(BaseScraper):
 
     def get_tagged_accounts(self) -> List[str]:
         """
-        Extract tagged accounts from IMAGE posts using div._aa1y structure
+        Extract tagged accounts from posts (handles both IMAGE and VIDEO posts)
 
-        Instagram structure for IMAGE posts with tags:
-        - Each tagged user is in: <div class="_aa1y">
-        - Inside: <a href="/username/">
-        - Username in: <span class="x972fbf...">username</span>
+        Instagram tag structure:
+        - IMAGE posts: Tags in <div class="_aa1y"> containers
+        - VIDEO posts: Tags in popup (click button, then extract from popup)
 
         Returns:
             List of usernames (without @)
@@ -322,7 +321,85 @@ class PostDataScraper(BaseScraper):
         except:
             pass
 
-        # METHOD 1: Extract from div._aa1y containers (IMAGE posts)
+        # STEP 1: Detect if this is a VIDEO post or IMAGE post
+        is_video_post = False
+        try:
+            # Check for video element
+            video_count = self.page.locator('video').count()
+            if video_count > 0:
+                is_video_post = True
+                self.logger.debug("Detected VIDEO post")
+            else:
+                self.logger.debug("Detected IMAGE post")
+        except:
+            pass
+
+        # STEP 2: If VIDEO post, use POPUP extraction (like reels)
+        if is_video_post:
+            self.logger.debug("Using VIDEO post tag extraction (popup method)...")
+            try:
+                # Find and click tag button
+                tag_button = self.page.locator('button:has(svg[aria-label="Tags"])').first
+
+                if tag_button.count() == 0:
+                    self.logger.debug("No tag button found")
+                    return ['No tags']
+
+                # Click the tag button
+                self.logger.debug("Clicking tag button...")
+                tag_button.click(timeout=3000)
+                time.sleep(1.5)  # Wait for popup animation
+                time.sleep(0.5)  # Extra wait for popup content
+
+                # CRITICAL: Extract from popup container ONLY
+                self.logger.debug("Extracting tags from popup...")
+                popup_container = self.page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+
+                if popup_container.count() == 0:
+                    # Fallback: Try role="dialog"
+                    popup_container = self.page.locator('div[role="dialog"]').first
+
+                if popup_container.count() > 0:
+                    # Extract links ONLY from popup
+                    popup_links = popup_container.locator('a[href^="/"]').all()
+
+                    for link in popup_links:
+                        try:
+                            href = link.get_attribute('href', timeout=1000)
+                            if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
+                                username = href.strip('/').split('/')[-1]
+
+                                # Filter out system paths
+                                if username in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories']:
+                                    continue
+
+                                if username and username not in tagged:
+                                    tagged.append(username)
+                                    self.logger.debug(f"✓ Found tag: {username}")
+                        except:
+                            continue
+
+                    # Close popup
+                    try:
+                        close_button = self.page.locator('button:has(svg[aria-label="Close"])').first
+                        close_button.click(timeout=2000)
+                    except:
+                        self.page.keyboard.press('Escape')
+
+                if tagged:
+                    self.logger.info(f"✓ Found {len(tagged)} tags (VIDEO popup): {tagged}")
+                    return tagged
+
+            except Exception as e:
+                self.logger.warning(f"VIDEO post popup extraction failed: {e}")
+                # Try closing popup
+                try:
+                    self.page.keyboard.press('Escape')
+                except:
+                    pass
+
+        # STEP 3: If IMAGE post (or video extraction failed), use div._aa1y extraction
+        self.logger.debug("Using IMAGE post tag extraction (div._aa1y method)...")
         try:
             # Find all tag containers
             tag_containers = self.page.locator('div._aa1y').all()
@@ -349,7 +426,7 @@ class PostDataScraper(BaseScraper):
                     continue
 
             if tagged:
-                self.logger.info(f"✓ Found {len(tagged)} tags: {tagged}")
+                self.logger.info(f"✓ Found {len(tagged)} tags (IMAGE): {tagged}")
                 return tagged
 
         except Exception as e:
