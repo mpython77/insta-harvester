@@ -14,7 +14,7 @@ class ScraperConfig:
     session_file: str = 'instagram_session.json'
 
     # Browser settings
-    headless: bool = False
+    headless: bool = True  # Chrome runs in headless mode by default
     viewport_width: int = 1920
     viewport_height: int = 1080
     user_agent: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -30,6 +30,12 @@ class ScraperConfig:
     scroll_delay_max: float = 2.5
     post_scrape_delay_min: float = 2.0
     post_scrape_delay_max: float = 4.0
+
+    # Action delays - used for button clicks, popups, and interactive elements
+    # This ensures Instagram has time to load, especially on slow connections
+    sleep_time: float = 2.5  # Base sleep time in seconds
+    action_delay_min: float = 2.0  # Minimum random delay before actions
+    action_delay_max: float = 3.5  # Maximum random delay before actions
 
     # Scroll settings
     max_scroll_attempts: int = 1000

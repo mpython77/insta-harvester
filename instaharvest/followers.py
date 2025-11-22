@@ -4,6 +4,7 @@ Professional class for collecting followers list with real-time output
 """
 
 import time
+import random
 from typing import Optional, List, Set
 
 from .base import BaseScraper
@@ -68,8 +69,9 @@ class FollowersCollector(BaseScraper):
                 self.logger.error("Failed to open followers popup")
                 return []
 
-            # Wait for popup to load
-            time.sleep(2)
+            # Wait for popup to load (using configurable sleep_time)
+            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for popup to load...")
+            time.sleep(self.config.sleep_time)
 
             # Collect followers with scrolling
             followers = self._collect_from_popup(
@@ -120,8 +122,9 @@ class FollowersCollector(BaseScraper):
                 self.logger.error("Failed to open following popup")
                 return []
 
-            # Wait for popup to load
-            time.sleep(2)
+            # Wait for popup to load (using configurable sleep_time)
+            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for popup to load...")
+            time.sleep(self.config.sleep_time)
 
             # Collect following with scrolling
             following = self._collect_from_popup(
@@ -145,6 +148,11 @@ class FollowersCollector(BaseScraper):
             True if clicked successfully, False otherwise
         """
         try:
+            # Add random delay before clicking (allows page to fully load)
+            delay_before = random.uniform(self.config.action_delay_min, self.config.action_delay_max)
+            self.logger.debug(f"⏱️ Waiting {delay_before:.1f}s before clicking Followers button...")
+            time.sleep(delay_before)
+
             # Find followers link - contains "followers" text
             followers_link = self.page.locator('a[href*="/followers/"]').first
 
@@ -154,7 +162,10 @@ class FollowersCollector(BaseScraper):
 
             # Click button
             followers_link.click(timeout=3000)
-            time.sleep(1.5)  # Wait for popup to open
+
+            # Wait for popup to open (using configurable sleep_time)
+            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for popup to open...")
+            time.sleep(self.config.sleep_time)
 
             self.logger.debug("✓ Followers popup opened")
             return True
@@ -171,6 +182,11 @@ class FollowersCollector(BaseScraper):
             True if clicked successfully, False otherwise
         """
         try:
+            # Add random delay before clicking (allows page to fully load)
+            delay_before = random.uniform(self.config.action_delay_min, self.config.action_delay_max)
+            self.logger.debug(f"⏱️ Waiting {delay_before:.1f}s before clicking Following button...")
+            time.sleep(delay_before)
+
             # Find following link - contains "following" text
             following_link = self.page.locator('a[href*="/following/"]').first
 
@@ -180,7 +196,10 @@ class FollowersCollector(BaseScraper):
 
             # Click button
             following_link.click(timeout=3000)
-            time.sleep(1.5)  # Wait for popup to open
+
+            # Wait for popup to open (using configurable sleep_time)
+            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for popup to open...")
+            time.sleep(self.config.sleep_time)
 
             self.logger.debug("✓ Following popup opened")
             return True
@@ -266,8 +285,10 @@ class FollowersCollector(BaseScraper):
             scroll_count += 1
             self._scroll_popup()
 
-            # Small delay between scrolls
-            time.sleep(1.0)
+            # Random delay between scrolls (allows content to load)
+            scroll_delay = random.uniform(self.config.scroll_delay_min, self.config.scroll_delay_max)
+            self.logger.debug(f"⏱️ Waiting {scroll_delay:.1f}s after scroll...")
+            time.sleep(scroll_delay)
 
         if print_realtime:
             print("="*70)
