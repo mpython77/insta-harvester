@@ -195,62 +195,32 @@ class ReelLinksScraper(BaseScraper):
 
     def _aggressive_scroll(self) -> None:
         """
-        Multi-stage scrolling strategy for Instagram's aggressive lazy loading
+        Optimized scrolling for Instagram lazy loading (FAST but EFFECTIVE)
 
-        Instagram requires:
-        1. Incremental scrolling (not just to bottom)
-        2. Element interaction/visibility
-        3. Longer wait times
-        4. Multiple passes
+        Balance between speed and completeness
         """
-        # Strategy 1: Incremental scroll (load content in stages)
-        current_position = self.page.evaluate('window.pageYOffset')
-        scroll_height = self.page.evaluate('document.body.scrollHeight')
-
-        # Scroll 80% of remaining distance (not 100%)
-        target_position = current_position + (scroll_height - current_position) * 0.8
-        self.page.evaluate(f'window.scrollTo(0, {target_position})')
-        time.sleep(1.0)
-
-        # Strategy 2: Trigger lazy loading by hovering over grid
-        try:
-            # Find the reels grid and move mouse to trigger hover events
-            grid = self.page.locator('article').first
-            if grid:
-                box = grid.bounding_box()
-                if box:
-                    # Move mouse to center of grid to trigger lazy load
-                    self.page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
-                    time.sleep(0.5)
-        except:
-            pass
-
-        # Strategy 3: Scroll to actual bottom
+        # Strategy 1: Scroll to bottom (fast)
         self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-        time.sleep(2.0)  # Increased from 1.5s to 2.0s
+        time.sleep(1.2)  # Quick wait for lazy loading
 
-        # Strategy 4: Bounce scroll to trigger loading
-        self.page.evaluate('window.scrollBy(0, -300)')
-        time.sleep(0.5)
-        self.page.evaluate('window.scrollBy(0, 300)')
-        time.sleep(0.5)
-
-        # Strategy 5: Try to scroll to last visible reel (force load next batch)
+        # Strategy 2: Trigger loading by scrolling to last visible element
         try:
             reels = self.page.locator('a[href*="/reel/"]').all()
-            if len(reels) > 0:
+            if len(reels) > 2:
+                # Scroll the last reel into view to trigger next batch
                 last_reel = reels[-1]
                 last_reel.scroll_into_view_if_needed()
-                time.sleep(1.0)
+                time.sleep(0.4)
         except:
             pass
 
-        # Final wait with random delay
-        delay = random.uniform(
-            self.config.scroll_delay_min,
-            self.config.scroll_delay_max
-        )
-        time.sleep(delay)
+        # Strategy 3: Small bounce to ensure loading
+        self.page.evaluate('window.scrollBy(0, -100)')
+        time.sleep(0.2)
+        self.page.evaluate('window.scrollBy(0, 100)')
+
+        # Final minimal delay
+        time.sleep(0.3)
 
     def _save_links(self, reel_links: List[str], username: str) -> None:
         """
