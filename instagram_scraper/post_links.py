@@ -111,46 +111,59 @@ class PostLinksScraper(BaseScraper):
 
     def _extract_current_links(self) -> List[Dict[str, str]]:
         """
-        Extract all visible POST links from current viewport (POSTS ONLY - NO REELS!)
+        Extract POST links from div._ac7v containers (NEW INSTAGRAM STRUCTURE)
+
+        Instagram structure:
+        - div._ac7v.x1ty9z65.xzboxd6 contains 3 posts/reels
+        - Each container has 3x <a href="/username/p/ABC/" or href="/username/reel/XYZ/">
+        - We only collect /p/ links (posts), skip /reel/
 
         Returns:
             List of dictionaries with 'url' and 'type' keys
-            Example: [{'url': 'https://...', 'type': 'Post'}]
         """
         try:
-            # IMPORTANT: Find ONLY post links (a[href*="/p/"]) - NO REELS!
-            # Reels are collected separately by ReelLinksScraper from /reels/ page
-            links = self.page.locator('a[href*="/p/"]').all()
-
             results = []
             seen_urls = set()
 
-            for link in links:
+            # Find all post/reel grid containers
+            containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
+
+            for container in containers:
                 try:
-                    href = link.get_attribute('href')
-                    if href:
-                        # Skip if it's actually a reel (safety check)
-                        if '/reel/' in href:
+                    # Get all links within this container
+                    links = container.locator('a[href]').all()
+
+                    for link in links:
+                        try:
+                            href = link.get_attribute('href')
+                            if not href:
+                                continue
+
+                            # ONLY collect /p/ links (posts), skip /reel/
+                            if '/p/' not in href:
+                                continue
+
+                            # Make full URL
+                            if href.startswith('/'):
+                                href = f'https://www.instagram.com{href}'
+
+                            # Skip duplicates
+                            if href in seen_urls:
+                                continue
+                            seen_urls.add(href)
+
+                            # Add post
+                            results.append({
+                                'url': href,
+                                'type': 'Post'
+                            })
+                        except:
                             continue
-
-                        # Make full URL
-                        if href.startswith('/'):
-                            href = f'https://www.instagram.com{href}'
-
-                        # Skip duplicates
-                        if href in seen_urls:
-                            continue
-                        seen_urls.add(href)
-
-                        # Only posts (no reels)
-                        results.append({
-                            'url': href,
-                            'type': 'Post'
-                        })
-                except Exception:
+                except:
                     continue
 
             return results
+
         except Exception as e:
             self.logger.error(f"Error extracting links: {e}")
             return []
@@ -227,32 +240,27 @@ class PostLinksScraper(BaseScraper):
 
     def _aggressive_scroll(self) -> None:
         """
-        Optimized scrolling for Instagram lazy loading (FAST but EFFECTIVE)
+        Fast scroll optimized for Instagram's div._ac7v container loading
 
-        Balance between speed and completeness
+        As we scroll, Instagram loads new div._ac7v containers (each with 3 posts)
         """
-        # Strategy 1: Scroll to bottom (fast)
-        self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-        time.sleep(1.2)  # Quick wait for lazy loading
-
-        # Strategy 2: Trigger loading by scrolling to last visible element
         try:
-            posts = self.page.locator('a[href*="/p/"]').all()
-            if len(posts) > 2:
-                # Scroll the last post into view to trigger next batch
-                last_post = posts[-1]
-                last_post.scroll_into_view_if_needed()
-                time.sleep(0.4)
+            # Scroll to last container to trigger loading of next batch
+            containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
+
+            if len(containers) > 0:
+                # Scroll last container into view to trigger lazy loading
+                last_container = containers[-1]
+                last_container.scroll_into_view_if_needed()
+                time.sleep(0.8)  # Wait for new containers to load
+            else:
+                # Fallback: scroll to bottom
+                self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                time.sleep(1.0)
         except:
-            pass
-
-        # Strategy 3: Small bounce to ensure loading
-        self.page.evaluate('window.scrollBy(0, -100)')
-        time.sleep(0.2)
-        self.page.evaluate('window.scrollBy(0, 100)')
-
-        # Final minimal delay
-        time.sleep(0.3)
+            # Fallback: scroll to bottom
+            self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+            time.sleep(1.0)
 
     def _save_links(self, links: List[Dict[str, str]]) -> None:
         """

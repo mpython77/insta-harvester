@@ -91,39 +91,55 @@ class ReelLinksScraper(BaseScraper):
 
     def _extract_current_reel_links(self) -> List[str]:
         """
-        Extract all visible REEL links from current viewport
+        Extract REEL links from div._ac7v containers (NEW INSTAGRAM STRUCTURE)
+
+        Instagram structure on /reels/ page:
+        - div._ac7v.x1ty9z65.xzboxd6 contains 3 reels
+        - Each container has 3x <a href="/username/reel/XYZ/">
 
         Returns:
             List of reel URLs
         """
         try:
-            # Find all REEL links
-            # Pattern: a[href*="/reel/"]
-            reel_links = self.page.locator('a[href*="/reel/"]').all()
-
             results = []
             seen_urls = set()
 
-            for link in reel_links:
+            # Find all post/reel grid containers
+            containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
+
+            for container in containers:
                 try:
-                    href = link.get_attribute('href')
-                    if href:
-                        # Make full URL
-                        if href.startswith('/'):
-                            href = f'https://www.instagram.com{href}'
+                    # Get all links within this container
+                    links = container.locator('a[href]').all()
 
-                        # Skip duplicates
-                        if href in seen_urls:
-                            continue
-                        seen_urls.add(href)
+                    for link in links:
+                        try:
+                            href = link.get_attribute('href')
+                            if not href:
+                                continue
 
-                        # Only add if it's a reel link
-                        if '/reel/' in href:
+                            # ONLY collect /reel/ links
+                            if '/reel/' not in href:
+                                continue
+
+                            # Make full URL
+                            if href.startswith('/'):
+                                href = f'https://www.instagram.com{href}'
+
+                            # Skip duplicates
+                            if href in seen_urls:
+                                continue
+                            seen_urls.add(href)
+
+                            # Add reel
                             results.append(href)
-                except Exception:
+                        except:
+                            continue
+                except:
                     continue
 
             return results
+
         except Exception as e:
             self.logger.error(f"Error extracting reel links: {e}")
             return []
@@ -195,32 +211,27 @@ class ReelLinksScraper(BaseScraper):
 
     def _aggressive_scroll(self) -> None:
         """
-        Optimized scrolling for Instagram lazy loading (FAST but EFFECTIVE)
+        Fast scroll optimized for Instagram's div._ac7v container loading
 
-        Balance between speed and completeness
+        As we scroll, Instagram loads new div._ac7v containers (each with 3 reels)
         """
-        # Strategy 1: Scroll to bottom (fast)
-        self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-        time.sleep(1.2)  # Quick wait for lazy loading
-
-        # Strategy 2: Trigger loading by scrolling to last visible element
         try:
-            reels = self.page.locator('a[href*="/reel/"]').all()
-            if len(reels) > 2:
-                # Scroll the last reel into view to trigger next batch
-                last_reel = reels[-1]
-                last_reel.scroll_into_view_if_needed()
-                time.sleep(0.4)
+            # Scroll to last container to trigger loading of next batch
+            containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
+
+            if len(containers) > 0:
+                # Scroll last container into view to trigger lazy loading
+                last_container = containers[-1]
+                last_container.scroll_into_view_if_needed()
+                time.sleep(0.8)  # Wait for new containers to load
+            else:
+                # Fallback: scroll to bottom
+                self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                time.sleep(1.0)
         except:
-            pass
-
-        # Strategy 3: Small bounce to ensure loading
-        self.page.evaluate('window.scrollBy(0, -100)')
-        time.sleep(0.2)
-        self.page.evaluate('window.scrollBy(0, 100)')
-
-        # Final minimal delay
-        time.sleep(0.3)
+            # Fallback: scroll to bottom
+            self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+            time.sleep(1.0)
 
     def _save_links(self, reel_links: List[str], username: str) -> None:
         """
