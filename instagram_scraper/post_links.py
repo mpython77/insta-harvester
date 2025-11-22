@@ -127,6 +127,7 @@ class PostLinksScraper(BaseScraper):
 
             # Find all post/reel grid containers
             containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
+            self.logger.debug(f"Found {len(containers)} containers on page")
 
             for container in containers:
                 try:
@@ -240,27 +241,35 @@ class PostLinksScraper(BaseScraper):
 
     def _aggressive_scroll(self) -> None:
         """
-        Fast scroll optimized for Instagram's div._ac7v container loading
+        Multi-stage scroll to ensure Instagram loads ALL containers
 
-        As we scroll, Instagram loads new div._ac7v containers (each with 3 posts)
+        Instagram doesn't always load new containers on first scroll attempt.
+        We need to scroll multiple times and wait longer.
         """
         try:
-            # Scroll to last container to trigger loading of next batch
+            # STAGE 1: Scroll to last container
             containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
 
             if len(containers) > 0:
-                # Scroll last container into view to trigger lazy loading
                 last_container = containers[-1]
                 last_container.scroll_into_view_if_needed()
-                time.sleep(0.8)  # Wait for new containers to load
-            else:
-                # Fallback: scroll to bottom
-                self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                time.sleep(1.0)
-        except:
-            # Fallback: scroll to bottom
+                time.sleep(0.5)
+
+            # STAGE 2: Scroll to actual page bottom to trigger more loading
             self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-            time.sleep(1.0)
+            time.sleep(1.5)  # Longer wait for lazy loading
+
+            # STAGE 3: Small bounce to ensure detection
+            self.page.evaluate('window.scrollBy(0, -100)')
+            time.sleep(0.3)
+            self.page.evaluate('window.scrollBy(0, 150)')
+            time.sleep(0.5)
+
+        except Exception as e:
+            self.logger.debug(f"Scroll error: {e}")
+            # Fallback: just scroll to bottom
+            self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+            time.sleep(1.5)
 
     def _save_links(self, links: List[Dict[str, str]]) -> None:
         """
