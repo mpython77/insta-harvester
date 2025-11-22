@@ -40,10 +40,12 @@ def main():
             print("  5. Scrape profile")
             print("  6. Batch follow multiple users")
             print("  7. Batch send messages")
+            print("  8. Get followers list")
+            print("  9. Get following list")
             print("  0. Exit")
             print("=" * 70)
 
-            choice = input("\nEnter choice (0-7): ").strip()
+            choice = input("\nEnter choice (0-9): ").strip()
 
             if choice == '0':
                 print("\n👋 Goodbye!")
@@ -147,6 +149,50 @@ def main():
                     print(f"  Failed: {result['failed']}")
                 else:
                     print("❌ Message or usernames missing")
+
+            elif choice == '8':
+                # Get followers
+                username = input("Enter username to get followers from: ").strip()
+                limit_input = input("Enter limit (or press Enter for all): ").strip()
+                limit = int(limit_input) if limit_input else None
+
+                print(f"\n📊 Collecting followers from @{username}...")
+                try:
+                    followers = browser.get_followers(username, limit=limit, print_realtime=True)
+                    print(f"\n✅ Total followers collected: {len(followers)}")
+
+                    # Ask to save
+                    save = input("\nSave to file? (y/n): ").strip().lower()
+                    if save == 'y':
+                        filename = f"{username}_followers.txt"
+                        with open(filename, 'w', encoding='utf-8') as f:
+                            for follower in followers:
+                                f.write(f"{follower}\n")
+                        print(f"✅ Saved to: {filename}")
+                except Exception as e:
+                    print(f"❌ Error: {e}")
+
+            elif choice == '9':
+                # Get following
+                username = input("Enter username to get following from: ").strip()
+                limit_input = input("Enter limit (or press Enter for all): ").strip()
+                limit = int(limit_input) if limit_input else None
+
+                print(f"\n📊 Collecting following from @{username}...")
+                try:
+                    following = browser.get_following(username, limit=limit, print_realtime=True)
+                    print(f"\n✅ Total following collected: {len(following)}")
+
+                    # Ask to save
+                    save = input("\nSave to file? (y/n): ").strip().lower()
+                    if save == 'y':
+                        filename = f"{username}_following.txt"
+                        with open(filename, 'w', encoding='utf-8') as f:
+                            for user in following:
+                                f.write(f"{user}\n")
+                        print(f"✅ Saved to: {filename}")
+                except Exception as e:
+                    print(f"❌ Error: {e}")
 
             else:
                 print("❌ Invalid choice!")

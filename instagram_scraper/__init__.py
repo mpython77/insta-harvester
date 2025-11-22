@@ -12,6 +12,7 @@ Features:
 - **Excel export** - Real-time data export to Excel
 - **Follow/Unfollow management** - Professional follow operations with rate limiting
 - **Direct messaging** - Send DMs with smart rate limiting
+- **Followers collection** - Collect followers/following lists with real-time output
 - **Shared browser sessions** - Single browser for all operations (no reopening!)
 - HTML structure change detection
 - Professional logging
@@ -57,8 +58,15 @@ Usage:
         browser.scrape_profile('user1')
         # No reopening browser!
 
+    # Collect followers with real-time output
+    from instagram_scraper import FollowersCollector
+
+    collector = FollowersCollector()
+    collector.setup_browser(session_data)
+    followers = collector.get_followers('username', limit=100)
+
 Author: AI Assistant
-Version: 2.4.0 (Added Shared Browser Sessions)
+Version: 2.5.0 (Added Followers Collection)
 """
 
 from .config import ScraperConfig
@@ -81,10 +89,11 @@ from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
 from .follow import FollowManager
 from .message import MessageManager
+from .followers import FollowersCollector
 from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
 
-__version__ = '2.4.0'
+__version__ = '2.5.0'
 __author__ = 'AI Assistant'
 
 __all__ = [
@@ -112,6 +121,7 @@ __all__ = [
     'ParallelPostDataScraper',
     'FollowManager',
     'MessageManager',
+    'FollowersCollector',
     'SharedBrowser',
 
     # Data structures
