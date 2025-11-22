@@ -218,6 +218,84 @@ Do you want to follow? (yes/no): yes
 
 ---
 
+### 5️⃣ **test_message.py** - Direct Message Management Test
+Tests direct messaging functionality
+
+**What it does:**
+- Send DM to single user
+- Batch send to multiple users
+- Send personalized messages
+- Smart rate limiting
+
+**How to use:**
+```bash
+python examples/test_message.py
+
+# Choose from 3 examples:
+# 1. Send single message
+# 2. Batch send same message to multiple users
+# 3. Send personalized messages to different users
+```
+
+**Example 1 - Single Message:**
+```
+Enter username to message (without @): instagram
+Enter your message: Hello from Python!
+
+📨 Sending message to @instagram...
+✅ Successfully sent message to @instagram
+Status: sent
+```
+
+**Example 2 - Batch Send:**
+```
+Enter message to send to all: Check out my new project!
+
+Enter usernames (one per line, empty line to finish):
+  Username 1: user1
+  Username 2: user2
+  Username 3: user3
+  Username 4: [Enter]
+
+📨 Sending message to 3 users...
+
+📊 BATCH SEND SUMMARY
+Total users: 3
+Successfully sent: 3
+Failed: 0
+
+Individual results:
+  ✅ @user1: sent
+  ✅ @user2: sent
+  ✅ @user3: sent
+```
+
+**Example 3 - Personalized Messages:**
+```
+Enter username and message pairs (empty username to finish):
+
+  Username 1: john
+  Message for @john: Hey John, thanks for the follow!
+
+  Username 2: alice
+  Message for @alice: Alice, loved your recent post!
+
+  Username 3: [Enter]
+
+📨 Sending 2 personalized messages...
+
+📊 PERSONALIZED SEND SUMMARY
+Total messages: 2
+Successfully sent: 2
+Failed: 0
+
+Results:
+  ✅ @john: sent
+  ✅ @alice: sent
+```
+
+---
+
 ## 🚀 When to Use Which Test
 
 ### Testing New Profile:
@@ -244,6 +322,12 @@ python examples/test_follow.py
 # Test follow and unfollow operations
 ```
 
+### Testing Direct Messaging:
+```bash
+python examples/test_message.py
+# Test sending DMs
+```
+
 ### Full Production Scraping:
 ```bash
 python main_advanced.py
@@ -263,10 +347,12 @@ python main_advanced.py
    - Data extraction issue → `test_phase2.py`
    - HTML changes → `test_professional.py`
    - Follow/Unfollow testing → `test_follow.py`
+   - Direct messaging testing → `test_message.py`
 
 3. **For production:**
    - Scraping: use `main_advanced.py`
    - Following: use `follow_user.py` or `unfollow_user.py`
+   - Messaging: use `send_message.py`
 
 ---
 

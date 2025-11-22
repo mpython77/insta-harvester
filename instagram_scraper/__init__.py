@@ -11,6 +11,7 @@ Features:
 - **Parallel processing** - Scrape multiple posts simultaneously
 - **Excel export** - Real-time data export to Excel
 - **Follow/Unfollow management** - Professional follow operations with rate limiting
+- **Direct messaging** - Send DMs with smart rate limiting
 - HTML structure change detection
 - Professional logging
 - Modular design for library usage
@@ -39,8 +40,15 @@ Usage:
     manager.setup_browser(session_data)
     result = manager.follow('username')
 
+    # Direct messaging
+    from instagram_scraper import MessageManager
+
+    messenger = MessageManager()
+    messenger.setup_browser(session_data)
+    result = messenger.send_message('username', 'Hello!')
+
 Author: AI Assistant
-Version: 2.2.0 (Added Follow/Unfollow Management)
+Version: 2.3.0 (Added Direct Message Support)
 """
 
 from .config import ScraperConfig
@@ -62,9 +70,10 @@ from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
 from .follow import FollowManager
+from .message import MessageManager
 from .orchestrator import InstagramOrchestrator, quick_scrape
 
-__version__ = '2.2.0'
+__version__ = '2.3.0'
 __author__ = 'AI Assistant'
 
 __all__ = [
@@ -91,6 +100,7 @@ __all__ = [
     'ReelDataScraper',
     'ParallelPostDataScraper',
     'FollowManager',
+    'MessageManager',
 
     # Data structures
     'ProfileData',
