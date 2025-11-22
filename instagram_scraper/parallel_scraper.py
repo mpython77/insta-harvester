@@ -30,21 +30,106 @@ def _worker_signal_handler(signum, frame):
 
 
 
+def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int) -> List[str]:
+    """
+    Extract tagged accounts from REEL via popup button
+
+    Reels show tags in a popup, not directly in HTML
+    """
+    tagged = []
+
+    try:
+        # METHOD 1: Click tag button to open popup
+        tag_button = page.locator('button:has(svg[aria-label="Tags"])').first
+        tag_button.click(timeout=3000)
+        print(f"[Worker {worker_id}] ✓ Clicked tag button, waiting for popup...")
+        time.sleep(1.5)  # Wait for popup animation
+
+        # Extract usernames from popup
+        popup_links = page.locator('a[href^="/"]').all()
+        for link in popup_links:
+            try:
+                href = link.get_attribute('href', timeout=1000)
+                if href and href.startswith('/') and href.count('/') == 2:
+                    username = href.strip('/').split('/')[-1]
+                    if username and username not in ['explore', 'accounts', 'p', 'reel'] and username not in tagged:
+                        tagged.append(username)
+            except:
+                continue
+
+        # Close popup
+        try:
+            close_button = page.locator('button:has(svg[aria-label="Close"])').first
+            close_button.click(timeout=2000)
+            print(f"[Worker {worker_id}] ✓ Closed tag popup")
+        except:
+            pass
+
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} reel tags: {tagged}")
+            return tagged
+
+    except Exception as e:
+        print(f"[Worker {worker_id}] Reel tag extraction failed: {e}")
+
+    # No tags found
+    print(f"[Worker {worker_id}] ⚠️ No tags in reel (or no tag button)")
+    return []
+
+
+def _extract_reel_likes(soup: BeautifulSoup, page: Page, worker_id: int) -> str:
+    """Extract likes from REEL using reel-specific selector"""
+    try:
+        # Reel likes selector
+        likes_span = page.locator('span.x1ypdohk.x1s688f.x2fvf9.xe9ewy2[role="button"]').first
+        likes_text = likes_span.inner_text(timeout=3000).strip()
+        likes_clean = likes_text.replace(',', '')
+        print(f"[Worker {worker_id}] ✓ Reel likes: {likes_clean}")
+        return likes_clean
+    except Exception as e:
+        print(f"[Worker {worker_id}] Reel likes extraction failed: {e}")
+        return 'N/A'
+
+
+def _extract_reel_timestamp(soup: BeautifulSoup, page: Page, worker_id: int) -> str:
+    """Extract timestamp from REEL"""
+    try:
+        # Method 1: time.x1p4m5qa element
+        time_elem = page.locator('time.x1p4m5qa').first
+
+        # Try title attribute first
+        title = time_elem.get_attribute('title', timeout=2000)
+        if title:
+            print(f"[Worker {worker_id}] ✓ Reel timestamp (title): {title}")
+            return title
+
+        # Fallback to datetime attribute
+        datetime_attr = time_elem.get_attribute('datetime', timeout=2000)
+        if datetime_attr:
+            print(f"[Worker {worker_id}] ✓ Reel timestamp (datetime): {datetime_attr}")
+            return datetime_attr
+
+    except Exception as e:
+        print(f"[Worker {worker_id}] Reel timestamp extraction failed: {e}")
+
+    return 'N/A'
+
+
 def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Worker function for multiprocessing - MUST be at module level
 
     Args:
-        args: Dictionary with keys: urls_batch, worker_id, session_data, config_dict, result_queue
+        args: Dictionary with keys: links_batch, worker_id, session_data, config_dict, result_queue
 
     Returns:
-        List of post data dictionaries
+        List of post/reel data dictionaries
     """
     # Register signal handler for this worker process
     signal.signal(signal.SIGINT, _worker_signal_handler)
     signal.signal(signal.SIGTERM, _worker_signal_handler)
 
-    urls_batch = args['urls_batch']
+    links_batch = args['links_batch']  # Changed: Now receives link dictionaries
     worker_id = args['worker_id']
     session_data = args['session_data']
     config_dict = args['config_dict']
@@ -80,8 +165,13 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
         page = context.new_page()
         page.set_default_timeout(config.default_timeout)
 
-        total_in_batch = len(urls_batch)
-        for idx, url in enumerate(urls_batch, 1):
+        total_in_batch = len(links_batch)
+        for idx, link_data in enumerate(links_batch, 1):
+            # Extract URL and content type
+            url = link_data['url']
+            content_type = link_data.get('type', 'Post')  # 'Post' or 'Reel'
+            is_reel = (content_type == 'Reel')
+
             # Check for shutdown request
             global _shutdown_requested
             if _shutdown_requested:
@@ -89,43 +179,51 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                 break
 
             try:
-                # LOG: Starting scrape
-                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] 🔍 Scraping: {url}")
+                # LOG: Starting scrape with type
+                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] 🔍 Scraping [{content_type}]: {url}")
 
-                # Navigate to post
+                # Navigate to post/reel
                 page.goto(url, wait_until='domcontentloaded', timeout=60000)
                 print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Page loaded")
 
-                # CRITICAL: Wait longer for tags to load
+                # CRITICAL: Wait longer for content to load
                 time.sleep(3)  # Increased from 2 to 3 seconds
-
-                # Try to wait for tag elements specifically
-                try:
-                    page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
-                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Tag elements detected")
-                except:
-                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
 
                 # Get HTML content
                 html_content = page.content()
                 soup = BeautifulSoup(html_content, 'lxml')
 
-                # Extract data with robust multi-method approach
-                tagged_accounts = _extract_tags_robust(soup, page, url, worker_id)
-                likes = _extract_likes_bs4(soup, page)
-                timestamp = _extract_timestamp_bs4(soup)
+                # Extract data based on content type
+                if is_reel:
+                    # REEL-specific extraction
+                    tagged_accounts = _extract_reel_tags(soup, page, url, worker_id)
+                    likes = _extract_reel_likes(soup, page, worker_id)
+                    timestamp = _extract_reel_timestamp(soup, page, worker_id)
+                else:
+                    # POST extraction (original logic)
+                    # Try to wait for tag elements specifically
+                    try:
+                        page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
+                        print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Tag elements detected")
+                    except:
+                        print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
+
+                    tagged_accounts = _extract_tags_robust(soup, page, url, worker_id)
+                    likes = _extract_likes_bs4(soup, page)
+                    timestamp = _extract_timestamp_bs4(soup)
 
                 result = {
                     'url': url,
                     'tagged_accounts': tagged_accounts,
                     'likes': likes,
-                    'timestamp': timestamp
+                    'timestamp': timestamp,
+                    'content_type': content_type  # Include content type in result
                 }
 
                 batch_results.append(result)
 
                 # LOG: Success
-                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✅ DONE: {len(tagged_accounts)} tags, {likes} likes")
+                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✅ DONE [{content_type}]: {len(tagged_accounts)} tags, {likes} likes")
 
                 # REAL-TIME: Send to queue immediately for Excel writing
                 if result_queue is not None:
@@ -145,7 +243,8 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                     'url': url,
                     'tagged_accounts': [],
                     'likes': 'ERROR',
-                    'timestamp': 'N/A'
+                    'timestamp': 'N/A',
+                    'content_type': content_type  # Include content type even in errors
                 }
                 batch_results.append(error_result)
 
@@ -353,16 +452,16 @@ class ParallelPostDataScraper:
 
     def scrape_multiple(
         self,
-        post_urls: List[str],
+        post_links: List[Dict[str, str]],  # Changed: Now accepts dictionaries
         parallel: int = 1,
         session_file: str = None,
         excel_exporter = None
     ) -> List[PostData]:
         """
-        Scrape multiple posts in parallel with real-time Excel export
+        Scrape multiple posts/reels in parallel with real-time Excel export
 
         Args:
-            post_urls: List of post URLs
+            post_links: List of dictionaries with 'url' and 'type' keys
             parallel: Number of parallel contexts (default 1 = sequential)
             session_file: Session file path
             excel_exporter: Optional Excel exporter for real-time writing
@@ -373,7 +472,7 @@ class ParallelPostDataScraper:
         session_file = session_file or self.config.session_file
 
         self.logger.info(
-            f"Starting parallel scrape: {len(post_urls)} posts, "
+            f"Starting parallel scrape: {len(post_links)} posts/reels, "
             f"{parallel} parallel contexts"
         )
 
@@ -384,10 +483,12 @@ class ParallelPostDataScraper:
 
         # Sequential (parallel=1)
         if parallel <= 1:
-            return self._scrape_sequential(post_urls, session_data)
+            # Extract URLs for sequential scraping
+            urls = [link['url'] for link in post_links]
+            return self._scrape_sequential(urls, session_data)
 
         # Parallel (parallel > 1)
-        return self._scrape_parallel(post_urls, session_data, parallel, excel_exporter)
+        return self._scrape_parallel(post_links, session_data, parallel, excel_exporter)
 
     def _scrape_sequential(
         self,
@@ -407,7 +508,7 @@ class ParallelPostDataScraper:
 
     def _scrape_parallel(
         self,
-        post_urls: List[str],
+        post_links: List[Dict[str, str]],  # Changed: Now accepts dictionaries
         session_data: dict,
         num_workers: int,
         excel_exporter=None
@@ -416,7 +517,7 @@ class ParallelPostDataScraper:
         Parallel scraping with multiple browser processes + REAL-TIME Excel writing
 
         Args:
-            post_urls: List of URLs
+            post_links: List of dictionaries with 'url' and 'type' keys
             session_data: Session data
             num_workers: Number of parallel workers
             excel_exporter: Optional Excel exporter for real-time writing
@@ -424,8 +525,8 @@ class ParallelPostDataScraper:
         Returns:
             List of PostData objects
         """
-        # Split URLs into batches
-        batches = self._split_into_batches(post_urls, num_workers)
+        # Split link dictionaries into batches
+        batches = self._split_into_batches(post_links, num_workers)
 
         # Prepare config as dict (must be serializable for multiprocessing)
         config_dict = {
@@ -443,7 +544,7 @@ class ParallelPostDataScraper:
         # Prepare arguments for each worker
         worker_args = [
             {
-                'urls_batch': batch,
+                'links_batch': batch,  # Changed: Now passing link dictionaries
                 'worker_id': i,
                 'session_data': session_data,
                 'config_dict': config_dict,
@@ -453,7 +554,7 @@ class ParallelPostDataScraper:
         ]
 
         self.logger.info(
-            f"Starting {num_workers} parallel processes for {len(post_urls)} posts"
+            f"Starting {num_workers} parallel processes for {len(post_links)} posts/reels"
         )
         self.logger.info("Real-time monitoring enabled ✓")
 
@@ -522,14 +623,24 @@ class ParallelPostDataScraper:
                         url=result_dict['url'],
                         tagged_accounts=result_dict['tagged_accounts'],
                         likes=result_dict['likes'],
-                        timestamp=result_dict['timestamp']
+                        timestamp=result_dict['timestamp'],
+                        content_type=result_dict.get('content_type', 'Post')  # Include content_type
                     ))
 
         # Sort results by original URL order
         results_dict = {r.url: r for r in results}
         sorted_results = [
-            results_dict.get(url, PostData(url=url, tagged_accounts=[], likes='N/A', timestamp='N/A'))
-            for url in post_urls
+            results_dict.get(
+                link['url'],
+                PostData(
+                    url=link['url'],
+                    tagged_accounts=[],
+                    likes='N/A',
+                    timestamp='N/A',
+                    content_type=link.get('type', 'Post')
+                )
+            )
+            for link in post_links  # Changed: Now iterating over link dictionaries
         ]
 
         self.logger.info(

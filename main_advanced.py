@@ -1,6 +1,16 @@
 """
-Instagram Scraper - Advanced Main Example
-Complete workflow with parallel processing and Excel export
+Instagram Scraper - FULL AUTOMATIC SCRAPING
+Professional version with complete automation
+
+Just enter username - everything else is automatic!
+Features:
+- Collects ALL post & reel links (Phase 1)
+- Extracts data from each post/reel (Phase 2)
+- Advanced diagnostics
+- Error recovery
+- Performance monitoring
+- Real-time Excel export
+- Parallel processing
 """
 
 import multiprocessing
@@ -8,169 +18,163 @@ from instagram_scraper import InstagramOrchestrator, ScraperConfig
 
 
 def main():
-    """Main function - advanced scraping with all features"""
+    """
+    FULL AUTOMATIC SCRAPING
+
+    Simply enter Instagram username and the scraper will:
+    1. Collect ALL post & reel links from profile
+    2. Extract tags, likes, dates from each post/reel
+    3. Save to Excel with Type column (Post/Reel)
+    4. Generate detailed statistics
+    5. Monitor performance & errors
+    """
     # Required for Windows multiprocessing support
     multiprocessing.freeze_support()
 
     print("=" * 70)
-    print("Instagram Scraper - ADVANCED (Parallel + Excel)")
+    print("🚀 INSTAGRAM SCRAPER - PROFESSIONAL FULL AUTO MODE")
+    print("=" * 70)
+    print()
+    print("✨ Features:")
+    print("  ✅ Automatic post link collection (from main profile)")
+    print("  ✅ Automatic reel link collection (from /reels/ page - SEPARATE!)")
+    print("  ✅ Smart data extraction (posts + reels)")
+    print("  ✅ Real-time Excel export with Type column")
+    print("  ✅ HTML diagnostics & error recovery")
+    print("  ✅ Performance monitoring")
+    print("  ✅ Parallel processing (3 tabs)")
+    print()
     print("=" * 70)
     print()
 
-    # Get username
-    username = input("Enter Instagram username (without @): ").strip().lstrip('@')
+    # Get username - ONLY input needed!
+    username = input("📝 Enter Instagram username (without @): ").strip().lstrip('@')
 
     if not username:
         print("❌ No username provided!")
         return
 
-    print(f"\n🎯 Target: @{username}\n")
-
-    # Get parallel option
-    print("Parallel processing (faster scraping):")
-    print("  1 = Sequential (one by one)")
-    print("  2 = 2 parallel tabs")
-    print("  3 = 3 parallel tabs (recommended)")
-    print("  5 = 5 parallel tabs (fastest)")
-    parallel_input = input("\nEnter number of parallel tabs (default=1): ").strip()
-
-    try:
-        parallel = int(parallel_input) if parallel_input else None
-    except ValueError:
-        parallel = None
-
-    # Get Excel option
-    excel_input = input("\nSave to Excel in real-time? (y/n, default=n): ").strip().lower()
-    save_excel = excel_input == 'y'
-
-    print("\n" + "=" * 70)
-    print(f"Configuration:")
-    print(f"  Username: @{username}")
-    print(f"  Parallel: {parallel if parallel else 'Sequential (1)'}")
-    print(f"  Excel Export: {'Yes' if save_excel else 'No'}")
+    print(f"\n🎯 Target: @{username}")
+    print()
+    print("⚙️  Configuration (OPTIMIZED):")
+    print("   - Parallel: 3 tabs (fast & stable)")
+    print("   - Excel: Real-time export")
+    print("   - Diagnostics: Enabled")
+    print("   - Error Recovery: Enabled")
+    print("   - Performance Monitoring: Enabled")
+    print()
     print("=" * 70)
     print()
 
-    input("Press ENTER to start scraping...")
+    confirm = input("🚀 Press ENTER to start FULL AUTO SCRAPING (or 'q' to quit): ").strip()
+    if confirm.lower() == 'q':
+        print("❌ Cancelled.")
+        return
+
+    print()
+    print("=" * 70)
+    print("🚀 STARTING FULL AUTOMATIC SCRAPING...")
+    print("=" * 70)
     print()
 
-    # Configuration
+    # Optimized configuration for production
     config = ScraperConfig(
-        headless=False,  # Set True for production
+        headless=False,  # Visual mode for monitoring
         log_level='INFO',
         log_to_console=True,
-        log_file='instagram_scraper.log'
+        log_file=f'instagram_scraper_{username}.log'
     )
 
     try:
-        # Create orchestrator
+        # Create orchestrator with professional features
         orchestrator = InstagramOrchestrator(config)
 
-        # Run advanced scraping
+        # FULL AUTOMATIC SCRAPING
+        # Phase 1: Collect links (posts + reels)
+        # Phase 2: Extract data with diagnostics & error recovery
+        # Phase 3: Save to Excel + JSON
         results = orchestrator.scrape_complete_profile_advanced(
             username,
-            parallel=parallel,
-            save_excel=save_excel,
-            export_json=True
+            parallel=3,          # 3 parallel tabs (optimal)
+            save_excel=True,     # Real-time Excel export
+            export_json=True     # JSON backup
         )
 
-        # Summary
-        print("\n" + "=" * 70)
-        print("✅ SCRAPING COMPLETE!")
+        # Display final summary
+        print()
         print("=" * 70)
+        print("✅ FULL AUTOMATIC SCRAPING COMPLETE!")
+        print("=" * 70)
+        print()
+        print("📊 RESULTS:")
+        print("-" * 70)
         print(f"👤 Username: @{results['username']}")
-        print(f"📊 Profile:")
-        print(f"   Posts: {results['profile']['posts']}")
+        print()
+        print(f"📈 Profile Stats:")
+        print(f"   Total Posts: {results['profile']['posts']}")
         print(f"   Followers: {results['profile']['followers']}")
         print(f"   Following: {results['profile']['following']}")
-        print(f"📁 Post Links: {len(results['post_links'])}")
-        print(f"📝 Posts Scraped: {len(results['posts_data'])}")
+        print()
+        print(f"🔗 Links Collected:")
+        print(f"   Total: {len(results['post_links'])} items")
+
+        # Count posts vs reels
+        if results['post_links']:
+            posts_count = sum(1 for link in results['post_links'] if link.get('type') == 'Post')
+            reels_count = sum(1 for link in results['post_links'] if link.get('type') == 'Reel')
+            print(f"   - Posts: {posts_count}")
+            print(f"   - Reels: {reels_count}")
+
+        print()
+        print(f"📝 Data Extracted:")
+        print(f"   Total Scraped: {len(results['posts_data'])} items")
+
+        # Count successful extractions
+        if results['posts_data']:
+            success = sum(1 for item in results['posts_data'] if item.get('likes') != 'ERROR')
+            print(f"   Successful: {success}/{len(results['posts_data'])} ({success/len(results['posts_data'])*100:.1f}%)")
+
+        print()
+        print("💾 Output Files:")
+        print(f"   📊 Excel: instagram_data_{username}.xlsx")
+        print(f"   📄 JSON: instagram_data_{username}.json")
+        print(f"   📋 Log: instagram_scraper_{username}.log")
+        print()
+        print("=" * 70)
+        print()
+        print("🎉 All done! Check the Excel file for complete data.")
         print()
 
-        if save_excel:
-            print(f"💾 Excel: instagram_data_{username}.xlsx")
-
-        print(f"💾 JSON: instagram_data_{username}.json")
+    except KeyboardInterrupt:
+        print()
+        print()
         print("=" * 70)
+        print("⚠️  SCRAPING INTERRUPTED (Ctrl+C)")
+        print("=" * 70)
+        print()
+        print("✅ Partial data has been saved.")
+        print(f"💾 Check: instagram_data_{username}.xlsx and .json")
+        print()
 
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print()
+        print("=" * 70)
+        print("❌ ERROR OCCURRED")
+        print("=" * 70)
+        print()
+        print(f"Error: {e}")
+        print()
+        print("💡 Tips:")
+        print("  - Make sure you have a valid Instagram session")
+        print("  - Check if the username exists")
+        print("  - Check the log file for details")
+        print()
+
         import traceback
+        print("📋 Full Error Details:")
+        print("-" * 70)
         traceback.print_exc()
-
-
-def example_quick_usage():
-    """Quick usage example"""
-    from instagram_scraper import InstagramOrchestrator, ScraperConfig
-
-    config = ScraperConfig(headless=True)
-    orchestrator = InstagramOrchestrator(config)
-
-    # Simple call with all features
-    results = orchestrator.scrape_complete_profile_advanced(
-        'dindinku__',
-        parallel=3,        # 3 parallel tabs
-        save_excel=True,   # Real-time Excel export
-        export_json=True   # JSON export
-    )
-
-    print(f"Scraped {len(results['posts_data'])} posts")
-    print(f"Excel saved: instagram_data_dindinku__.xlsx")
-
-
-def example_parallel_only():
-    """Example: Only parallel processing, no Excel"""
-    from instagram_scraper import InstagramOrchestrator
-
-    orchestrator = InstagramOrchestrator()
-
-    results = orchestrator.scrape_complete_profile_advanced(
-        'cristiano',
-        parallel=5,         # Fast! 5 parallel tabs
-        save_excel=False,   # No Excel
-        export_json=True
-    )
-
-    return results
-
-
-def example_excel_only():
-    """Example: Only Excel export, no parallel"""
-    from instagram_scraper import InstagramOrchestrator
-
-    orchestrator = InstagramOrchestrator()
-
-    results = orchestrator.scrape_complete_profile_advanced(
-        'cristiano',
-        parallel=None,      # Sequential
-        save_excel=True,    # Real-time Excel
-        export_json=False
-    )
-
-    return results
-
-
-def example_library_usage():
-    """Example: Use as library - parallel scraper only"""
-    from instagram_scraper import ParallelPostDataScraper, ScraperConfig
-
-    config = ScraperConfig(headless=True)
-    scraper = ParallelPostDataScraper(config)
-
-    post_urls = [
-        'https://www.instagram.com/p/ABC123/',
-        'https://www.instagram.com/p/DEF456/',
-        'https://www.instagram.com/p/GHI789/',
-    ]
-
-    # Parallel scrape
-    results = scraper.scrape_multiple(
-        post_urls,
-        parallel=3  # 3 tabs
-    )
-
-    for data in results:
-        print(f"{data.url}: {data.likes} likes, {len(data.tagged_accounts)} tags")
+        print("-" * 70)
 
 
 if __name__ == '__main__':

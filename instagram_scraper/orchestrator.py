@@ -14,6 +14,8 @@ from .config import ScraperConfig
 from .profile import ProfileScraper, ProfileData
 from .post_links import PostLinksScraper
 from .post_data import PostDataScraper, PostData
+from .reel_links import ReelLinksScraper
+from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
 from .logger import setup_logger
@@ -23,16 +25,19 @@ class InstagramOrchestrator:
     """
     Main orchestrator for complete Instagram scraping workflow
 
-    Workflow:
-    1. Scrape profile (posts, followers, following)
-    2. Collect all post links
-    3. Scrape data from each post (tags, likes, timestamp)
+    Workflow (COMPLETE SEPARATION OF POSTS AND REELS):
+    1. Scrape profile stats (posts, followers, following)
+    2. Collect POST links from main profile (POSTS ONLY)
+    3. Collect REEL links from /reels/ page (REELS ONLY - SEPARATE!)
+    4. Scrape data from posts (tags, likes, timestamp)
+    5. Scrape data from reels (tags, likes, timestamp - SEPARATE!)
 
     Features:
     - Complete end-to-end scraping
+    - Separate handling of posts and reels (no mixing!)
     - Progress tracking
     - Error resilience
-    - Data export
+    - Data export with Type column (Post/Reel)
     """
 
     def __init__(self, config: Optional[ScraperConfig] = None):
@@ -138,12 +143,27 @@ class InstagramOrchestrator:
 
     def _collect_post_links(self, username: str) -> List[Dict[str, str]]:
         """
-        Collect all post/reel links from profile
+        Collect all POST links from main profile (POSTS ONLY - NO REELS!)
 
         Returns:
-            List of dictionaries with 'url' and 'type' keys
+            List of dictionaries with 'url' and 'type' keys (all type='Post')
+
+        NOTE: Reels are collected separately by _collect_reel_links()
         """
         scraper = PostLinksScraper(self.config)
+        return scraper.scrape(
+            username,
+            save_to_file=True
+        )
+
+    def _collect_reel_links(self, username: str) -> List[str]:
+        """
+        Collect all REEL links from {username}/reels/ page (SEPARATE from posts)
+
+        Returns:
+            List of reel URLs
+        """
+        scraper = ReelLinksScraper(self.config)
         return scraper.scrape(
             username,
             save_to_file=True
@@ -162,6 +182,19 @@ class InstagramOrchestrator:
         return scraper.scrape_multiple(
             urls,
             delay_between_posts=True
+        )
+
+    def _scrape_reels_data(self, reel_links: List[str]) -> List[ReelData]:
+        """
+        Scrape data from all REELS (SEPARATE from posts)
+
+        Args:
+            reel_links: List of reel URLs
+        """
+        scraper = ReelDataScraper(self.config)
+        return scraper.scrape_multiple(
+            reel_links,
+            delay_between_reels=True
         )
 
     def scrape_complete_profile_advanced(
@@ -202,7 +235,9 @@ class InstagramOrchestrator:
             'username': username,
             'profile': None,
             'post_links': [],
-            'posts_data': []
+            'reel_links': [],
+            'posts_data': [],
+            'reels_data': []
         }
 
         # Track current state for graceful shutdown
@@ -245,6 +280,18 @@ class InstagramOrchestrator:
             self.logger.warning("Shutdown requested after STEP 2")
             return results
 
+        # STEP 2.5: Collect REEL links (SEPARATE from posts)
+        self.logger.info("\nSTEP 2.5: Collecting REEL links from /reels/ page...")
+        reel_links = self._collect_reel_links(username)
+        results['reel_links'] = reel_links
+        self.current_results = results  # Update for graceful shutdown
+        self.logger.info(f"✓ Collected {len(reel_links)} reel links")
+
+        # Check for shutdown request
+        if self.shutdown_requested:
+            self.logger.warning("Shutdown requested after STEP 2.5")
+            return results
+
         # STEP 3: Scrape post data (parallel or sequential)
         if post_links:
             self.logger.info(
@@ -269,6 +316,29 @@ class InstagramOrchestrator:
             results['posts_data'] = [p.to_dict() for p in posts_data]
             self.logger.info(f"✓ Scraped {len(posts_data)} posts")
 
+        # Check for shutdown request
+        if self.shutdown_requested:
+            self.logger.warning("Shutdown requested after STEP 3")
+            if excel_exporter:
+                excel_exporter.finalize()
+            return results
+
+        # STEP 3.5: Scrape REEL data (SEPARATE from posts)
+        if reel_links:
+            self.logger.info(
+                f"\nSTEP 3.5: Scraping {len(reel_links)} REELS "
+                f"(sequential - reels only)..."
+            )
+
+            # Note: Reels are always scraped sequentially using ReelDataScraper
+            reels_data = self._scrape_reels_sequential(
+                reel_links,
+                excel_exporter
+            )
+
+            results['reels_data'] = [r.to_dict() for r in reels_data]
+            self.logger.info(f"✓ Scraped {len(reels_data)} reels")
+
         # Finalize Excel
         if excel_exporter:
             excel_exporter.finalize()
@@ -284,7 +354,9 @@ class InstagramOrchestrator:
         self.logger.info(f"{'='*60}")
         self.logger.info(f"Profile: {results['profile']}")
         self.logger.info(f"Post links: {len(results['post_links'])}")
+        self.logger.info(f"Reel links: {len(results['reel_links'])}")
         self.logger.info(f"Posts scraped: {len(results['posts_data'])}")
+        self.logger.info(f"Reels scraped: {len(results['reels_data'])}")
         self.logger.info(f"{'='*60}\n")
 
         return results
@@ -310,10 +382,9 @@ class InstagramOrchestrator:
         self.logger.info(f"📊 Real-time Excel writing: {'ENABLED' if excel_exporter else 'DISABLED'}")
 
         scraper = ParallelPostDataScraper(self.config)
-        # Extract URLs from dictionaries
-        urls = [link['url'] for link in post_links]
+        # Pass full link dictionaries (with content_type info)
         posts_data = scraper.scrape_multiple(
-            urls,
+            post_links,  # Changed: Now passing full dictionaries!
             parallel=parallel,
             session_file=self.config.session_file,
             excel_exporter=excel_exporter  # Pass to enable real-time writing!
@@ -395,6 +466,74 @@ class InstagramOrchestrator:
             scraper.close()
 
         return posts_data
+
+    def _scrape_reels_sequential(
+        self,
+        reel_links: List[str],
+        excel_exporter: Optional[ExcelExporter] = None
+    ) -> List[ReelData]:
+        """
+        Scrape REELS sequentially with real-time Excel export (SEPARATE from posts)
+
+        Args:
+            reel_links: List of reel URLs
+            excel_exporter: Optional Excel exporter
+
+        Returns:
+            List of ReelData objects
+        """
+        reels_data = []
+
+        scraper = ReelDataScraper(self.config)
+        scraper.load_session()
+        scraper.setup_browser(scraper.load_session())
+
+        try:
+            for i, url in enumerate(reel_links, 1):
+                # Check for shutdown request before each reel
+                if self.shutdown_requested:
+                    self.logger.warning(f"Shutdown requested at reel {i}/{len(reel_links)}")
+                    break
+
+                self.logger.info(f"[{i}/{len(reel_links)}] Scraping [Reel]: {url}")
+
+                try:
+                    data = scraper.scrape(url)
+                    reels_data.append(data)
+
+                    # Update current results immediately (for graceful shutdown)
+                    if self.current_results is not None:
+                        self.current_results['reels_data'] = [r.to_dict() for r in reels_data]
+
+                    # Save to Excel immediately (real-time saving)
+                    if excel_exporter:
+                        excel_exporter.add_row(
+                            post_url=data.url,
+                            tagged_accounts=data.tagged_accounts,
+                            likes=data.likes,
+                            post_date=data.timestamp,
+                            content_type='Reel'
+                        )
+
+                except Exception as e:
+                    self.logger.error(f"Failed to scrape {url}: {e}")
+                    reels_data.append(ReelData(
+                        url=url,
+                        tagged_accounts=[],
+                        likes='ERROR',
+                        timestamp='N/A',
+                        content_type='Reel'
+                    ))
+
+                # Delay
+                if i < len(reel_links):
+                    import random
+                    time.sleep(random.uniform(2, 4))
+
+        finally:
+            scraper.close()
+
+        return reels_data
 
     def _export_results(self, results: Dict[str, Any]) -> None:
         """Export results to JSON file"""

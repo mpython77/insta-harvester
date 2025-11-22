@@ -1,0 +1,228 @@
+"""
+Instagram Scraper - Reel links collector
+Scroll through reels page and collect all reel links
+
+ALOHIDA FAYL - FAQAT REELS UCHUN!
+"""
+
+import time
+import random
+from typing import List, Set, Optional
+from pathlib import Path
+
+from .base import BaseScraper
+from .config import ScraperConfig
+from .exceptions import ProfileNotFoundError
+
+
+class ReelLinksScraper(BaseScraper):
+    """
+    Instagram REEL links scraper - FAQAT REELS!
+
+    Features:
+    - Scrapes from {username}/reels/ page
+    - Automatic scrolling with human-like behavior
+    - Real-time progress tracking
+    - Duplicate detection
+    - Smart stopping (2-3 scroll attempts with no new reels = DONE)
+    - Export to file
+    """
+
+    def __init__(self, config: Optional[ScraperConfig] = None):
+        """Initialize reel links scraper"""
+        super().__init__(config)
+        self.logger.info("ReelLinksScraper ready (REELS ONLY)")
+
+    def scrape(
+        self,
+        username: str,
+        save_to_file: bool = True
+    ) -> List[str]:
+        """
+        Scrape all REEL links from {username}/reels/ page
+
+        Args:
+            username: Instagram username
+            save_to_file: Save links to file
+
+        Returns:
+            List of reel URLs (e.g., ['https://instagram.com/user/reel/ABC/', ...])
+        """
+        username = username.strip().lstrip('@')
+        self.logger.info(f"🎬 Starting REEL links scrape for: @{username}")
+
+        # Load session and setup browser
+        session_data = self.load_session()
+        self.setup_browser(session_data)
+
+        try:
+            # Navigate to REELS page (not profile!)
+            reels_url = f'https://www.instagram.com/{username}/reels/'
+            self.logger.info(f"📍 Navigating to: {reels_url}")
+            self.goto_url(reels_url)
+
+            # Check profile exists
+            if not self._profile_exists():
+                raise ProfileNotFoundError(f"Profile @{username} not found or has no reels")
+
+            # Wait for reels to load
+            time.sleep(3)
+
+            # Scroll and collect reel links
+            reel_links = self._scroll_and_collect()
+
+            # Save to file
+            if save_to_file:
+                self._save_links(reel_links, username)
+
+            self.logger.info(f"✅ Collected {len(reel_links)} REEL links")
+            return reel_links
+
+        finally:
+            self.close()
+
+    def _profile_exists(self) -> bool:
+        """Check if profile/reels page exists"""
+        try:
+            content = self.page.content()
+            return 'Page Not Found' not in content and 'Sorry, this page' not in content
+        except Exception:
+            return False
+
+    def _extract_current_reel_links(self) -> List[str]:
+        """
+        Extract all visible REEL links from current viewport
+
+        Returns:
+            List of reel URLs
+        """
+        try:
+            # Find all REEL links
+            # Pattern: a[href*="/reel/"]
+            reel_links = self.page.locator('a[href*="/reel/"]').all()
+
+            results = []
+            seen_urls = set()
+
+            for link in reel_links:
+                try:
+                    href = link.get_attribute('href')
+                    if href:
+                        # Make full URL
+                        if href.startswith('/'):
+                            href = f'https://www.instagram.com{href}'
+
+                        # Skip duplicates
+                        if href in seen_urls:
+                            continue
+                        seen_urls.add(href)
+
+                        # Only add if it's a reel link
+                        if '/reel/' in href:
+                            results.append(href)
+                except Exception:
+                    continue
+
+            return results
+        except Exception as e:
+            self.logger.error(f"Error extracting reel links: {e}")
+            return []
+
+    def _scroll_and_collect(self) -> List[str]:
+        """
+        Scroll through reels page and collect all reel links
+
+        Smart stopping: If 2-3 scrolls with NO new reels → DONE
+
+        Returns:
+            List of unique reel URLs
+        """
+        self.logger.info(f"🎬 Starting reel link collection...")
+
+        all_reel_links: Set[str] = set()
+        scroll_attempts = 0
+        no_new_reels_count = 0
+        MAX_NO_NEW_REELS = 3  # Stop after 3 scrolls with no new reels
+
+        while True:
+            # Extract current reel links
+            current_reels = self._extract_current_reel_links()
+            previous_count = len(all_reel_links)
+
+            # Add new reel links
+            for reel_url in current_reels:
+                all_reel_links.add(reel_url)
+
+            new_count = len(all_reel_links)
+
+            # Log progress
+            self.logger.info(
+                f"Progress: {new_count} reel links "
+                f"(+{new_count - previous_count} new)"
+            )
+
+            # Check if no new reels found
+            if new_count == previous_count:
+                no_new_reels_count += 1
+                self.logger.info(f"⚠️ No new reels found ({no_new_reels_count}/{MAX_NO_NEW_REELS})")
+            else:
+                # Reset counter if new reels found
+                no_new_reels_count = 0
+
+            # Stopping condition: 2-3 scrolls with no new reels
+            if no_new_reels_count >= MAX_NO_NEW_REELS:
+                self.logger.info(
+                    f"✓ Finished! No new reels after {MAX_NO_NEW_REELS} scroll attempts. "
+                    f"Total collected: {new_count}"
+                )
+                break
+
+            # Safety: Max scroll attempts
+            if scroll_attempts >= 100:  # Very high limit for reels
+                self.logger.warning(
+                    f"Max scroll attempts (100) reached"
+                )
+                break
+
+            # Scroll down (human-like)
+            self._human_like_scroll()
+
+            scroll_attempts += 1
+
+        # Convert set to sorted list
+        result = sorted(list(all_reel_links))
+        return result
+
+    def _human_like_scroll(self) -> None:
+        """Scroll down with human-like behavior"""
+        # Scroll 80% of viewport height
+        self.page.evaluate('window.scrollBy(0, window.innerHeight * 0.8)')
+
+        # Random delay
+        delay = random.uniform(
+            self.config.scroll_delay_min,
+            self.config.scroll_delay_max
+        )
+        time.sleep(delay)
+
+    def _save_links(self, reel_links: List[str], username: str) -> None:
+        """
+        Save reel links to file
+
+        Args:
+            reel_links: List of reel URLs
+            username: Username for filename
+        """
+        # Use a separate file for reels
+        output_file = Path(f'reel_links_{username}.txt')
+
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                for reel_url in reel_links:
+                    f.write(f"{reel_url}\n")
+
+            self.logger.info(f"💾 Reel links saved to: {output_file}")
+
+        except Exception as e:
+            self.logger.error(f"Failed to save reel links: {e}")
+            raise

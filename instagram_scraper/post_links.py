@@ -1,6 +1,8 @@
 """
 Instagram Scraper - Post links collector
-Scroll through profile and collect all post/reel links
+Scroll through profile and collect ONLY POST links (NO REELS)
+
+NOTE: Reels are collected separately by ReelLinksScraper from /reels/ page
 """
 
 import time
@@ -15,14 +17,17 @@ from .exceptions import ProfileNotFoundError
 
 class PostLinksScraper(BaseScraper):
     """
-    Instagram post links scraper with intelligent scrolling
+    Instagram POST links scraper with intelligent scrolling (POSTS ONLY - NO REELS!)
 
     Features:
+    - Collects ONLY posts (a[href*="/p/"]) - reels are handled separately
     - Automatic scrolling with human-like behavior
     - Real-time progress tracking
     - Duplicate detection
     - Smart stopping (target reached or no new content)
     - Export to file
+
+    NOTE: For reels, use ReelLinksScraper which scrapes from /reels/ page
     """
 
     def __init__(self, config: Optional[ScraperConfig] = None):
@@ -37,7 +42,7 @@ class PostLinksScraper(BaseScraper):
         save_to_file: bool = True
     ) -> List[Dict[str, str]]:
         """
-        Scrape all post/reel links from profile
+        Scrape all POST links from profile (POSTS ONLY - NO REELS!)
 
         Args:
             username: Instagram username
@@ -45,8 +50,10 @@ class PostLinksScraper(BaseScraper):
             save_to_file: Save links to file
 
         Returns:
-            List of dictionaries with 'url' and 'type' keys
-            Example: [{'url': 'https://...', 'type': 'Post'}, {'url': 'https://...', 'type': 'Reel'}]
+            List of dictionaries with 'url' and 'type' keys (all type='Post')
+            Example: [{'url': 'https://.../p/ABC/', 'type': 'Post'}]
+
+        NOTE: For reels, use ReelLinksScraper which scrapes from /reels/ page
         """
         username = username.strip().lstrip('@')
         self.logger.info(f"Starting post links scrape for: @{username}")
@@ -104,15 +111,16 @@ class PostLinksScraper(BaseScraper):
 
     def _extract_current_links(self) -> List[Dict[str, str]]:
         """
-        Extract all visible post/reel links from current viewport
+        Extract all visible POST links from current viewport (POSTS ONLY - NO REELS!)
 
         Returns:
             List of dictionaries with 'url' and 'type' keys
-            Example: [{'url': 'https://...', 'type': 'Post'}, {'url': 'https://...', 'type': 'Reel'}]
+            Example: [{'url': 'https://...', 'type': 'Post'}]
         """
         try:
-            # Find all post and reel links
-            links = self.page.locator('a[href*="/p/"], a[href*="/reel/"]').all()
+            # IMPORTANT: Find ONLY post links (a[href*="/p/"]) - NO REELS!
+            # Reels are collected separately by ReelLinksScraper from /reels/ page
+            links = self.page.locator('a[href*="/p/"]').all()
 
             results = []
             seen_urls = set()
@@ -121,6 +129,10 @@ class PostLinksScraper(BaseScraper):
                 try:
                     href = link.get_attribute('href')
                     if href:
+                        # Skip if it's actually a reel (safety check)
+                        if '/reel/' in href:
+                            continue
+
                         # Make full URL
                         if href.startswith('/'):
                             href = f'https://www.instagram.com{href}'
@@ -130,12 +142,10 @@ class PostLinksScraper(BaseScraper):
                             continue
                         seen_urls.add(href)
 
-                        # Detect type
-                        content_type = 'Reel' if '/reel/' in href else 'Post'
-
+                        # Only posts (no reels)
                         results.append({
                             'url': href,
-                            'type': content_type
+                            'type': 'Post'
                         })
                 except Exception:
                     continue

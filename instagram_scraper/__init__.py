@@ -4,7 +4,9 @@ Instagram Scraper - Professional Instagram scraping library
 Features:
 - Profile statistics (posts, followers, following)
 - Post links collection with intelligent scrolling
+- Reel links collection (SEPARATE from posts)
 - Post data extraction (tags, likes, timestamps)
+- Reel data extraction (SEPARATE from posts)
 - Complete workflow orchestration
 - **Parallel processing** - Scrape multiple posts simultaneously
 - **Excel export** - Real-time data export to Excel
@@ -30,7 +32,7 @@ Usage:
     )
 
 Author: AI Assistant
-Version: 2.0.0 (Parallel + Excel)
+Version: 2.1.0 (Separate Reel Scrapers)
 """
 
 from .config import ScraperConfig
@@ -47,11 +49,13 @@ from .base import BaseScraper
 from .profile import ProfileScraper, ProfileData
 from .post_links import PostLinksScraper
 from .post_data import PostDataScraper, PostData
+from .reel_links import ReelLinksScraper
+from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
 from .orchestrator import InstagramOrchestrator, quick_scrape
 
-__version__ = '2.0.0'
+__version__ = '2.1.0'
 __author__ = 'AI Assistant'
 
 __all__ = [
@@ -74,11 +78,14 @@ __all__ = [
     'ProfileScraper',
     'PostLinksScraper',
     'PostDataScraper',
+    'ReelLinksScraper',
+    'ReelDataScraper',
     'ParallelPostDataScraper',
 
     # Data structures
     'ProfileData',
     'PostData',
+    'ReelData',
 
     # Export
     'ExcelExporter',
