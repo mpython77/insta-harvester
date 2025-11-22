@@ -12,6 +12,7 @@ Features:
 - **Excel export** - Real-time data export to Excel
 - **Follow/Unfollow management** - Professional follow operations with rate limiting
 - **Direct messaging** - Send DMs with smart rate limiting
+- **Shared browser sessions** - Single browser for all operations (no reopening!)
 - HTML structure change detection
 - Professional logging
 - Modular design for library usage
@@ -47,8 +48,17 @@ Usage:
     messenger.setup_browser(session_data)
     result = messenger.send_message('username', 'Hello!')
 
+    # Shared browser - all operations in one browser!
+    from instagram_scraper import SharedBrowser
+
+    with SharedBrowser() as browser:
+        browser.follow('user1')
+        browser.send_message('user1', 'Hello!')
+        browser.scrape_profile('user1')
+        # No reopening browser!
+
 Author: AI Assistant
-Version: 2.3.0 (Added Direct Message Support)
+Version: 2.4.0 (Added Shared Browser Sessions)
 """
 
 from .config import ScraperConfig
@@ -71,9 +81,10 @@ from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
 from .follow import FollowManager
 from .message import MessageManager
+from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
 
-__version__ = '2.3.0'
+__version__ = '2.4.0'
 __author__ = 'AI Assistant'
 
 __all__ = [
@@ -101,6 +112,7 @@ __all__ = [
     'ParallelPostDataScraper',
     'FollowManager',
     'MessageManager',
+    'SharedBrowser',
 
     # Data structures
     'ProfileData',
