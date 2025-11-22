@@ -3,7 +3,7 @@ Instagram Message Manager - Example Usage
 Demonstrates how to use the MessageManager class
 """
 
-from instagram_scraper import MessageManager, ScraperConfig
+from instaharvest import MessageManager, ScraperConfig
 
 
 def example_single_message():

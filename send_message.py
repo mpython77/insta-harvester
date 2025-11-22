@@ -9,7 +9,7 @@ Requirements:
     - Instagram session must be saved first (run save_session.py)
 """
 
-from instagram_scraper import MessageManager
+from instaharvest import MessageManager
 
 
 def main():

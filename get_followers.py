@@ -3,7 +3,7 @@ Instagram Followers Collector - Simple Script
 Collect followers list from any profile with real-time output
 """
 
-from instagram_scraper import FollowersCollector
+from instaharvest import FollowersCollector
 
 
 def main():

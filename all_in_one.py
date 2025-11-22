@@ -13,7 +13,7 @@ Usage:
     python all_in_one.py
 """
 
-from instagram_scraper import SharedBrowser
+from instaharvest import SharedBrowser
 
 
 def main():

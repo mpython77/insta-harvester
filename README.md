@@ -1,425 +1,336 @@
-# 🚀 Instagram Scraper - Professional Edition
+# InstaHarvest 🌾
 
-Professional Instagram scraper with **automatic** post & reel data extraction, advanced diagnostics, error recovery, and performance monitoring.
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Code Style](https://img.shields.io/badge/code%20style-black-black)](https://github.com/psf/black)
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+**Professional Instagram Data Collection Toolkit** - A powerful and efficient library for Instagram automation, data collection, and analytics.
 
 ---
 
 ## ✨ Features
 
-### 🎯 Core Features
-- ✅ **Full Automatic Scraping** - Just enter username, everything else is automatic
-- ✅ **Post & Reel Support** - Handles both content types intelligently
-- ✅ **Real-time Excel Export** - Live export with Type column (Post/Reel)
-- ✅ **Parallel Processing** - 3 concurrent tabs for faster scraping
-- ✅ **Smart Type Detection** - Automatically identifies posts vs reels
-
-### 🔍 Professional Features
-- ✅ **HTML Diagnostics** - Detects Instagram HTML changes automatically
-- ✅ **Error Recovery** - 90%+ recovery rate with fallback methods
-- ✅ **Performance Monitoring** - Real-time CPU, memory, and speed tracking
-- ✅ **Memory Optimization** - Automatic garbage collection
-- ✅ **Detailed Statistics** - Comprehensive reports after scraping
-
-### 📊 Data Extraction
-- **Posts:** Tags, Likes, Date
-- **Reels:** Tags (via popup), Likes, Date
-- **Profile:** Posts count, Followers, Following
-- **Output:** Excel + JSON with Type column
+- 📊 **Profile Statistics** - Collect followers, following, posts count
+- 🔗 **Post & Reel Links** - Intelligent scrolling and link collection
+- 🏷️ **Tagged Accounts** - Extract tags from posts and reels
+- 👥 **Followers/Following** - Collect lists with real-time output
+- 💬 **Direct Messaging** - Send DMs with smart rate limiting
+- 🤝 **Follow/Unfollow** - Manage following with rate limiting
+- ⚡ **Parallel Processing** - Scrape multiple posts simultaneously
+- 📑 **Excel Export** - Real-time data export to Excel
+- 🌐 **Shared Browser** - Single browser for all operations
+- 🔍 **HTML Detection** - Automatic structure change detection
+- 📝 **Professional Logging** - Comprehensive logging system
 
 ---
 
 ## 🚀 Quick Start
 
-### 1️⃣ Installation
+### Installation
 
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/ArtemInsta.git
-cd ArtemInsta
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install Playwright browsers
-playwright install chromium
+pip install instaharvest
 ```
 
-### 2️⃣ Setup Instagram Session
+### Install Playwright Browser
 
 ```bash
-# Run once to save your Instagram session
+playwright install chrome
+```
+
+### Basic Usage
+
+```python
+from instaharvest import quick_scrape
+
+# Simple profile scraping
+results = quick_scrape('username')
+print(f"Followers: {results['profile']['followers']}")
+```
+
+---
+
+## 📖 Documentation
+
+### 1. Profile Scraping
+
+```python
+from instaharvest import ProfileScraper
+
+scraper = ProfileScraper()
+session_data = scraper.load_session()
+scraper.setup_browser(session_data)
+
+profile = scraper.scrape('username')
+print(f"Posts: {profile.posts}")
+print(f"Followers: {profile.followers}")
+print(f"Following: {profile.following}")
+
+scraper.close()
+```
+
+### 2. Collect Followers/Following
+
+```python
+from instaharvest import FollowersCollector
+
+collector = FollowersCollector()
+session_data = collector.load_session()
+collector.setup_browser(session_data)
+
+# Collect first 100 followers
+followers = collector.get_followers('username', limit=100, print_realtime=True)
+print(f"Collected {len(followers)} followers")
+
+# Collect following
+following = collector.get_following('username', limit=50)
+
+collector.close()
+```
+
+### 3. Follow/Unfollow Management
+
+```python
+from instaharvest import FollowManager
+
+manager = FollowManager()
+session_data = manager.load_session()
+manager.setup_browser(session_data)
+
+# Follow a user
+result = manager.follow('username')
+print(result)  # {'status': 'success', 'action': 'followed', ...}
+
+# Unfollow
+result = manager.unfollow('username')
+
+# Batch follow
+usernames = ['user1', 'user2', 'user3']
+results = manager.batch_follow(usernames)
+
+manager.close()
+```
+
+### 4. Direct Messaging
+
+```python
+from instaharvest import MessageManager
+
+messenger = MessageManager()
+session_data = messenger.load_session()
+messenger.setup_browser(session_data)
+
+# Send single message
+result = messenger.send_message('username', 'Hello!')
+
+# Batch send
+usernames = ['user1', 'user2']
+results = messenger.batch_send(usernames, 'Hi there!')
+
+messenger.close()
+```
+
+### 5. Shared Browser (Recommended!)
+
+**Use one browser for all operations** - Much faster!
+
+```python
+from instaharvest import SharedBrowser
+
+with SharedBrowser() as browser:
+    # All operations use the same browser instance
+    browser.follow('user1')
+    browser.send_message('user1', 'Hello!')
+    followers = browser.get_followers('user2', limit=100)
+    profile = browser.scrape_profile('user3')
+
+    # No browser reopening! Fast and efficient!
+```
+
+### 6. Advanced: Parallel Processing
+
+```python
+from instaharvest import InstagramOrchestrator, ScraperConfig
+
+config = ScraperConfig(headless=True)
+orchestrator = InstagramOrchestrator(config)
+
+# Scrape with 3 parallel workers + Excel export
+results = orchestrator.scrape_complete_profile_advanced(
+    'username',
+    parallel=3,        # 3 parallel browser tabs
+    save_excel=True,   # Real-time Excel export
+    max_posts=100
+)
+
+print(f"Scraped {len(results['posts_data'])} posts")
+```
+
+### 7. Post Data Extraction
+
+```python
+from instaharvest import PostDataScraper
+
+scraper = PostDataScraper()
+session_data = scraper.load_session()
+scraper.setup_browser(session_data)
+
+# Scrape single post
+post = scraper.scrape('https://www.instagram.com/p/POST_ID/')
+print(f"Tagged: {post.tagged_accounts}")
+print(f"Likes: {post.likes}")
+print(f"Date: {post.timestamp}")
+
+scraper.close()
+```
+
+---
+
+## 🎯 Complete Workflow Example
+
+```python
+from instaharvest import SharedBrowser
+
+with SharedBrowser() as browser:
+    # 1. Get profile stats
+    profile = browser.scrape_profile('target_user')
+    print(f"Target has {profile['followers']} followers")
+
+    # 2. Collect their followers
+    followers = browser.get_followers('target_user', limit=50)
+    print(f"Collected {len(followers)} followers")
+
+    # 3. Follow them
+    for follower in followers[:10]:  # Follow first 10
+        result = browser.follow(follower)
+        if result['status'] == 'success':
+            print(f"✓ Followed {follower}")
+
+    # 4. Send welcome message
+    for follower in followers[:5]:
+        browser.send_message(follower, "Thanks for following!")
+```
+
+---
+
+## 📋 Requirements
+
+- Python 3.8+
+- Playwright (with Chrome browser)
+- pandas
+- openpyxl
+- beautifulsoup4
+- lxml
+
+---
+
+## 🔧 Session Setup
+
+**First-time setup** - Save your Instagram session:
+
+```bash
 python save_session.py
-
-# Follow the prompts:
-# - Enter username
-# - Enter password
-# - Complete 2FA if enabled
-# Session saved to: instagram_session.json
 ```
 
-### 3️⃣ Run Full Auto Scraping
-
-```bash
-# Just run and enter username!
-python main_advanced.py
-
-# That's it! 🎉
-# Output:
-# - instagram_data_USERNAME.xlsx (with Type column)
-# - instagram_data_USERNAME.json
-# - instagram_scraper_USERNAME.log
-```
-
----
-
-## 📖 Usage
-
-### FULL AUTO MODE (Recommended)
-
-```bash
-python main_advanced.py
-```
-
-**Input:** Username only!
-
-**What it does:**
-1. ✅ Collects ALL post & reel links (Phase 1)
-2. ✅ Extracts data from each item (Phase 2)
-3. ✅ Saves to Excel with Type column
-4. ✅ Shows detailed statistics
-
-**Example:**
-```
-🚀 INSTAGRAM SCRAPER - PROFESSIONAL FULL AUTO MODE
-
-📝 Enter Instagram username: cristiano
-🎯 Target: @cristiano
-
-⚙️  Configuration (OPTIMIZED):
-   - Parallel: 3 tabs (fast & stable)
-   - Excel: Real-time export
-   - Diagnostics: Enabled
-   - Error Recovery: Enabled
-   - Performance Monitoring: Enabled
-
-🚀 Press ENTER to start...
-
-[Automatic scraping starts...]
-
-✅ FULL AUTOMATIC SCRAPING COMPLETE!
-
-📊 RESULTS:
-   Username: @cristiano
-   Total Posts: 3,567
-   Links Collected: 3,567 items
-     - Posts: 2,234
-     - Reels: 1,333
-   Data Extracted: 3,567 items
-   Successful: 3,545/3,567 (99.4%)
-
-💾 Output Files:
-   📊 Excel: instagram_data_cristiano.xlsx
-   📄 JSON: instagram_data_cristiano.json
-   📋 Log: instagram_scraper_cristiano.log
-```
-
----
-
-## 📊 Output Format
-
-### Excel File Structure
-
-| Post URL | Type | Tagged Accounts | Likes Count | Post Date | Scraping Date/Time |
-|----------|------|-----------------|-------------|-----------|-------------------|
-| https://... | Post | user1, user2 | 1234 | Nov 17, 2025 | 2025-11-22 10:30:15 |
-| https://... | Reel | user3, user4 | 5678 | Nov 18, 2025 | 2025-11-22 10:32:45 |
-
-### JSON File Structure
-
-```json
-{
-  "username": "cristiano",
-  "profile": {
-    "posts": 3567,
-    "followers": "500M",
-    "following": "500"
-  },
-  "post_links": [
-    {"url": "https://...", "type": "Post"},
-    {"url": "https://...", "type": "Reel"}
-  ],
-  "posts_data": [
-    {
-      "url": "https://...",
-      "tagged_accounts": ["user1", "user2"],
-      "likes": "1234",
-      "timestamp": "Nov 17, 2025",
-      "content_type": "Post"
-    }
-  ]
-}
-```
-
----
-
-## 🔍 Advanced Features
-
-### HTML Diagnostics
-
-Automatically detects when Instagram changes their HTML structure:
-
-```
-🔍 Running POST diagnostics...
-  ✓ tags_primary: Found 3 elements (0.042s)
-  ✓ likes_button: Found 1 elements (0.031s)
-  ✗ timestamp: NOT FOUND (0.028s)
-
-⚠️ HTML CHANGE DETECTED: 'timestamp' selector failed!
-   Selector: time
-   Instagram may have updated HTML structure
-```
-
-### Error Recovery
-
-Automatic fallback methods:
-
-```
-⚠️ likes: Primary method failed - TimeoutError
-✓ likes: Fallback method succeeded
-
-ERROR STATISTICS:
-  Total Errors: 15
-  Recovered: 14
-  Failed: 1
-  Recovery Rate: 93.3%
-```
-
-### Performance Monitoring
-
-Real-time monitoring:
-
-```
-💻 SYSTEM INFO:
-  CPU: 8 cores @ 15.2%
-  RAM: 12.3/16.0 GB available
-  Process: 342.15 MB, CPU: 8.3%
-
-♻️ Memory optimized: Freed 45.23 MB
-
-📊 PERFORMANCE REPORT:
-  Total Time: 45.32s
-  Operations/Second: 0.55
-  Peak Memory: 342.15 MB
-```
-
----
-
-## 🧪 Testing & Examples
-
-Check the `examples/` directory for test scripts:
-
-```bash
-# Test link collection
-python examples/test_phase1.py
-
-# Test data extraction
-python examples/test_phase2.py
-
-# Test professional features
-python examples/test_professional.py
-```
-
-See [examples/README.md](examples/README.md) for detailed documentation.
+This will:
+1. Open Chrome browser
+2. Let you log in to Instagram manually
+3. Save session to `instagram_session.json`
+4. All future scripts will use this session (no re-login needed!)
 
 ---
 
 ## 📁 Project Structure
 
 ```
-ArtemInsta/
-├── main_advanced.py           # FULL AUTO SCRAPING (main script)
-├── save_session.py            # Instagram login session manager
-├── requirements.txt           # Python dependencies
-├── instagram_scraper/         # Core library
-│   ├── __init__.py
-│   ├── base.py               # Base scraper class
-│   ├── config.py             # Configuration
-│   ├── post_links.py         # Link collection (Phase 1)
-│   ├── post_data.py          # Data extraction (Phase 2) - PROFESSIONAL
-│   ├── diagnostics.py        # HTML diagnostics system
-│   ├── error_handler.py      # Error recovery system
-│   ├── performance.py        # Performance monitoring
-│   ├── parallel_scraper.py   # Parallel processing
-│   ├── excel_export.py       # Real-time Excel export
-│   └── orchestrator.py       # Workflow coordinator
-├── examples/                  # Test & example scripts
-│   ├── README.md
-│   ├── test_phase1.py        # Link collection test
-│   ├── test_phase2.py        # Data extraction test
-│   └── test_professional.py  # Professional features test
-└── PROFESSIONAL_FEATURES.md   # Documentation (Uzbek)
+instaharvest/
+├── instaharvest/          # Main package
+│   ├── __init__.py        # Package entry point
+│   ├── base.py            # Base scraper class
+│   ├── config.py          # Configuration
+│   ├── profile.py         # Profile scraping
+│   ├── followers.py       # Followers collection
+│   ├── follow.py          # Follow/unfollow
+│   ├── message.py         # Direct messaging
+│   ├── post_data.py       # Post data extraction
+│   ├── shared_browser.py  # Shared browser manager
+│   └── ...                # More modules
+├── examples/              # Example scripts
+├── README.md              # This file
+├── setup.py               # Package setup
+└── LICENSE                # MIT License
 ```
 
 ---
 
 ## ⚙️ Configuration
 
-### Default Configuration (Optimized)
-
 ```python
-from instagram_scraper import ScraperConfig
+from instaharvest import ScraperConfig
 
 config = ScraperConfig(
-    headless=False,           # Visual mode
-    log_level='INFO',         # Detailed logs
-    log_to_console=True,      # Console output
-    parallel=3,               # 3 concurrent tabs
-    enable_diagnostics=True,  # HTML diagnostics
-)
-```
-
-### Headless Mode (Server/Production)
-
-```python
-config = ScraperConfig(
-    headless=True,  # No browser window
-    log_level='INFO',
+    headless=True,              # Run in headless mode
+    viewport_width=1920,
+    viewport_height=1080,
+    default_timeout=30000,      # 30 seconds
+    max_scroll_attempts=50,
+    log_level='INFO'
 )
 ```
 
 ---
 
-## 🛠️ Requirements
+## 🛡️ Best Practices
 
-- **Python:** 3.8+
-- **OS:** Windows, macOS, Linux
-- **RAM:** 4GB+ (8GB recommended for parallel processing)
-- **Disk:** 500MB for dependencies
-
-### Dependencies
-
-```
-playwright==1.48.0      # Browser automation
-beautifulsoup4==4.12.3  # HTML parsing
-openpyxl==3.1.2        # Excel export
-pandas==2.2.0          # Data manipulation
-lxml==5.1.0            # Fast XML/HTML parsing
-psutil==5.9.8          # Performance monitoring
-```
+1. **Use SharedBrowser** - Reuses browser instance, much faster
+2. **Rate Limiting** - Built-in delays to avoid Instagram bans
+3. **Session Management** - Auto-refreshes session to prevent expiration
+4. **Error Handling** - Comprehensive exception handling
+5. **Logging** - Professional logging for debugging
 
 ---
 
-## 🐛 Troubleshooting
+## ⚠️ Disclaimer
 
-### Session Expired
+This tool is for educational purposes only. Make sure to:
 
-```bash
-# Re-run session setup
-python save_session.py
-```
+- Follow Instagram's Terms of Service
+- Respect rate limits
+- Don't spam or harass users
+- Use responsibly
 
-### "Profile not found"
-
-- Check username spelling
-- Make sure profile is public or you follow it
-
-### Slow Scraping
-
-- Reduce parallel tabs: `parallel=2`
-- Check internet speed
-- Close other browser tabs
-
-### HTML Structure Changed
-
-The scraper will automatically detect and report HTML changes:
-
-```
-❌ CRITICAL HTML STRUCTURE CHANGE DETECTED!
-   Failed selectors: timestamp, likes_button
-
-💡 Solution:
-   - Check GitHub for updates
-   - Report issue with diagnostic report
-```
+**The authors are not responsible for any misuse of this library.**
 
 ---
 
-## 📈 Performance
+## 📜 License
 
-Tested with real Instagram profiles:
-
-| Profile Size | Time (3 tabs) | Memory | Success Rate |
-|--------------|---------------|--------|--------------|
-| 100 posts    | ~8 min        | 350 MB | 98-100%      |
-| 500 posts    | ~40 min       | 450 MB | 97-99%       |
-| 1000 posts   | ~80 min       | 550 MB | 96-98%       |
-
-*Average: 4-5 seconds per post/reel with parallel processing*
+MIT License - see [LICENSE](LICENSE) file for details
 
 ---
 
 ## 🤝 Contributing
 
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
----
-
-## ⚠️ Legal & Ethics
-
-**Important:** This tool is for educational and research purposes only.
-
-- ✅ Use on your own account or with permission
-- ✅ Respect Instagram's Terms of Service
-- ✅ Don't abuse rate limits
-- ❌ Don't use for spam or harassment
-- ❌ Don't scrape private accounts without permission
-
-**Rate Limiting:** The scraper includes built-in delays to be respectful of Instagram's servers.
-
----
-
-## 📝 License
-
-MIT License - See [LICENSE](LICENSE) file for details.
-
----
-
-## 🌟 Credits
-
-Developed with ❤️ using:
-- [Playwright](https://playwright.dev/) - Browser automation
-- [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) - HTML parsing
-- [Pandas](https://pandas.pydata.org/) - Data manipulation
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
 ## 📞 Support
 
-- **Issues:** [GitHub Issues](https://github.com/yourusername/ArtemInsta/issues)
-- **Documentation:** See `PROFESSIONAL_FEATURES.md` (Uzbek)
-- **Examples:** See `examples/README.md`
+- GitHub Issues: [Report a bug](https://github.com/yourusername/instaharvest/issues)
+- Documentation: [Read the docs](https://github.com/yourusername/instaharvest#readme)
 
 ---
 
-## 🎯 Roadmap
+## 🎉 Acknowledgments
 
-- [ ] Support for Stories
-- [ ] Support for Comments extraction
-- [ ] GUI interface
-- [ ] Multiple account support
-- [ ] Scheduled scraping
+Built with:
+- [Playwright](https://playwright.dev/) - Browser automation
+- [Pandas](https://pandas.pydata.org/) - Data processing
+- [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) - HTML parsing
 
 ---
 
-**Made with ❤️ for the Instagram scraping community**
+**Made with ❤️ by Artem**
 
-⭐ **Star this repo if you find it useful!**
+*Happy Harvesting! 🌾*

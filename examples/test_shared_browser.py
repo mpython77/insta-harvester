@@ -3,7 +3,7 @@ Shared Browser - Example Usage
 Demonstrates using single browser for multiple operations
 """
 
-from instagram_scraper import SharedBrowser
+from instaharvest import SharedBrowser
 
 
 def example_basic_usage():

@@ -3,7 +3,7 @@ Instagram Scraper - Main Example
 Complete workflow demonstration
 """
 
-from instagram_scraper import (
+from instaharvest import (
     InstagramOrchestrator,
     ScraperConfig,
     ProfileScraper,

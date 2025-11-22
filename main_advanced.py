@@ -15,7 +15,7 @@ Features:
 """
 
 import multiprocessing
-from instagram_scraper import InstagramOrchestrator, ScraperConfig
+from instaharvest import InstagramOrchestrator, ScraperConfig
 
 
 def main():

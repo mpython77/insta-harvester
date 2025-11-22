@@ -3,7 +3,7 @@ Instagram Followers Collector - Example Usage
 Demonstrates how to use the FollowersCollector class
 """
 
-from instagram_scraper import FollowersCollector, ScraperConfig
+from instaharvest import FollowersCollector, ScraperConfig
 
 
 def example_basic_followers():
