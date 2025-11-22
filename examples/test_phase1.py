@@ -2,7 +2,7 @@
 Test Phase 1: Post + Reel Link Collection with Type Detection
 """
 
-from instagram_scraper import PostLinksScraper, ScraperConfig
+from instaharvest import PostLinksScraper, ScraperConfig
 
 def test_link_collection():
     """Test that links are collected with proper type classification"""

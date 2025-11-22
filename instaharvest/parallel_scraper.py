@@ -187,100 +187,109 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
         page = context.new_page()
         page.set_default_timeout(config.default_timeout)
 
-        total_in_batch = len(links_batch)
-        for idx, link_data in enumerate(links_batch, 1):
-            # Extract URL and content type
-            url = link_data['url']
-            content_type = link_data.get('type', 'Post')  # 'Post' or 'Reel'
-            is_reel = (content_type == 'Reel')
+        try:
+            total_in_batch = len(links_batch)
+            for idx, link_data in enumerate(links_batch, 1):
+                # Extract URL and content type
+                url = link_data['url']
+                content_type = link_data.get('type', 'Post')  # 'Post' or 'Reel'
+                is_reel = (content_type == 'Reel')
 
-            # Check for shutdown request
-            global _shutdown_requested
-            if _shutdown_requested:
-                print(f"[Worker {worker_id}] Shutdown requested, stopping...")
-                break
+                # Check for shutdown request
+                global _shutdown_requested
+                if _shutdown_requested:
+                    print(f"[Worker {worker_id}] Shutdown requested, stopping...")
+                    break
 
-            try:
-                # LOG: Starting scrape with type
-                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] 🔍 Scraping [{content_type}]: {url}")
+                try:
+                    # LOG: Starting scrape with type
+                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] 🔍 Scraping [{content_type}]: {url}")
 
-                # Navigate to post/reel
-                page.goto(url, wait_until='domcontentloaded', timeout=60000)
-                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Page loaded")
+                    # Navigate to post/reel
+                    page.goto(url, wait_until='domcontentloaded', timeout=60000)
+                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Page loaded")
 
-                # CRITICAL: Wait longer for content to load
-                time.sleep(3)  # Increased from 2 to 3 seconds
+                    # CRITICAL: Wait longer for content to load
+                    time.sleep(3)  # Increased from 2 to 3 seconds
 
-                # Get HTML content
-                html_content = page.content()
-                soup = BeautifulSoup(html_content, 'lxml')
+                    # Get HTML content
+                    html_content = page.content()
+                    soup = BeautifulSoup(html_content, 'lxml')
 
-                # Extract data based on content type
-                if is_reel:
-                    # REEL-specific extraction
-                    tagged_accounts = _extract_reel_tags(soup, page, url, worker_id)
-                    likes = _extract_reel_likes(soup, page, worker_id)
-                    timestamp = _extract_reel_timestamp(soup, page, worker_id)
-                else:
-                    # POST extraction (original logic)
-                    # Try to wait for tag elements specifically
-                    try:
-                        page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
-                        print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Tag elements detected")
-                    except:
-                        print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
+                    # Extract data based on content type
+                    if is_reel:
+                        # REEL-specific extraction
+                        tagged_accounts = _extract_reel_tags(soup, page, url, worker_id)
+                        likes = _extract_reel_likes(soup, page, worker_id)
+                        timestamp = _extract_reel_timestamp(soup, page, worker_id)
+                    else:
+                        # POST extraction (original logic)
+                        # Try to wait for tag elements specifically
+                        try:
+                            page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
+                            print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Tag elements detected")
+                        except:
+                            print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
 
-                    tagged_accounts = _extract_tags_robust(soup, page, url, worker_id)
-                    likes = _extract_likes_bs4(soup, page)
-                    timestamp = _extract_timestamp_bs4(soup)
+                        tagged_accounts = _extract_tags_robust(soup, page, url, worker_id)
+                        likes = _extract_likes_bs4(soup, page)
+                        timestamp = _extract_timestamp_bs4(soup)
 
-                result = {
-                    'url': url,
-                    'tagged_accounts': tagged_accounts,
-                    'likes': likes,
-                    'timestamp': timestamp,
-                    'content_type': content_type  # Include content type in result
-                }
-
-                batch_results.append(result)
-
-                # LOG: Success
-                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✅ DONE [{content_type}]: {len(tagged_accounts)} tags, {likes} likes")
-
-                # REAL-TIME: Send to queue immediately for Excel writing
-                if result_queue is not None:
-                    result_queue.put({
-                        'type': 'post_result',
-                        'worker_id': worker_id,
-                        'data': result,
-                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    })
-
-                # Small delay
-                time.sleep(random.uniform(1, 2))
-
-            except Exception as e:
-                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ❌ ERROR: {e}")
-                error_result = {
-                    'url': url,
-                    'tagged_accounts': [],
-                    'likes': 'ERROR',
-                    'timestamp': 'N/A',
-                    'content_type': content_type  # Include content type even in errors
-                }
-                batch_results.append(error_result)
-
-                # Send error to queue too
-                if result_queue is not None:
-                    result_queue.put({
-                        'type': 'post_error',
-                        'worker_id': worker_id,
+                    result = {
                         'url': url,
-                        'error': str(e)
-                    })
+                        'tagged_accounts': tagged_accounts,
+                        'likes': likes,
+                        'timestamp': timestamp,
+                        'content_type': content_type  # Include content type in result
+                    }
 
-        context.close()
-        browser.close()
+                    batch_results.append(result)
+
+                    # LOG: Success
+                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✅ DONE [{content_type}]: {len(tagged_accounts)} tags, {likes} likes")
+
+                    # REAL-TIME: Send to queue immediately for Excel writing
+                    if result_queue is not None:
+                        result_queue.put({
+                            'type': 'post_result',
+                            'worker_id': worker_id,
+                            'data': result,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        })
+
+                    # Small delay
+                    time.sleep(random.uniform(1, 2))
+
+                except Exception as e:
+                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ❌ ERROR: {e}")
+                    error_result = {
+                        'url': url,
+                        'tagged_accounts': [],
+                        'likes': 'ERROR',
+                        'timestamp': 'N/A',
+                        'content_type': content_type  # Include content type even in errors
+                    }
+                    batch_results.append(error_result)
+
+                    # Send error to queue too
+                    if result_queue is not None:
+                        result_queue.put({
+                            'type': 'post_error',
+                            'worker_id': worker_id,
+                            'url': url,
+                            'error': str(e)
+                        })
+
+        finally:
+            # Always cleanup browser resources
+            try:
+                context.close()
+            except:
+                pass
+            try:
+                browser.close()
+            except:
+                pass
 
     return batch_results
 

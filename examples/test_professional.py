@@ -3,7 +3,7 @@ Test Professional Instagram Scraper
 Tests all advanced features: diagnostics, error handling, performance monitoring
 """
 
-from instagram_scraper import PostDataScraper, ScraperConfig
+from instaharvest import PostDataScraper, ScraperConfig
 
 def test_professional_scraper():
     """Test professional scraper with all features"""

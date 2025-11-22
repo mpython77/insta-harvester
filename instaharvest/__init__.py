@@ -1,29 +1,30 @@
 """
-Instagram Scraper - Professional Instagram scraping library
+InstaHarvest 🌾 - Professional Instagram Data Collection Toolkit
+
+A powerful and efficient Instagram automation library for data collection,
+engagement management, and analytics.
 
 Features:
-- Profile statistics (posts, followers, following)
-- Post links collection with intelligent scrolling
-- Reel links collection (SEPARATE from posts)
-- Post data extraction (tags, likes, timestamps)
-- Reel data extraction (SEPARATE from posts)
-- Complete workflow orchestration
-- **Parallel processing** - Scrape multiple posts simultaneously
-- **Excel export** - Real-time data export to Excel
-- **Follow/Unfollow management** - Professional follow operations with rate limiting
-- **Direct messaging** - Send DMs with smart rate limiting
-- **Shared browser sessions** - Single browser for all operations (no reopening!)
-- HTML structure change detection
-- Professional logging
-- Modular design for library usage
+- 📊 Profile statistics (posts, followers, following)
+- 🔗 Post & Reel links collection with intelligent scrolling
+- 🏷️ Tagged accounts extraction (posts & reels)
+- 👥 Followers/Following collection with real-time output
+- 💬 Direct messaging with smart rate limiting
+- 🤝 Follow/Unfollow management
+- ⚡ Parallel processing - Scrape multiple posts simultaneously
+- 📑 Real-time Excel export
+- 🌐 Shared browser sessions - Single browser for all operations
+- 🔍 HTML structure change detection
+- 📝 Professional logging
+- 🧩 Modular design for library usage
 
-Usage:
+Quick Start:
     # Simple usage
-    from instagram_scraper import quick_scrape
+    from instaharvest import quick_scrape
     results = quick_scrape('username')
 
-    # Advanced usage with parallel processing and Excel
-    from instagram_scraper import InstagramOrchestrator, ScraperConfig
+    # Advanced usage with parallel processing
+    from instaharvest import InstagramOrchestrator, ScraperConfig
 
     config = ScraperConfig(headless=True)
     orchestrator = InstagramOrchestrator(config)
@@ -35,30 +36,38 @@ Usage:
     )
 
     # Follow/Unfollow management
-    from instagram_scraper import FollowManager
+    from instaharvest import FollowManager
 
     manager = FollowManager()
     manager.setup_browser(session_data)
     result = manager.follow('username')
 
     # Direct messaging
-    from instagram_scraper import MessageManager
+    from instaharvest import MessageManager
 
     messenger = MessageManager()
     messenger.setup_browser(session_data)
     result = messenger.send_message('username', 'Hello!')
 
     # Shared browser - all operations in one browser!
-    from instagram_scraper import SharedBrowser
+    from instaharvest import SharedBrowser
 
     with SharedBrowser() as browser:
         browser.follow('user1')
         browser.send_message('user1', 'Hello!')
+        followers = browser.get_followers('user1', limit=100)
         browser.scrape_profile('user1')
-        # No reopening browser!
 
-Author: AI Assistant
-Version: 2.4.0 (Added Shared Browser Sessions)
+    # Collect followers with real-time output
+    from instaharvest import FollowersCollector
+
+    collector = FollowersCollector()
+    collector.setup_browser(session_data)
+    followers = collector.get_followers('username', limit=100)
+
+Author: Artem
+Version: 2.5.0
+License: MIT
 """
 
 from .config import ScraperConfig
@@ -81,11 +90,14 @@ from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
 from .follow import FollowManager
 from .message import MessageManager
+from .followers import FollowersCollector
 from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
 
-__version__ = '2.4.0'
-__author__ = 'AI Assistant'
+__version__ = '2.5.0'
+__author__ = 'Artem'
+__email__ = 'kelajak054@gmail.com'
+__url__ = 'https://github.com/mpython77/insta-harvester'
 
 __all__ = [
     # Configuration
@@ -112,6 +124,7 @@ __all__ = [
     'ParallelPostDataScraper',
     'FollowManager',
     'MessageManager',
+    'FollowersCollector',
     'SharedBrowser',
 
     # Data structures

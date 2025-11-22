@@ -11,6 +11,7 @@ from .config import ScraperConfig
 from .logger import setup_logger
 from .follow import FollowManager
 from .message import MessageManager
+from .followers import FollowersCollector
 from .profile import ProfileScraper
 from .post_links import PostLinksScraper
 from .reel_links import ReelLinksScraper
@@ -23,6 +24,7 @@ class SharedBrowser:
     Opens browser once and reuses it for all operations:
     - Follow/Unfollow
     - Send messages
+    - Collect followers/following
     - Scrape profiles
     - Collect links
     - etc.
@@ -31,6 +33,7 @@ class SharedBrowser:
         >>> with SharedBrowser() as browser:
         ...     browser.follow("username")
         ...     browser.send_message("username", "Hello!")
+        ...     followers = browser.get_followers("username", limit=50)
         ...     browser.scrape_profile("username")
 
     Or manual usage:
@@ -38,6 +41,7 @@ class SharedBrowser:
         >>> browser.start()
         >>> browser.follow("username")
         >>> browser.send_message("username", "Hello!")
+        >>> followers = browser.get_followers("username", limit=100)
         >>> browser.close()
     """
 
@@ -67,6 +71,7 @@ class SharedBrowser:
         # Manager instances (will be created after browser starts)
         self._follow_manager: Optional[FollowManager] = None
         self._message_manager: Optional[MessageManager] = None
+        self._followers_collector: Optional[FollowersCollector] = None
         self._profile_scraper: Optional[ProfileScraper] = None
 
         self.logger.info("✨ SharedBrowser initialized")
@@ -142,6 +147,36 @@ class SharedBrowser:
         if self.context:
             self._update_session()
 
+        # Clean up manager instances
+        if self._follow_manager:
+            self._follow_manager.playwright = None
+            self._follow_manager.browser = None
+            self._follow_manager.context = None
+            self._follow_manager.page = None
+            self._follow_manager = None
+
+        if self._message_manager:
+            self._message_manager.playwright = None
+            self._message_manager.browser = None
+            self._message_manager.context = None
+            self._message_manager.page = None
+            self._message_manager = None
+
+        if self._followers_collector:
+            self._followers_collector.playwright = None
+            self._followers_collector.browser = None
+            self._followers_collector.context = None
+            self._followers_collector.page = None
+            self._followers_collector = None
+
+        if self._profile_scraper:
+            self._profile_scraper.playwright = None
+            self._profile_scraper.browser = None
+            self._profile_scraper.context = None
+            self._profile_scraper.page = None
+            self._profile_scraper = None
+
+        # Close browser resources
         if self.page:
             self.page.close()
         if self.context:
@@ -193,6 +228,19 @@ class SharedBrowser:
             manager.page = self.page
             self._message_manager = manager
         return self._message_manager
+
+    @property
+    def followers_collector(self) -> FollowersCollector:
+        """Get FollowersCollector instance (lazy loading)"""
+        if self._followers_collector is None:
+            collector = FollowersCollector(self.config)
+            # Inject existing browser components
+            collector.playwright = self.playwright
+            collector.browser = self.browser
+            collector.context = self.context
+            collector.page = self.page
+            self._followers_collector = collector
+        return self._followers_collector
 
     @property
     def profile_scraper(self) -> ProfileScraper:
@@ -302,6 +350,34 @@ class SharedBrowser:
         if isinstance(data, ProfileData):
             return data.to_dict()
         return data
+
+    def get_followers(self, username: str, limit: Optional[int] = None, print_realtime: bool = True) -> list:
+        """
+        Collect followers from a profile
+
+        Args:
+            username: Instagram username
+            limit: Maximum number of followers to collect (None = all)
+            print_realtime: Print followers in real-time as discovered
+
+        Returns:
+            List of follower usernames
+        """
+        return self.followers_collector.get_followers(username, limit=limit, print_realtime=print_realtime)
+
+    def get_following(self, username: str, limit: Optional[int] = None, print_realtime: bool = True) -> list:
+        """
+        Collect following list from a profile
+
+        Args:
+            username: Instagram username
+            limit: Maximum number to collect (None = all)
+            print_realtime: Print in real-time as discovered
+
+        Returns:
+            List of following usernames
+        """
+        return self.followers_collector.get_following(username, limit=limit, print_realtime=print_realtime)
 
     # ==================== CONTEXT MANAGER ====================
 

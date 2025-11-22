@@ -3,7 +3,7 @@ Test Phase 2: Reel Data Extraction
 Tests the extraction of tags, likes, and dates from reels
 """
 
-from instagram_scraper import PostDataScraper, ScraperConfig
+from instaharvest import PostDataScraper, ScraperConfig
 
 def test_reel_extraction():
     """Test reel data extraction"""

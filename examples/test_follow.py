@@ -3,7 +3,7 @@ Instagram Follow Manager - Example Usage
 Demonstrates how to use the FollowManager class
 """
 
-from instagram_scraper import FollowManager, ScraperConfig
+from instaharvest import FollowManager, ScraperConfig
 
 
 def example_single_follow():

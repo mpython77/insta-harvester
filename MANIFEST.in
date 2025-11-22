@@ -1,0 +1,30 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include requirements.txt
+
+# Include all Python files
+recursive-include instaharvest *.py
+
+# Include examples
+recursive-include examples *.py
+recursive-include examples *.md
+
+# Exclude unnecessary files
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude *.dylib
+
+# Exclude tests and development files
+exclude tests/*
+exclude .gitignore
+exclude .flake8
+exclude .mypy_cache
+exclude *.egg-info
+
+# Exclude session files and logs
+exclude *.json
+exclude *.log
+exclude *.xlsx

@@ -422,8 +422,8 @@ class InstagramOrchestrator:
         posts_data = []
 
         scraper = PostDataScraper(self.config)
-        scraper.load_session()
-        scraper.setup_browser(scraper.load_session())
+        session_data = scraper.load_session()
+        scraper.setup_browser(session_data)
 
         try:
             for i, link_data in enumerate(post_links, 1):
@@ -494,8 +494,8 @@ class InstagramOrchestrator:
         reels_data = []
 
         scraper = ReelDataScraper(self.config)
-        scraper.load_session()
-        scraper.setup_browser(scraper.load_session())
+        session_data = scraper.load_session()
+        scraper.setup_browser(session_data)
 
         try:
             for i, url in enumerate(reel_links, 1):

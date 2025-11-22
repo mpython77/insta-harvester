@@ -34,15 +34,18 @@ class ExcelExporter:
         self.filename = Path(filename)
         self.logger = logger or logging.getLogger(__name__)
 
-        # Initialize DataFrame
-        self.df = pd.DataFrame(columns=[
+        # Use list for O(1) append performance, convert to DataFrame when writing
+        self.rows: List[Dict[str, Any]] = []
+
+        # Column names
+        self.columns = [
             'Post URL',
             'Type',
             'Tagged Accounts',
             'Likes Count',
             'Post Date',
             'Scraping Date/Time'
-        ])
+        ]
 
         # Create empty file
         self._create_file()
@@ -52,7 +55,9 @@ class ExcelExporter:
     def _create_file(self) -> None:
         """Create initial Excel file with headers"""
         try:
-            self.df.to_excel(self.filename, index=False, engine='openpyxl')
+            # Create empty DataFrame with just headers
+            df = pd.DataFrame(columns=self.columns)
+            df.to_excel(self.filename, index=False, engine='openpyxl')
             self.logger.debug(f"Created Excel file: {self.filename}")
         except Exception as e:
             self.logger.error(f"Failed to create Excel file: {e}")
@@ -83,21 +88,20 @@ class ExcelExporter:
             # Current datetime
             scraping_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-            # Create new row
-            new_row = pd.DataFrame([{
+            # Append to list (O(1) operation - fast!)
+            row_dict = {
                 'Post URL': post_url,
                 'Type': content_type,
                 'Tagged Accounts': tags_str,
                 'Likes Count': likes,
                 'Post Date': post_date,
                 'Scraping Date/Time': scraping_time
-            }])
+            }
+            self.rows.append(row_dict)
 
-            # Append to DataFrame
-            self.df = pd.concat([self.df, new_row], ignore_index=True)
-
-            # Write to file (real-time)
-            self.df.to_excel(self.filename, index=False, engine='openpyxl')
+            # Convert to DataFrame and write to file (real-time)
+            df = pd.DataFrame(self.rows, columns=self.columns)
+            df.to_excel(self.filename, index=False, engine='openpyxl')
 
             self.logger.debug(f"Added row to Excel [{content_type}]: {post_url}")
 
@@ -122,7 +126,7 @@ class ExcelExporter:
 
     def get_row_count(self) -> int:
         """Get current number of rows"""
-        return len(self.df)
+        return len(self.rows)
 
     def finalize(self) -> None:
         """Finalize Excel file (optional cleanup)"""
