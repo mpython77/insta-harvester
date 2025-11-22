@@ -1,20 +1,20 @@
 # 📚 Examples & Test Scripts
 
-Bu papkada Instagram Scraper ning turli funksiyalarini test qilish uchun example kodlar joylashgan.
+This folder contains example code for testing various functions of Instagram Scraper.
 
 ---
 
-## 📋 Fayllar
+## 📋 Files
 
 ### 1️⃣ **test_phase1.py** - Link Collection Test
-Phase 1 funksiyasini test qiladi: Post va Reel linklerini to'plash
+Tests Phase 1 functionality: Collecting Post and Reel links
 
-**Nima qiladi:**
-- Profile dan barcha post va reel linklerini yig'adi
-- Har bir link ning type ini aniqlaydi (Post/Reel)
-- Statistika ko'rsatadi (qancha post, qancha reel)
+**What it does:**
+- Collects all post and reel links from profile
+- Identifies type of each link (Post/Reel)
+- Shows statistics (how many posts, how many reels)
 
-**Qanday ishlatish:**
+**How to use:**
 ```bash
 python examples/test_phase1.py
 
@@ -22,7 +22,7 @@ python examples/test_phase1.py
 # Output: Link list with types
 ```
 
-**Output misoli:**
+**Output example:**
 ```
 📋 First 10 links (with types):
   1. [Post] https://instagram.com/p/ABC123/
@@ -38,14 +38,14 @@ Statistics:
 ---
 
 ### 2️⃣ **test_phase2.py** - Data Extraction Test
-Phase 2 funksiyasini test qiladi: Post va Reel dan ma'lumot olish
+Tests Phase 2 functionality: Extracting data from Posts and Reels
 
-**Nima qiladi:**
-- Bitta yoki bir necha URL dan ma'lumot oladi
-- Reel va Post uchun turli extraction metodlarini ishlatadi
-- Tags, likes, date ni ko'rsatadi
+**What it does:**
+- Extracts data from one or more URLs
+- Uses different extraction methods for Reels and Posts
+- Shows tags, likes, date
 
-**Qanday ishlatish:**
+**How to use:**
 ```bash
 python examples/test_phase2.py
 
@@ -83,15 +83,15 @@ Successfully scraped: 2/2
 ---
 
 ### 3️⃣ **test_professional.py** - Professional Features Test
-Barcha professional xususiyatlarni test qiladi
+Tests all professional features
 
-**Nima qiladi:**
+**What it does:**
 - HTML diagnostics
 - Error recovery
 - Performance monitoring
-- Batafsil statistika
+- Detailed statistics
 
-**Qanday ishlatish:**
+**How to use:**
 ```bash
 python examples/test_professional.py
 
@@ -133,47 +133,47 @@ Diagnostics: PARTIAL (83.3% success rate)
 
 ---
 
-## 🚀 Qachon Qaysi Test Ishlatish Kerak
+## 🚀 When to Use Which Test
 
-### Yangi Profile Test Qilish:
+### Testing New Profile:
 ```bash
 python examples/test_phase1.py
-# Tezkor test - faqat linklar yig'iladi
+# Quick test - only collects links
 ```
 
-### Reel Extraction Test:
+### Testing Reel Extraction:
 ```bash
 python examples/test_phase2.py
-# Reels maxsus extraction ni test qilish
+# Test specific reel extraction
 ```
 
-### HTML O'zgarishini Tekshirish:
+### Checking HTML Changes:
 ```bash
 python examples/test_professional.py
-# Instagram HTML o'zgardimi bilish uchun
+# Find out if Instagram HTML changed
 ```
 
 ### Full Production Scraping:
 ```bash
 python main_advanced.py
-# Bu test emas, to'liq scraping!
+# This is not a test, full scraping!
 ```
 
 ---
 
 ## 💡 Tips
 
-1. **Test qilishdan oldin:**
-   - Instagram session yarating: `python save_session.py`
-   - Internet connection tekshiring
+1. **Before testing:**
+   - Create Instagram session: `python save_session.py`
+   - Check internet connection
 
-2. **Qaysi test kerak:**
-   - Link collection muammosi → `test_phase1.py`
-   - Data extraction muammosi → `test_phase2.py`
-   - HTML o'zgarish → `test_professional.py`
+2. **Which test to use:**
+   - Link collection issue → `test_phase1.py`
+   - Data extraction issue → `test_phase2.py`
+   - HTML changes → `test_professional.py`
 
-3. **Production uchun:**
-   - Test emas, `main_advanced.py` ishlatish!
+3. **For production:**
+   - Don't use tests, use `main_advanced.py`!
 
 ---
 
@@ -211,6 +211,6 @@ python main_advanced.py
 
 ---
 
-Barcha test scriptlar **development va debugging** uchun.
+All test scripts are for **development and debugging** purposes.
 
-**Production scraping** uchun faqat `main_advanced.py` ishlatish! 🚀
+For **production scraping** use only `main_advanced.py`! 🚀
