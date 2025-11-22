@@ -1,8 +1,13 @@
-node_modules/
+# Session and data files
 instagram_session.json
 post_links.txt
+reel_links.txt
+*.xlsx
 *.log
+
+# Environment
 .env
+node_modules/
 
 # Python
 __pycache__/
@@ -25,3 +30,17 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

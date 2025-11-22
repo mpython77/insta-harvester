@@ -1,20 +1,20 @@
 # 📚 Examples & Test Scripts
 
-Bu papkada Instagram Scraper ning turli funksiyalarini test qilish uchun example kodlar joylashgan.
+This folder contains example code for testing various functions of Instagram Scraper.
 
 ---
 
-## 📋 Fayllar
+## 📋 Files
 
 ### 1️⃣ **test_phase1.py** - Link Collection Test
-Phase 1 funksiyasini test qiladi: Post va Reel linklerini to'plash
+Tests Phase 1 functionality: Collecting Post and Reel links
 
-**Nima qiladi:**
-- Profile dan barcha post va reel linklerini yig'adi
-- Har bir link ning type ini aniqlaydi (Post/Reel)
-- Statistika ko'rsatadi (qancha post, qancha reel)
+**What it does:**
+- Collects all post and reel links from profile
+- Identifies type of each link (Post/Reel)
+- Shows statistics (how many posts, how many reels)
 
-**Qanday ishlatish:**
+**How to use:**
 ```bash
 python examples/test_phase1.py
 
@@ -22,7 +22,7 @@ python examples/test_phase1.py
 # Output: Link list with types
 ```
 
-**Output misoli:**
+**Output example:**
 ```
 📋 First 10 links (with types):
   1. [Post] https://instagram.com/p/ABC123/
@@ -38,14 +38,14 @@ Statistics:
 ---
 
 ### 2️⃣ **test_phase2.py** - Data Extraction Test
-Phase 2 funksiyasini test qiladi: Post va Reel dan ma'lumot olish
+Tests Phase 2 functionality: Extracting data from Posts and Reels
 
-**Nima qiladi:**
-- Bitta yoki bir necha URL dan ma'lumot oladi
-- Reel va Post uchun turli extraction metodlarini ishlatadi
-- Tags, likes, date ni ko'rsatadi
+**What it does:**
+- Extracts data from one or more URLs
+- Uses different extraction methods for Reels and Posts
+- Shows tags, likes, date
 
-**Qanday ishlatish:**
+**How to use:**
 ```bash
 python examples/test_phase2.py
 
@@ -83,15 +83,15 @@ Successfully scraped: 2/2
 ---
 
 ### 3️⃣ **test_professional.py** - Professional Features Test
-Barcha professional xususiyatlarni test qiladi
+Tests all professional features
 
-**Nima qiladi:**
+**What it does:**
 - HTML diagnostics
 - Error recovery
 - Performance monitoring
-- Batafsil statistika
+- Detailed statistics
 
-**Qanday ishlatish:**
+**How to use:**
 ```bash
 python examples/test_professional.py
 
@@ -133,47 +133,226 @@ Diagnostics: PARTIAL (83.3% success rate)
 
 ---
 
-## 🚀 Qachon Qaysi Test Ishlatish Kerak
+### 4️⃣ **test_follow.py** - Follow/Unfollow Management Test
+Tests Follow/Unfollow functionality
 
-### Yangi Profile Test Qilish:
+**What it does:**
+- Follow Instagram users
+- Unfollow Instagram users
+- Check following status
+- Batch follow multiple users
+- Smart follow with status check
+
+**How to use:**
+```bash
+python examples/test_follow.py
+
+# Choose from 5 examples:
+# 1. Follow a single user
+# 2. Check if following a user
+# 3. Unfollow a user
+# 4. Batch follow multiple users
+# 5. Smart follow (check status first)
+```
+
+**Example 1 - Single Follow:**
+```
+Enter username to follow (without @): instagram
+
+🔄 Following @instagram...
+✅ Successfully followed @instagram
+Status: followed
+```
+
+**Example 2 - Check Status:**
+```
+Enter username to check (without @): instagram
+
+🔍 Checking status for @instagram...
+✅ You are following @instagram
+```
+
+**Example 3 - Unfollow:**
+```
+Enter username to unfollow (without @): instagram
+
+🔄 Unfollowing @instagram...
+✅ Successfully unfollowed @instagram
+Status: unfollowed
+```
+
+**Example 4 - Batch Follow:**
+```
+Enter usernames to follow (one per line, empty line to finish):
+  Username 1: user1
+  Username 2: user2
+  Username 3: user3
+  Username 4: [Enter]
+
+🔄 Following 3 users...
+
+📊 BATCH FOLLOW SUMMARY
+Total users: 3
+Successfully followed: 2
+Already following: 1
+Failed: 0
+
+Individual results:
+  ✅ @user1: followed
+  ✅ @user2: already_following
+  ✅ @user3: followed
+```
+
+**Example 5 - Smart Follow:**
+```
+Enter username (without @): instagram
+
+🔍 Checking current status for @instagram...
+ℹ️ You are not following @instagram
+
+Do you want to follow? (yes/no): yes
+
+🔄 Following @instagram...
+✅ Successfully followed @instagram
+```
+
+---
+
+### 5️⃣ **test_message.py** - Direct Message Management Test
+Tests direct messaging functionality
+
+**What it does:**
+- Send DM to single user
+- Batch send to multiple users
+- Send personalized messages
+- Smart rate limiting
+
+**How to use:**
+```bash
+python examples/test_message.py
+
+# Choose from 3 examples:
+# 1. Send single message
+# 2. Batch send same message to multiple users
+# 3. Send personalized messages to different users
+```
+
+**Example 1 - Single Message:**
+```
+Enter username to message (without @): instagram
+Enter your message: Hello from Python!
+
+📨 Sending message to @instagram...
+✅ Successfully sent message to @instagram
+Status: sent
+```
+
+**Example 2 - Batch Send:**
+```
+Enter message to send to all: Check out my new project!
+
+Enter usernames (one per line, empty line to finish):
+  Username 1: user1
+  Username 2: user2
+  Username 3: user3
+  Username 4: [Enter]
+
+📨 Sending message to 3 users...
+
+📊 BATCH SEND SUMMARY
+Total users: 3
+Successfully sent: 3
+Failed: 0
+
+Individual results:
+  ✅ @user1: sent
+  ✅ @user2: sent
+  ✅ @user3: sent
+```
+
+**Example 3 - Personalized Messages:**
+```
+Enter username and message pairs (empty username to finish):
+
+  Username 1: john
+  Message for @john: Hey John, thanks for the follow!
+
+  Username 2: alice
+  Message for @alice: Alice, loved your recent post!
+
+  Username 3: [Enter]
+
+📨 Sending 2 personalized messages...
+
+📊 PERSONALIZED SEND SUMMARY
+Total messages: 2
+Successfully sent: 2
+Failed: 0
+
+Results:
+  ✅ @john: sent
+  ✅ @alice: sent
+```
+
+---
+
+## 🚀 When to Use Which Test
+
+### Testing New Profile:
 ```bash
 python examples/test_phase1.py
-# Tezkor test - faqat linklar yig'iladi
+# Quick test - only collects links
 ```
 
-### Reel Extraction Test:
+### Testing Reel Extraction:
 ```bash
 python examples/test_phase2.py
-# Reels maxsus extraction ni test qilish
+# Test specific reel extraction
 ```
 
-### HTML O'zgarishini Tekshirish:
+### Checking HTML Changes:
 ```bash
 python examples/test_professional.py
-# Instagram HTML o'zgardimi bilish uchun
+# Find out if Instagram HTML changed
+```
+
+### Testing Follow/Unfollow:
+```bash
+python examples/test_follow.py
+# Test follow and unfollow operations
+```
+
+### Testing Direct Messaging:
+```bash
+python examples/test_message.py
+# Test sending DMs
 ```
 
 ### Full Production Scraping:
 ```bash
 python main_advanced.py
-# Bu test emas, to'liq scraping!
+# This is not a test, full scraping!
 ```
 
 ---
 
 ## 💡 Tips
 
-1. **Test qilishdan oldin:**
-   - Instagram session yarating: `python save_session.py`
-   - Internet connection tekshiring
+1. **Before testing:**
+   - Create Instagram session: `python save_session.py`
+   - Check internet connection
 
-2. **Qaysi test kerak:**
-   - Link collection muammosi → `test_phase1.py`
-   - Data extraction muammosi → `test_phase2.py`
-   - HTML o'zgarish → `test_professional.py`
+2. **Which test to use:**
+   - Link collection issue → `test_phase1.py`
+   - Data extraction issue → `test_phase2.py`
+   - HTML changes → `test_professional.py`
+   - Follow/Unfollow testing → `test_follow.py`
+   - Direct messaging testing → `test_message.py`
 
-3. **Production uchun:**
-   - Test emas, `main_advanced.py` ishlatish!
+3. **For production:**
+   - Scraping: use `main_advanced.py`
+   - Following: use `follow_user.py` or `unfollow_user.py`
+   - Messaging: use `send_message.py`
 
 ---
 
@@ -211,6 +390,6 @@ python main_advanced.py
 
 ---
 
-Barcha test scriptlar **development va debugging** uchun.
+All test scripts are for **development and debugging** purposes.
 
-**Production scraping** uchun faqat `main_advanced.py` ishlatish! 🚀
+For **production scraping** use only `main_advanced.py`! 🚀
