@@ -1,6 +1,11 @@
 """
 Instagram Scraper - Post data extractor
 Extract tags, likes, and timestamps from individual posts
+
+PROFESSIONAL VERSION with:
+- Advanced diagnostics
+- Intelligent error recovery
+- Performance monitoring
 """
 
 import time
@@ -12,6 +17,9 @@ from pathlib import Path
 from .base import BaseScraper
 from .config import ScraperConfig
 from .exceptions import HTMLStructureChangedError
+from .diagnostics import HTMLDiagnostics, run_diagnostic_mode
+from .error_handler import ErrorHandler
+from .performance import PerformanceMonitor
 
 
 @dataclass
@@ -30,7 +38,7 @@ class PostData:
 
 class PostDataScraper(BaseScraper):
     """
-    Instagram post data scraper
+    Instagram post data scraper - PROFESSIONAL VERSION
 
     Features:
     - Extract tagged accounts
@@ -39,12 +47,28 @@ class PostDataScraper(BaseScraper):
     - Multiple fallback methods
     - HTML structure change detection
     - Modular extraction (get only what you need)
+    - Advanced diagnostics
+    - Intelligent error recovery
+    - Performance monitoring
     """
 
-    def __init__(self, config: Optional[ScraperConfig] = None):
-        """Initialize post data scraper"""
+    def __init__(self, config: Optional[ScraperConfig] = None, enable_diagnostics: bool = True):
+        """
+        Initialize post data scraper
+
+        Args:
+            config: Scraper configuration
+            enable_diagnostics: Enable diagnostic mode (default: True)
+        """
         super().__init__(config)
-        self.logger.info("PostDataScraper ready")
+
+        # Initialize advanced systems
+        self.error_handler = ErrorHandler(self.logger)
+        self.performance_monitor = PerformanceMonitor(self.logger)
+        self.diagnostics = None  # Will be initialized when page is ready
+        self.enable_diagnostics = enable_diagnostics
+
+        self.logger.info("✨ PostDataScraper ready (Professional Mode)")
 
     def _is_reel(self, url: str) -> bool:
         """Check if URL is a reel"""
@@ -59,7 +83,7 @@ class PostDataScraper(BaseScraper):
         get_timestamp: bool = True
     ) -> PostData:
         """
-        Scrape data from a single post or reel
+        Scrape data from a single post or reel - PROFESSIONAL VERSION
 
         Args:
             post_url: URL of the post/reel
@@ -70,42 +94,107 @@ class PostDataScraper(BaseScraper):
         Returns:
             PostData object
         """
-        # Detect content type
-        is_reel = self._is_reel(post_url)
-        content_type = 'Reel' if is_reel else 'Post'
+        # Start performance monitoring
+        with self.performance_monitor.measure(f"scrape_{self._get_content_type(post_url)}"):
+            # Detect content type
+            is_reel = self._is_reel(post_url)
+            content_type = 'Reel' if is_reel else 'Post'
 
-        self.logger.info(f"Scraping {content_type}: {post_url}")
+            self.logger.info(f"🎯 Scraping {content_type}: {post_url}")
 
-        # Navigate to post/reel
-        self.goto_url(post_url)
+            # Navigate to post/reel
+            self.goto_url(post_url)
 
-        # CRITICAL: Wait longer for content to load
-        time.sleep(3)
+            # CRITICAL: Wait for content to load
+            time.sleep(3)
 
-        # Extract data based on type
-        if is_reel:
-            tagged_accounts = self.get_reel_tagged_accounts() if get_tags else []
-            likes = self.get_reel_likes_count() if get_likes else 'N/A'
-            timestamp = self.get_reel_timestamp() if get_timestamp else 'N/A'
-        else:
-            tagged_accounts = self.get_tagged_accounts() if get_tags else []
-            likes = self.get_likes_count() if get_likes else 'N/A'
-            timestamp = self.get_timestamp() if get_timestamp else 'N/A'
+            # Initialize diagnostics if page is ready
+            if self.enable_diagnostics and self.diagnostics is None:
+                self.diagnostics = HTMLDiagnostics(self.page, self.logger)
 
-        data = PostData(
-            url=post_url,
-            tagged_accounts=tagged_accounts,
-            likes=likes,
-            timestamp=timestamp,
-            content_type=content_type
+            # Run diagnostics to detect HTML structure changes
+            if self.enable_diagnostics and self.diagnostics:
+                try:
+                    if is_reel:
+                        report = self.diagnostics.diagnose_reel(post_url)
+                    else:
+                        report = self.diagnostics.diagnose_post(post_url)
+
+                    if report.overall_status == 'FAILED':
+                        self.logger.critical(
+                            f"❌ CRITICAL HTML STRUCTURE CHANGE DETECTED!\n"
+                            f"   {', '.join(report.recommendations)}"
+                        )
+                    elif report.overall_status == 'PARTIAL':
+                        self.logger.warning(
+                            f"⚠️ Some HTML selectors may have changed: "
+                            f"{report.get_success_rate():.1f}% success rate"
+                        )
+                except Exception as e:
+                    self.logger.debug(f"Diagnostics failed: {e}")
+
+            # Extract data based on type with error recovery
+            if is_reel:
+                tagged_accounts = self._extract_with_recovery(
+                    self.get_reel_tagged_accounts, 'reel_tags'
+                ) if get_tags else []
+
+                likes = self._extract_with_recovery(
+                    self.get_reel_likes_count, 'reel_likes', default='N/A'
+                ) if get_likes else 'N/A'
+
+                timestamp = self._extract_with_recovery(
+                    self.get_reel_timestamp, 'reel_timestamp', default='N/A'
+                ) if get_timestamp else 'N/A'
+            else:
+                tagged_accounts = self._extract_with_recovery(
+                    self.get_tagged_accounts, 'post_tags'
+                ) if get_tags else []
+
+                likes = self._extract_with_recovery(
+                    self.get_likes_count, 'post_likes', default='N/A'
+                ) if get_likes else 'N/A'
+
+                timestamp = self._extract_with_recovery(
+                    self.get_timestamp, 'post_timestamp', default='N/A'
+                ) if get_timestamp else 'N/A'
+
+            data = PostData(
+                url=post_url,
+                tagged_accounts=tagged_accounts,
+                likes=likes,
+                timestamp=timestamp,
+                content_type=content_type
+            )
+
+            self.logger.info(
+                f"✅ Extracted [{content_type}]: {len(data.tagged_accounts)} tags, "
+                f"{data.likes} likes, {data.timestamp}"
+            )
+
+            return data
+
+    def _get_content_type(self, url: str) -> str:
+        """Helper to get content type from URL"""
+        return 'reel' if self._is_reel(url) else 'post'
+
+    def _extract_with_recovery(self, extractor_func, element_name: str, default: Any = None):
+        """
+        Extract with intelligent error recovery
+
+        Args:
+            extractor_func: Extraction function
+            element_name: Name for logging
+            default: Default value if extraction fails
+
+        Returns:
+            Extracted value or default
+        """
+        return self.error_handler.safe_extract(
+            extractor=extractor_func,
+            element_name=element_name,
+            default=default if default is not None else []
         )
-
-        self.logger.debug(
-            f"Extracted [{content_type}]: {len(data.tagged_accounts)} tags, "
-            f"{data.likes} likes, time={data.timestamp}"
-        )
-
-        return data
 
     def scrape_multiple(
         self,
@@ -117,7 +206,7 @@ class PostDataScraper(BaseScraper):
         delay_between_posts: bool = True
     ) -> List[PostData]:
         """
-        Scrape multiple posts sequentially
+        Scrape multiple posts sequentially - PROFESSIONAL VERSION
 
         Args:
             post_urls: List of post URLs
@@ -129,17 +218,20 @@ class PostDataScraper(BaseScraper):
         Returns:
             List of PostData objects
         """
-        self.logger.info(f"Scraping {len(post_urls)} posts...")
+        self.logger.info(f"📦 Scraping {len(post_urls)} posts/reels...")
+        self.performance_monitor.log_system_info()
 
         # Load session and setup browser
         session_data = self.load_session()
         self.setup_browser(session_data)
 
         results = []
+        start_time = time.time()
 
         try:
             for i, url in enumerate(post_urls, 1):
-                self.logger.info(f"[{i}/{len(post_urls)}] Processing: {url}")
+                content_type = 'Reel' if self._is_reel(url) else 'Post'
+                self.logger.info(f"[{i}/{len(post_urls)}] Processing [{content_type}]: {url}")
 
                 try:
                     data = self.scrape(
@@ -157,8 +249,14 @@ class PostDataScraper(BaseScraper):
                         url=url,
                         tagged_accounts=[],
                         likes='ERROR',
-                        timestamp='N/A'
+                        timestamp='N/A',
+                        content_type=content_type
                     ))
+
+                # Check memory usage and optimize if needed
+                if i % 10 == 0:  # Check every 10 posts
+                    if not self.performance_monitor.check_memory_threshold(500):
+                        self.performance_monitor.optimize_memory()
 
                 # Delay between posts (rate limiting)
                 if delay_between_posts and i < len(post_urls):
@@ -166,8 +264,35 @@ class PostDataScraper(BaseScraper):
                         self.config.post_scrape_delay_min,
                         self.config.post_scrape_delay_max
                     )
-                    self.logger.debug(f"Waiting {delay:.1f}s...")
+                    self.logger.debug(f"⏱️ Waiting {delay:.1f}s...")
                     time.sleep(delay)
+
+            # Print final statistics
+            total_time = time.time() - start_time
+            success_count = sum(1 for r in results if r.likes != 'ERROR')
+            posts_count = sum(1 for r in results if r.content_type == 'Post' and r.likes != 'ERROR')
+            reels_count = sum(1 for r in results if r.content_type == 'Reel' and r.likes != 'ERROR')
+
+            self.logger.info(
+                f"\n{'='*70}\n"
+                f"📊 SCRAPING COMPLETE - STATISTICS\n"
+                f"{'='*70}\n"
+                f"Total URLs: {len(post_urls)}\n"
+                f"Successfully scraped: {success_count}/{len(post_urls)} "
+                f"({(success_count/len(post_urls)*100):.1f}%)\n"
+                f"  - Posts: {posts_count}\n"
+                f"  - Reels: {reels_count}\n"
+                f"Failed: {len(post_urls) - success_count}\n"
+                f"Total time: {total_time:.2f}s\n"
+                f"Average time per item: {total_time/len(post_urls):.2f}s\n"
+                f"{'='*70}"
+            )
+
+            # Print performance report
+            self.performance_monitor.print_report()
+
+            # Print error statistics
+            self.error_handler.print_stats()
 
             return results
 
