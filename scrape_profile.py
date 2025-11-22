@@ -1,9 +1,9 @@
 """
 Instagram Profile Scraper
-Session orqali Instagram ga kirib, profile ma'lumotlarini oladi:
-- Posts soni
-- Followers soni
-- Following soni
+Logs into Instagram via session and retrieves profile information:
+- Number of posts
+- Number of followers
+- Number of following
 """
 
 import json
@@ -15,12 +15,12 @@ SESSION_FILE = 'instagram_session.json'
 
 
 class InstagramScraper:
-    """Instagram profil ma'lumotlarini scraping qilish"""
+    """Scrape Instagram profile information"""
 
     def __init__(self, username: str):
         """
         Args:
-            username: Instagram username (@ belgisisiz)
+            username: Instagram username (without @ symbol)
         """
         self.username = username
         self.profile_url = f'https://www.instagram.com/{username}/'
@@ -29,27 +29,27 @@ class InstagramScraper:
         self.browser = None
 
     def check_session(self):
-        """Session faylni tekshirish"""
+        """Check session file"""
         if not os.path.exists(SESSION_FILE):
             raise FileNotFoundError(
-                f'❌ {SESSION_FILE} topilmadi!\n'
-                f'Avval "python save_session.py" ni ishga tushiring.'
+                f'❌ {SESSION_FILE} not found!\n'
+                f'Please run "python save_session.py" first.'
             )
 
     def load_session(self, p):
-        """Session bilan browser ochish"""
-        print('📂 Session yuklanmoqda...')
+        """Launch browser with session"""
+        print('📂 Loading session...')
 
         with open(SESSION_FILE, 'r', encoding='utf-8') as f:
             session_data = json.load(f)
 
-        # Browser ochish
+        # Launch browser
         self.browser = p.chromium.launch(
-            headless=False,  # Ko'rish uchun False, tezkor ish uchun True qiling
+            headless=False,  # False for viewing, True for faster operation
             args=['--start-maximized']
         )
 
-        # Session bilan context yaratish
+        # Create context with session
         self.context = self.browser.new_context(
             storage_state=session_data,
             viewport={'width': 1920, 'height': 1080},
@@ -58,46 +58,46 @@ class InstagramScraper:
 
         self.page = self.context.new_page()
 
-        # Timeout ni oshirish
-        self.page.set_default_timeout(60000)  # 60 sekund
+        # Increase timeout
+        self.page.set_default_timeout(60000)  # 60 seconds
 
-        print('✅ Session yuklandi!')
+        print('✅ Session loaded!')
 
     def goto_profile(self):
-        """Profile sahifasiga o'tish"""
-        print(f'🔍 Profile ochilmoqda: {self.username}')
+        """Navigate to profile page"""
+        print(f'🔍 Opening profile: {self.username}')
 
-        # networkidle o'rniga domcontentloaded ishlatamiz (tezroq)
+        # Use domcontentloaded instead of networkidle (faster)
         self.page.goto(self.profile_url, wait_until='domcontentloaded', timeout=60000)
 
-        print('⏳ Sahifa yuklanishi kutilmoqda...')
-        # Sahifa elementlari yuklanishi uchun biroz kutish
+        print('⏳ Waiting for page to load...')
+        # Wait a bit for page elements to load
         time.sleep(3)
 
-        # Profile mavjudligini tekshirish
+        # Check if profile exists
         if 'Page Not Found' in self.page.content() or 'Sorry, this page' in self.page.content():
-            raise ValueError(f'❌ Profile topilmadi: {self.username}')
+            raise ValueError(f'❌ Profile not found: {self.username}')
 
-        print('✅ Profile ochildi!')
+        print('✅ Profile opened!')
 
     def extract_profile_data(self):
-        """Profile ma'lumotlarini olish"""
-        print('📊 Ma\'lumotlar olinmoqda...\n')
+        """Extract profile information"""
+        print('📊 Retrieving data...\n')
 
-        # Profile statslarini kutish
+        # Wait for profile stats
         try:
             self.page.wait_for_selector('span:has-text("posts")', timeout=10000)
         except Exception:
-            print('⚠️  Profile ma\'lumotlari yuklanmadi, qayta urinilmoqda...')
+            print('⚠️  Profile data not loaded, retrying...')
             time.sleep(2)
 
-        # Posts sonini olish
+        # Get posts count
         posts = self._get_posts_count()
 
-        # Followers sonini olish
+        # Get followers count
         followers = self._get_followers_count()
 
-        # Following sonini olish
+        # Get following count
         following = self._get_following_count()
 
         return {
@@ -108,49 +108,49 @@ class InstagramScraper:
         }
 
     def _get_posts_count(self):
-        """Posts sonini olish"""
+        """Get posts count"""
         try:
-            # "posts" so'zini topish va ichidagi raqamni olish
+            # Find "posts" text and get the number inside
             posts_element = self.page.locator('span:has-text("posts")').first
             if posts_element:
-                # Element ichidan span.html-span ni topish
+                # Find span.html-span inside element
                 posts_text = posts_element.locator('span.html-span').first.inner_text()
                 return posts_text.strip().replace(',', '')
         except Exception as e:
-            print(f'⚠️  Posts olishda xatolik: {e}')
+            print(f'⚠️  Error getting posts: {e}')
             return 'N/A'
 
     def _get_followers_count(self):
-        """Followers sonini olish"""
+        """Get followers count"""
         try:
-            # followers link ni topish
+            # Find followers link
             followers_link = self.page.locator('a[href*="/followers/"]').first
             if followers_link:
-                # title attributidan aniq sonni olish
+                # Get exact count from title attribute
                 title = followers_link.locator('span[title]').first
                 if title:
                     return title.get_attribute('title').replace(',', '')
                 else:
-                    # yoki ko'rinadigan textni olish
+                    # or get visible text
                     return followers_link.locator('span.html-span').first.inner_text()
         except Exception as e:
-            print(f'⚠️  Followers olishda xatolik: {e}')
+            print(f'⚠️  Error getting followers: {e}')
             return 'N/A'
 
     def _get_following_count(self):
-        """Following sonini olish"""
+        """Get following count"""
         try:
-            # following link ni topish
+            # Find following link
             following_link = self.page.locator('a[href*="/following/"]').first
             if following_link:
-                # span.html-span ichidan text olish
+                # Get text from span.html-span
                 return following_link.locator('span.html-span').first.inner_text().replace(',', '')
         except Exception as e:
-            print(f'⚠️  Following olishda xatolik: {e}')
+            print(f'⚠️  Error getting following: {e}')
             return 'N/A'
 
     def print_profile_data(self, data):
-        """Ma'lumotlarni chiroyli formatda chiqarish"""
+        """Print data in a nice format"""
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
         print(f'👤 Username:  @{data["username"]}')
         print(f'📸 Posts:     {data["posts"]}')
@@ -159,12 +159,12 @@ class InstagramScraper:
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
     def close(self):
-        """Browser yopish"""
+        """Close browser"""
         if self.browser:
             self.browser.close()
 
     def scrape(self):
-        """Asosiy scraping funksiyasi"""
+        """Main scraping function"""
         self.check_session()
 
         with sync_playwright() as p:
@@ -179,24 +179,24 @@ class InstagramScraper:
 
 
 def main():
-    """Main funksiya"""
+    """Main function"""
     print('🚀 Instagram Profile Scraper\n')
 
-    # Username ni so'rash
-    username = input('Instagram username kiriting (@ belgisisiz): ').strip().lstrip('@')
+    # Ask for username
+    username = input('Enter Instagram username (without @ symbol): ').strip().lstrip('@')
 
     if not username:
-        print('❌ Username kiritilmadi!')
+        print('❌ Username not provided!')
         return
 
-    # Scraping boshlash
+    # Start scraping
     scraper = InstagramScraper(username)
 
     try:
         scraper.scrape()
-        print('\n✅ Scraping tugadi!')
+        print('\n✅ Scraping complete!')
     except Exception as e:
-        print(f'\n❌ Xatolik: {e}')
+        print(f'\n❌ Error: {e}')
         raise
 
 
@@ -204,6 +204,6 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print('\n\n⚠️  Dastur to\'xtatildi!')
+        print('\n\n⚠️  Program interrupted!')
     except Exception:
         pass

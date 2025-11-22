@@ -1,9 +1,9 @@
 """
 Instagram Post Data Scraper
-post_links.txt dan linklar o'qib, har biridan:
-- Tagged akkauntlar
-- Likes soni
-- Post vaqti
+Reads links from post_links.txt and extracts from each:
+- Tagged accounts
+- Likes count
+- Post timestamp
 """
 
 import json
@@ -16,7 +16,7 @@ LINKS_FILE = 'post_links.txt'
 
 
 class InstagramPostDataScraper:
-    """Instagram post ma'lumotlarini scraping qilish"""
+    """Instagram post data scraping"""
 
     def __init__(self):
         self.page = None
@@ -24,41 +24,41 @@ class InstagramPostDataScraper:
         self.browser = None
 
     def check_session(self):
-        """Session faylni tekshirish"""
+        """Check if session file exists"""
         if not os.path.exists(SESSION_FILE):
             raise FileNotFoundError(
-                f'❌ {SESSION_FILE} topilmadi!\n'
-                f'Avval "python save_session.py" ni ishga tushiring.'
+                f'❌ {SESSION_FILE} not found!\n'
+                f'Run "python save_session.py" first.'
             )
 
     def check_links_file(self):
-        """Links faylni tekshirish"""
+        """Check if links file exists"""
         if not os.path.exists(LINKS_FILE):
             raise FileNotFoundError(
-                f'❌ {LINKS_FILE} topilmadi!\n'
-                f'Avval "python scrape_post_links.py" ni ishga tushiring.'
+                f'❌ {LINKS_FILE} not found!\n'
+                f'Run "python scrape_post_links.py" first.'
             )
 
     def load_links(self):
-        """Linklar faylni o'qish"""
+        """Load links from file"""
         with open(LINKS_FILE, 'r', encoding='utf-8') as f:
             links = [line.strip() for line in f if line.strip()]
         return links
 
     def load_session(self, p):
-        """Session bilan browser ochish"""
-        print('📂 Session yuklanmoqda...')
+        """Open browser with session"""
+        print('📂 Loading session...')
 
         with open(SESSION_FILE, 'r', encoding='utf-8') as f:
             session_data = json.load(f)
 
-        # Browser ochish
+        # Launch browser
         self.browser = p.chromium.launch(
             headless=False,
             args=['--start-maximized']
         )
 
-        # Session bilan context yaratish
+        # Create context with session
         self.context = self.browser.new_context(
             storage_state=session_data,
             viewport={'width': 1920, 'height': 1080},
@@ -68,29 +68,29 @@ class InstagramPostDataScraper:
         self.page = self.context.new_page()
         self.page.set_default_timeout(60000)
 
-        print('✅ Session yuklandi!')
+        print('✅ Session loaded!')
 
     def goto_post(self, url):
-        """Post sahifasiga o'tish"""
+        """Navigate to post page"""
         try:
             self.page.goto(url, wait_until='domcontentloaded', timeout=60000)
-            time.sleep(3)  # Sahifa yuklanishi uchun
+            time.sleep(3)  # Wait for page to load
 
-            # Likes elementini kutish
+            # Wait for likes element
             try:
                 self.page.wait_for_selector('span:has-text("likes")', timeout=5000)
             except Exception:
-                pass  # Agar likes bo'lmasa davom etish
+                pass  # Continue if no likes
 
             return True
         except Exception as e:
-            print(f'⚠️  Post ochishda xatolik: {e}')
+            print(f'⚠️  Error opening post: {e}')
             return False
 
     def _get_tagged_accounts(self):
-        """Tag qilingan akkauntlarni olish"""
+        """Get tagged accounts"""
         try:
-            # ._aa1y class ichidagi barcha a[href] linklar
+            # All a[href] links inside ._aa1y class
             tag_containers = self.page.locator('._aa1y').all()
 
             tagged = []
@@ -99,7 +99,7 @@ class InstagramPostDataScraper:
                     link = container.locator('a[href]').first
                     href = link.get_attribute('href')
                     if href:
-                        # Username ni olish (/ larni olib tashlash)
+                        # Extract username (remove slashes)
                         username = href.strip('/').split('/')[-1]
                         tagged.append(username)
                 except Exception:
@@ -110,24 +110,24 @@ class InstagramPostDataScraper:
             return ['No tags']
 
     def _get_likes_count(self):
-        """Likes sonini olish"""
-        # Method 1: Section ichidan span[role="button"] (yangi Instagram struktura)
+        """Get likes count"""
+        # Method 1: span[role="button"] inside section (new Instagram structure)
         try:
-            # Section ichidan like SVG iconidan keyin kelgan span
+            # Find span after like SVG icon inside section
             section = self.page.locator('section').first
-            # aria-label="Like" bor SVG ni topish
+            # Find SVG with aria-label="Like"
             like_svg = section.locator('svg[aria-label="Like"]').first
-            # SVG dan keyin kelgan span[role="button"] ni topish
-            # Bu spans orasida birinchisi - likes soni
+            # Find span[role="button"] after SVG
+            # First one among these spans - likes count
             spans = section.locator('span[role="button"]').all()
 
-            for span in spans[:2]:  # Birinchi 2 ta span (likes va comments)
+            for span in spans[:2]:  # First 2 spans (likes and comments)
                 try:
                     text = span.inner_text(timeout=2000).strip()
-                    # Raqam ekanligini tekshirish
+                    # Check if it's a number
                     if text and text.replace(',', '').replace('.', '').replace('K', '').replace('M', '').isdigit():
                         return text.replace(',', '')
-                    # Agar K yoki M bilan bo'lsa (44K, 2.5M)
+                    # If with K or M (44K, 2.5M)
                     if text and ('K' in text or 'M' in text):
                         return text
                 except Exception:
@@ -137,9 +137,9 @@ class InstagramPostDataScraper:
 
         # Method 2: Direct span selector
         try:
-            # Like icon yonidagi span
+            # Span next to like icon
             section = self.page.locator('section').first
-            # x1ypdohk x1s688f class kombinatsiyasi
+            # x1ypdohk x1s688f class combination
             likes_span = section.locator('span.x1ypdohk.x1s688f').first
             likes_text = likes_span.inner_text(timeout=2000).strip()
             if likes_text and likes_text.replace(',', '').isdigit():
@@ -147,7 +147,7 @@ class InstagramPostDataScraper:
         except Exception:
             pass
 
-        # Method 3: Link orqali (eski struktura)
+        # Method 3: Via link (old structure)
         try:
             likes_link = self.page.locator('a[href*="/liked_by/"]').first
             likes_text = likes_link.locator('span.html-span').first.inner_text(timeout=2000)
@@ -156,7 +156,7 @@ class InstagramPostDataScraper:
         except Exception:
             pass
 
-        # Method 4: "likes" matni bilan (fallback)
+        # Method 4: With "likes" text (fallback)
         try:
             likes_count = self.page.locator('span:has-text("likes")').count()
             for i in range(likes_count):
@@ -174,14 +174,14 @@ class InstagramPostDataScraper:
         return 'N/A'
 
     def _get_post_time(self):
-        """Post vaqtini olish"""
+        """Get post timestamp"""
         try:
-            # time elementi
+            # time element
             time_element = self.page.locator('time').first
             if time_element:
                 # datetime attribute
                 datetime_str = time_element.get_attribute('datetime')
-                # title attribute (odam o'qiy oladigan format)
+                # title attribute (human-readable format)
                 title_str = time_element.get_attribute('title')
 
                 if title_str:
@@ -194,12 +194,12 @@ class InstagramPostDataScraper:
         return 'N/A'
 
     def scrape_post(self, url):
-        """Bitta postni scraping qilish"""
-        # Postga kirish
+        """Scrape a single post"""
+        # Navigate to post
         if not self.goto_post(url):
             return None
 
-        # Ma'lumotlar olish
+        # Extract data
         tagged = self._get_tagged_accounts()
         likes = self._get_likes_count()
         post_time = self._get_post_time()
@@ -212,7 +212,7 @@ class InstagramPostDataScraper:
         }
 
     def print_post_data(self, data):
-        """Post ma'lumotlarini chiroyli formatda chiqarish"""
+        """Print post data in formatted style"""
         if not data:
             return
 
@@ -224,30 +224,30 @@ class InstagramPostDataScraper:
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
     def close(self):
-        """Browser yopish"""
+        """Close browser"""
         if self.browser:
             self.browser.close()
 
     def scrape_all(self):
-        """Barcha postlarni scraping qilish"""
+        """Scrape all posts"""
         self.check_session()
         self.check_links_file()
 
-        # Linklar yuklanmoqda
+        # Load links
         links = self.load_links()
-        print(f'📊 Jami linklar: {len(links)}\n')
+        print(f'📊 Total links: {len(links)}\n')
 
         if not links:
-            print('❌ Linklar topilmadi!')
+            print('❌ No links found!')
             return
 
         with sync_playwright() as p:
             try:
                 self.load_session(p)
 
-                print('🚀 Scraping boshlandi...\n')
+                print('🚀 Scraping started...\n')
 
-                # Har bir linkni scraping qilish
+                # Scrape each link
                 for i, link in enumerate(links, 1):
                     print(f'[{i}/{len(links)}] 🔍 Scraping: {link}')
 
@@ -255,14 +255,14 @@ class InstagramPostDataScraper:
                     if data:
                         self.print_post_data(data)
 
-                    # Keyingi postga o'tishdan oldin kutish (Instagram limiting)
+                    # Wait before next post (Instagram rate limiting)
                     if i < len(links):
                         import random
                         wait_time = random.uniform(2, 4)
-                        print(f'⏳ {wait_time:.1f}s kutilmoqda...')
+                        print(f'⏳ Waiting {wait_time:.1f}s...')
                         time.sleep(wait_time)
 
-                print('\n✅ Barcha postlar scraping qilindi!')
+                print('\n✅ All posts scraped successfully!')
 
             finally:
                 time.sleep(2)
@@ -270,7 +270,7 @@ class InstagramPostDataScraper:
 
 
 def main():
-    """Main funksiya"""
+    """Main function"""
     print('🚀 Instagram Post Data Scraper\n')
 
     scraper = InstagramPostDataScraper()
@@ -278,7 +278,7 @@ def main():
     try:
         scraper.scrape_all()
     except Exception as e:
-        print(f'\n❌ Xatolik: {e}')
+        print(f'\n❌ Error: {e}')
         raise
 
 
@@ -286,6 +286,6 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print('\n\n⚠️  Dastur to\'xtatildi!')
+        print('\n\n⚠️  Program stopped!')
     except Exception:
         pass

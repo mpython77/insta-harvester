@@ -1,6 +1,6 @@
 """
 Instagram Post Links Scraper
-Profile dan barcha post linklarini olish (scroll qilib)
+Collects all post links from a profile (with scrolling)
 """
 
 import json
@@ -12,12 +12,12 @@ SESSION_FILE = 'instagram_session.json'
 
 
 class InstagramPostLinksScraper:
-    """Instagram postlar linklarini scraping qilish"""
+    """Scrape Instagram post links"""
 
     def __init__(self, username: str):
         """
         Args:
-            username: Instagram username (@ belgisisiz)
+            username: Instagram username (without @ symbol)
         """
         self.username = username
         self.profile_url = f'https://www.instagram.com/{username}/'
@@ -26,27 +26,27 @@ class InstagramPostLinksScraper:
         self.browser = None
 
     def check_session(self):
-        """Session faylni tekshirish"""
+        """Check session file"""
         if not os.path.exists(SESSION_FILE):
             raise FileNotFoundError(
-                f'❌ {SESSION_FILE} topilmadi!\n'
-                f'Avval "python save_session.py" ni ishga tushiring.'
+                f'❌ {SESSION_FILE} not found!\n'
+                f'Please run "python save_session.py" first.'
             )
 
     def load_session(self, p):
-        """Session bilan browser ochish"""
-        print('📂 Session yuklanmoqda...')
+        """Launch browser with session"""
+        print('📂 Loading session...')
 
         with open(SESSION_FILE, 'r', encoding='utf-8') as f:
             session_data = json.load(f)
 
-        # Browser ochish
+        # Launch browser
         self.browser = p.chromium.launch(
             headless=False,
             args=['--start-maximized']
         )
 
-        # Session bilan context yaratish
+        # Create context with session
         self.context = self.browser.new_context(
             storage_state=session_data,
             viewport={'width': 1920, 'height': 1080},
@@ -56,124 +56,124 @@ class InstagramPostLinksScraper:
         self.page = self.context.new_page()
         self.page.set_default_timeout(60000)
 
-        print('✅ Session yuklandi!')
+        print('✅ Session loaded!')
 
     def goto_profile(self):
-        """Profile sahifasiga o'tish"""
-        print(f'🔍 Profile ochilmoqda: {self.username}')
+        """Navigate to profile page"""
+        print(f'🔍 Opening profile: {self.username}')
 
         self.page.goto(self.profile_url, wait_until='domcontentloaded', timeout=60000)
 
-        print('⏳ Sahifa yuklanishi kutilmoqda...')
+        print('⏳ Waiting for page to load...')
         time.sleep(3)
 
-        # Profile mavjudligini tekshirish
+        # Check if profile exists
         if 'Page Not Found' in self.page.content() or 'Sorry, this page' in self.page.content():
-            raise ValueError(f'❌ Profile topilmadi: {self.username}')
+            raise ValueError(f'❌ Profile not found: {self.username}')
 
-        print('✅ Profile ochildi!')
+        print('✅ Profile opened!')
 
     def get_posts_count(self):
-        """Posts sonini olish"""
+        """Get number of posts"""
         try:
             self.page.wait_for_selector('span:has-text("posts")', timeout=10000)
             posts_element = self.page.locator('span:has-text("posts")').first
             if posts_element:
                 posts_text = posts_element.locator('span.html-span').first.inner_text()
-                # Virgullarni olib tashlash va int ga o'girish
+                # Remove commas and convert to int
                 posts_count = int(posts_text.strip().replace(',', ''))
                 return posts_count
         except Exception as e:
-            print(f'⚠️  Posts sonini olishda xatolik: {e}')
+            print(f'⚠️  Error getting posts count: {e}')
             return 0
 
     def extract_post_links(self):
-        """Barcha post linklarini topish (scroll qilmasdan)"""
+        """Find all post links (without scrolling)"""
         try:
-            # Post va reel linklarini topish
-            # /username/p/ yoki /username/reel/ pattern
+            # Find post and reel links
+            # /username/p/ or /username/reel/ pattern
             links = self.page.locator('a[href*="/p/"], a[href*="/reel/"]').all()
 
-            # Href larni olish
+            # Get hrefs
             hrefs = set()
             for link in links:
                 href = link.get_attribute('href')
                 if href:
-                    # To'liq URL yaratish
+                    # Create full URL
                     if href.startswith('/'):
                         href = f'https://www.instagram.com{href}'
                     hrefs.add(href)
 
             return hrefs
         except Exception as e:
-            print(f'⚠️  Linklar olishda xatolik: {e}')
+            print(f'⚠️  Error getting links: {e}')
             return set()
 
     def scroll_and_collect_links(self, target_posts_count):
-        """Scroll qilib barcha post linklarini yig'ish"""
-        print(f'\n📜 Scroll qilib {target_posts_count} ta post linkini yig\'ish boshlandi...\n')
+        """Scroll and collect all post links"""
+        print(f'\n📜 Starting to scroll and collect {target_posts_count} post links...\n')
 
         all_links = set()
         scroll_attempts = 0
         no_new_links_count = 0
-        max_no_new_attempts = 3  # 3 marta yangi link yuklanmasa to'xtatish
+        max_no_new_attempts = 3  # Stop if no new links after 3 attempts
 
         while True:
-            # Hozirgi linklarni olish
+            # Get current links
             current_links = self.extract_post_links()
             previous_count = len(all_links)
             all_links.update(current_links)
             new_count = len(all_links)
 
-            # Progress ko'rsatish
-            print(f'📊 To\'plangan linklar: {new_count}/{target_posts_count}', end='\r')
+            # Show progress
+            print(f'📊 Collected links: {new_count}/{target_posts_count}', end='\r')
 
-            # Yangi link topilmasa counter oshirish
+            # Increment counter if no new links found
             if new_count == previous_count:
                 no_new_links_count += 1
             else:
-                no_new_links_count = 0  # Yangi link topilsa reset qilish
+                no_new_links_count = 0  # Reset if new links found
 
-            # To'xtatish shartlari
+            # Stop conditions
             if new_count >= target_posts_count:
-                print(f'\n✅ Barcha postlar to\'plandi: {new_count} ta link')
+                print(f'\n✅ All posts collected: {new_count} links')
                 break
 
             if no_new_links_count >= max_no_new_attempts:
-                print(f'\n⚠️  Yangi linklar yuklanmayapti. To\'plangan: {new_count} ta')
+                print(f'\n⚠️  No new links loading. Collected: {new_count} links')
                 break
 
-            # Scroll qilish (odamga o'xshab)
+            # Scroll (human-like)
             self.page.evaluate('window.scrollBy(0, window.innerHeight * 0.8)')
 
-            # 1.5-2.5 sekund kutish (random)
+            # Wait 1.5-2.5 seconds (random)
             import random
             wait_time = random.uniform(1.5, 2.5)
             time.sleep(wait_time)
 
             scroll_attempts += 1
 
-            # Juda ko'p scroll qilinsa to'xtatish (xavfsizlik uchun)
+            # Stop if too many scrolls (safety limit)
             if scroll_attempts > 1000:
-                print(f'\n⚠️  Maksimal scroll limitiga yetildi. To\'plangan: {new_count} ta')
+                print(f'\n⚠️  Maximum scroll limit reached. Collected: {new_count} links')
                 break
 
         return list(all_links)
 
     def save_links_to_file(self, links, filename='post_links.txt'):
-        """Linklarni faylga saqlash"""
+        """Save links to file"""
         with open(filename, 'w', encoding='utf-8') as f:
             for link in sorted(links):
                 f.write(link + '\n')
-        print(f'\n💾 Linklar saqlandi: {filename}')
+        print(f'\n💾 Links saved: {filename}')
 
     def close(self):
-        """Browser yopish"""
+        """Close browser"""
         if self.browser:
             self.browser.close()
 
     def scrape(self):
-        """Asosiy scraping funksiyasi"""
+        """Main scraping function"""
         self.check_session()
 
         with sync_playwright() as p:
@@ -181,58 +181,58 @@ class InstagramPostLinksScraper:
                 self.load_session(p)
                 self.goto_profile()
 
-                # Posts sonini olish
+                # Get posts count
                 posts_count = self.get_posts_count()
-                print(f'📸 Jami postlar: {posts_count}\n')
+                print(f'📸 Total posts: {posts_count}\n')
 
                 if posts_count == 0:
-                    print('❌ Posts topilmadi yoki olishda xatolik!')
+                    print('❌ No posts found or error getting count!')
                     return []
 
-                # Scroll qilib linklar yig'ish
+                # Scroll and collect links
                 links = self.scroll_and_collect_links(posts_count)
 
-                # Faylga saqlash
+                # Save to file
                 if links:
                     self.save_links_to_file(links)
 
                 return links
 
             finally:
-                time.sleep(2)  # Ko'rish uchun
+                time.sleep(2)  # For viewing
                 self.close()
 
 
 def main():
-    """Main funksiya"""
+    """Main function"""
     print('🚀 Instagram Post Links Scraper\n')
 
-    # Username ni so'rash
-    username = input('Instagram username kiriting (@ belgisisiz): ').strip().lstrip('@')
+    # Ask for username
+    username = input('Enter Instagram username (without @ symbol): ').strip().lstrip('@')
 
     if not username:
-        print('❌ Username kiritilmadi!')
+        print('❌ Username not provided!')
         return
 
-    # Scraping boshlash
+    # Start scraping
     scraper = InstagramPostLinksScraper(username)
 
     try:
         links = scraper.scrape()
 
         print('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        print(f'✅ Scraping tugadi!')
-        print(f'📊 To\'plangan linklar: {len(links)} ta')
+        print(f'✅ Scraping complete!')
+        print(f'📊 Collected links: {len(links)}')
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
-        # Birinchi 5 ta linkni ko'rsatish
+        # Show first 5 links
         if links:
-            print('\n🔗 Misol linklar (birinchi 5 ta):')
+            print('\n🔗 Example links (first 5):')
             for i, link in enumerate(sorted(links)[:5], 1):
                 print(f'  {i}. {link}')
 
     except Exception as e:
-        print(f'\n❌ Xatolik: {e}')
+        print(f'\n❌ Error: {e}')
         raise
 
 
@@ -240,6 +240,6 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print('\n\n⚠️  Dastur to\'xtatildi!')
+        print('\n\n⚠️  Program interrupted!')
     except Exception:
         pass
