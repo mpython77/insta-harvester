@@ -492,11 +492,14 @@ class ParallelPostDataScraper:
 
     def _scrape_sequential(
         self,
-        post_urls: List[str],
+        post_links: List[Dict[str, str]],
         session_data: dict
     ) -> List[PostData]:
         """Sequential scraping (original method)"""
         from .post_data import PostDataScraper
+
+        # Extract URLs from dictionaries
+        post_urls = [link['url'] for link in post_links]
 
         scraper = PostDataScraper(self.config)
         results = scraper.scrape_multiple(
@@ -561,7 +564,7 @@ class ParallelPostDataScraper:
         # Use multiprocessing Pool with async
         results = []
         completed_count = 0
-        total_posts = len(post_urls)
+        total_posts = len(post_links)
 
         with Pool(processes=num_workers) as pool:
             # Start workers asynchronously
