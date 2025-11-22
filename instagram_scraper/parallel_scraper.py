@@ -47,8 +47,22 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
         time.sleep(1.5)  # Wait for popup animation
         time.sleep(0.5)  # Extra wait for popup content
 
-        # Extract usernames from popup (EXCLUDE comment section!)
-        popup_links = page.locator('a[href^="/"]').all()
+        # CRITICAL FIX: Extract usernames ONLY from popup container (NOT comment section!)
+        # Popup class: x1cy8zhl x9f619 x78zum5 xl56j7k x2lwn1j xeuugli x47corl
+        print(f"[Worker {worker_id}] Looking for popup container...")
+
+        # Find popup container
+        popup_container = page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+
+        if popup_container.count() == 0:
+            print(f"[Worker {worker_id}] Popup container not found, trying alternative selectors...")
+            # Alternative: role="dialog"
+            popup_container = page.locator('div[role="dialog"]').first
+
+        # Extract links ONLY from within popup container
+        popup_links = popup_container.locator('a[href^="/"]').all()
+        print(f"[Worker {worker_id}] Found {len(popup_links)} links in popup")
+
         for link in popup_links:
             try:
                 href = link.get_attribute('href', timeout=1000)
@@ -59,17 +73,9 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
                     if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
                         continue
 
-                    # CRITICAL: Skip if in comment section
-                    try:
-                        parent_classes = link.evaluate('(element) => { const parent = element.closest("div"); return parent ? parent.className : ""; }')
-                        if 'x5yr21d' in parent_classes and 'xw2csxc' in parent_classes:
-                            print(f"[Worker {worker_id}] Skipping {username} (in comment section)")
-                            continue
-                    except:
-                        pass  # If check fails, include the username
-
                     if username not in tagged:
                         tagged.append(username)
+                        print(f"[Worker {worker_id}] ✓ Added tag: {username}")
             except:
                 continue
 

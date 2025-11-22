@@ -340,12 +340,27 @@ class ReelDataScraper(BaseScraper):
             # Step 3: Extract tagged accounts from popup (EXCLUDE comment section!)
             self.logger.debug("Extracting tagged accounts from popup...")
 
-            # Method 1: Links in popup container (NOT from comment section!)
+            # Method 1: Links ONLY from popup container (NOT from comment section!)
             try:
                 # Wait for popup content to load
                 time.sleep(0.5)
 
-                links = self.page.locator('a[href^="/"]').all()
+                # CRITICAL FIX: Extract links ONLY from within popup container
+                # Popup class: x1cy8zhl x9f619 x78zum5 xl56j7k x2lwn1j xeuugli x47corl
+                self.logger.debug("Looking for popup container...")
+
+                # Find popup container - look for div with these specific classes
+                popup_container = self.page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+
+                if popup_container.count() == 0:
+                    self.logger.debug("Popup container not found, trying alternative selectors...")
+                    # Alternative: any div with role="dialog" or similar popup indicators
+                    popup_container = self.page.locator('div[role="dialog"]').first
+
+                # Extract links ONLY from within the popup container
+                links = popup_container.locator('a[href^="/"]').all()
+                self.logger.debug(f"Found {len(links)} links in popup")
+
                 for link in links:
                     try:
                         href = link.get_attribute('href', timeout=1000)
@@ -356,21 +371,9 @@ class ReelDataScraper(BaseScraper):
                             if username in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories']:
                                 continue
 
-                            # CRITICAL: Check if link is NOT in comment section
-                            # Comment class: x5yr21d xw2csxc x1odjw0f x1n2onr6
-                            try:
-                                # Get parent div classes
-                                parent_classes = link.evaluate('(element) => { const parent = element.closest("div"); return parent ? parent.className : ""; }')
-
-                                # Skip if it's in comment section
-                                if 'x5yr21d' in parent_classes and 'xw2csxc' in parent_classes:
-                                    self.logger.debug(f"Skipping {username} (in comment section)")
-                                    continue
-                            except:
-                                pass  # If check fails, include the username
-
                             if username not in tagged:
                                 tagged.append(username)
+                                self.logger.debug(f"✓ Added tag: {username}")
                     except:
                         continue
 
