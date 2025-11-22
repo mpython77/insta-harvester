@@ -16,11 +16,12 @@ from .exceptions import HTMLStructureChangedError
 
 @dataclass
 class PostData:
-    """Post data structure"""
+    """Post/Reel data structure"""
     url: str
     tagged_accounts: List[str]
     likes: str
     timestamp: str
+    content_type: str = 'Post'  # 'Post' or 'Reel'
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -45,6 +46,10 @@ class PostDataScraper(BaseScraper):
         super().__init__(config)
         self.logger.info("PostDataScraper ready")
 
+    def _is_reel(self, url: str) -> bool:
+        """Check if URL is a reel"""
+        return '/reel/' in url
+
     def scrape(
         self,
         post_url: str,
@@ -54,10 +59,10 @@ class PostDataScraper(BaseScraper):
         get_timestamp: bool = True
     ) -> PostData:
         """
-        Scrape data from a single post
+        Scrape data from a single post or reel
 
         Args:
-            post_url: URL of the post
+            post_url: URL of the post/reel
             get_tags: Extract tagged accounts
             get_likes: Extract likes count
             get_timestamp: Extract post timestamp
@@ -65,24 +70,38 @@ class PostDataScraper(BaseScraper):
         Returns:
             PostData object
         """
-        self.logger.info(f"Scraping post: {post_url}")
+        # Detect content type
+        is_reel = self._is_reel(post_url)
+        content_type = 'Reel' if is_reel else 'Post'
 
-        # Navigate to post
+        self.logger.info(f"Scraping {content_type}: {post_url}")
+
+        # Navigate to post/reel
         self.goto_url(post_url)
 
-        # CRITICAL: Wait longer for tags to load (increased from 2 to 3 seconds)
+        # CRITICAL: Wait longer for content to load
         time.sleep(3)
 
-        # Extract data
+        # Extract data based on type
+        if is_reel:
+            tagged_accounts = self.get_reel_tagged_accounts() if get_tags else []
+            likes = self.get_reel_likes_count() if get_likes else 'N/A'
+            timestamp = self.get_reel_timestamp() if get_timestamp else 'N/A'
+        else:
+            tagged_accounts = self.get_tagged_accounts() if get_tags else []
+            likes = self.get_likes_count() if get_likes else 'N/A'
+            timestamp = self.get_timestamp() if get_timestamp else 'N/A'
+
         data = PostData(
             url=post_url,
-            tagged_accounts=self.get_tagged_accounts() if get_tags else [],
-            likes=self.get_likes_count() if get_likes else 'N/A',
-            timestamp=self.get_timestamp() if get_timestamp else 'N/A'
+            tagged_accounts=tagged_accounts,
+            likes=likes,
+            timestamp=timestamp,
+            content_type=content_type
         )
 
         self.logger.debug(
-            f"Extracted: {len(data.tagged_accounts)} tags, "
+            f"Extracted [{content_type}]: {len(data.tagged_accounts)} tags, "
             f"{data.likes} likes, time={data.timestamp}"
         )
 
@@ -380,3 +399,177 @@ class PostDataScraper(BaseScraper):
         )
 
         return result
+
+    # ==================== REEL-SPECIFIC EXTRACTION METHODS ====================
+
+    def get_reel_likes_count(self) -> str:
+        """
+        Extract likes count from REEL (different HTML structure than posts)
+
+        Reel likes location:
+        <span class="x1ypdohk x1s688f x2fvf9 xe9ewy2" role="button" tabindex="0">3</span>
+
+        Returns:
+            Likes count as string
+        """
+        # Method 1: Reel-specific selector (user provided)
+        try:
+            likes_span = self.page.locator('span.x1ypdohk.x1s688f.x2fvf9.xe9ewy2[role="button"]').first
+            likes_text = likes_span.inner_text(timeout=3000).strip()
+            if likes_text:
+                self.logger.debug(f"✓ Found reel likes: {likes_text}")
+                return likes_text.replace(',', '')
+        except Exception as e:
+            self.logger.debug(f"Reel likes method 1 failed: {e}")
+
+        # Method 2: General span with role=button (first one is usually likes)
+        try:
+            spans = self.page.locator('span[role="button"]').all()
+            for span in spans[:3]:  # Check first 3
+                try:
+                    text = span.inner_text(timeout=2000).strip()
+                    # Check if it looks like a number
+                    if text and (text.replace(',', '').replace('.', '').replace('K', '').replace('M', '').isdigit() or 'K' in text or 'M' in text):
+                        self.logger.debug(f"✓ Found reel likes (method 2): {text}")
+                        return text.replace(',', '')
+                except:
+                    continue
+        except Exception as e:
+            self.logger.debug(f"Reel likes method 2 failed: {e}")
+
+        self.logger.warning("Failed to extract reel likes count")
+        return 'N/A'
+
+    def get_reel_timestamp(self) -> str:
+        """
+        Extract timestamp from REEL
+
+        Reel timestamp location:
+        <time class="x1p4m5qa" datetime="2025-07-23T12:34:14.000Z" title="Jul 23, 2025">July 23</time>
+
+        Returns:
+            Timestamp string
+        """
+        # Method 1: time.x1p4m5qa selector
+        try:
+            time_element = self.page.locator('time.x1p4m5qa').first
+
+            # Try title attribute first
+            title = time_element.get_attribute('title', timeout=3000)
+            if title:
+                self.logger.debug(f"✓ Found reel timestamp (title): {title}")
+                return title
+
+            # Try datetime attribute
+            datetime_str = time_element.get_attribute('datetime', timeout=3000)
+            if datetime_str:
+                self.logger.debug(f"✓ Found reel timestamp (datetime): {datetime_str}")
+                return datetime_str
+
+            # Fallback to text
+            text = time_element.inner_text(timeout=3000)
+            if text:
+                self.logger.debug(f"✓ Found reel timestamp (text): {text}")
+                return text
+        except Exception as e:
+            self.logger.debug(f"Reel timestamp method 1 failed: {e}")
+
+        # Method 2: Any time element (fallback)
+        try:
+            time_element = self.page.locator('time').first
+            title = time_element.get_attribute('title')
+            if title:
+                self.logger.debug(f"✓ Found reel timestamp (fallback): {title}")
+                return title
+        except Exception as e:
+            self.logger.debug(f"Reel timestamp method 2 failed: {e}")
+
+        self.logger.warning("Failed to extract reel timestamp")
+        return 'N/A'
+
+    def get_reel_tagged_accounts(self) -> List[str]:
+        """
+        Extract tagged accounts from REEL (different logic than posts)
+
+        Reel tag extraction:
+        1. Find tag button: <button> with <svg aria-label="Tags">
+        2. Click the button to open popup
+        3. Extract href attributes from popup: href="/username/"
+
+        Returns:
+            List of usernames (without @)
+        """
+        tagged = []
+
+        try:
+            # Step 1: Find and click tag button
+            self.logger.debug("Looking for reel tag button...")
+
+            # Look for button with Tags SVG
+            tag_button = self.page.locator('button:has(svg[aria-label="Tags"])').first
+
+            # Check if button exists
+            if tag_button.count() == 0:
+                self.logger.debug("No tag button found - reel has no tags")
+                return ['No tags']
+
+            # Click the tag button
+            self.logger.debug("Clicking tag button...")
+            tag_button.click(timeout=3000)
+
+            # Step 2: Wait for popup to appear
+            time.sleep(1.5)  # Wait for animation
+
+            # Step 3: Extract tagged accounts from popup
+            self.logger.debug("Extracting tagged accounts from popup...")
+
+            # Method 1: All links in the popup
+            try:
+                # Look for links with username pattern
+                links = self.page.locator('a[href^="/"]').all()
+                for link in links:
+                    try:
+                        href = link.get_attribute('href', timeout=1000)
+                        if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
+                            username = href.strip('/').split('/')[-1]
+                            # Filter out Instagram system paths
+                            if username and username not in ['explore', 'direct', 'accounts', 'p', 'reel'] and username not in tagged:
+                                tagged.append(username)
+                    except:
+                        continue
+
+                if tagged:
+                    self.logger.info(f"✓ Found {len(tagged)} tags in reel: {tagged}")
+
+                    # Close popup by clicking outside or close button
+                    try:
+                        close_button = self.page.locator('button:has(svg[aria-label="Close"])').first
+                        close_button.click(timeout=2000)
+                    except:
+                        # Try pressing Escape
+                        self.page.keyboard.press('Escape')
+
+                    return tagged
+            except Exception as e:
+                self.logger.debug(f"Reel tag extraction from popup failed: {e}")
+
+            # If popup method failed, try closing and return
+            try:
+                self.page.keyboard.press('Escape')
+            except:
+                pass
+
+        except Exception as e:
+            self.logger.debug(f"Reel tag button click failed: {e}")
+
+        # Fallback: Try post tag extraction method
+        self.logger.debug("Fallback to post tag extraction for reel...")
+        try:
+            tagged = self.get_tagged_accounts()
+            if tagged and tagged != ['No tags']:
+                return tagged
+        except Exception as e:
+            self.logger.debug(f"Fallback tag extraction failed: {e}")
+
+        self.logger.warning("No tags found in reel")
+        return ['No tags']

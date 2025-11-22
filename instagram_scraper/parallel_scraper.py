@@ -490,7 +490,8 @@ class ParallelPostDataScraper:
                                     post_url=data['url'],
                                     tagged_accounts=data['tagged_accounts'],
                                     likes=data['likes'],
-                                    post_date=data['timestamp']
+                                    post_date=data['timestamp'],
+                                    content_type=data.get('content_type', 'Post')
                                 )
                                 self.logger.info(f"  ✓ Saved to Excel: {data['url']}")
                             except Exception as e:

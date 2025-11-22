@@ -373,7 +373,8 @@ class InstagramOrchestrator:
                             post_url=data.url,
                             tagged_accounts=data.tagged_accounts,
                             likes=data.likes,
-                            post_date=data.timestamp
+                            post_date=data.timestamp,
+                            content_type=data.content_type
                         )
 
                 except Exception as e:
