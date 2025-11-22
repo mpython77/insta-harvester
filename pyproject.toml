@@ -8,7 +8,7 @@ version = "2.5.0"
 description = "Professional Instagram data collection toolkit with automation features"
 readme = "README.md"
 authors = [
-    {name = "Artem", email = "your.email@example.com"}
+    {name = "Artem", email = "kelajak054@gmail.com"}
 ]
 license = {text = "MIT"}
 classifiers = [
@@ -55,10 +55,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/instaharvest"
-Documentation = "https://github.com/yourusername/instaharvest#readme"
-Repository = "https://github.com/yourusername/instaharvest"
-"Bug Tracker" = "https://github.com/yourusername/instaharvest/issues"
+Homepage = "https://github.com/mpython77/insta-harvester"
+Documentation = "https://github.com/mpython77/insta-harvester#readme"
+Repository = "https://github.com/mpython77/insta-harvester"
+"Bug Tracker" = "https://github.com/mpython77/insta-harvester/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

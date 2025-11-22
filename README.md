@@ -317,8 +317,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📞 Support
 
-- GitHub Issues: [Report a bug](https://github.com/yourusername/instaharvest/issues)
-- Documentation: [Read the docs](https://github.com/yourusername/instaharvest#readme)
+- GitHub Issues: [Report a bug](https://github.com/mpython77/insta-harvester/issues)
+- Documentation: [Read the docs](https://github.com/mpython77/insta-harvester#readme)
+- Email: kelajak054@gmail.com
 
 ---
 

@@ -13,11 +13,11 @@ setup(
     name="instaharvest",
     version="2.5.0",
     author="Artem",
-    author_email="your.email@example.com",  # Update with your email
+    author_email="kelajak054@gmail.com",
     description="Professional Instagram data collection toolkit with automation features",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/instaharvest",  # Update with your repo
+    url="https://github.com/mpython77/insta-harvester",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -68,9 +68,9 @@ setup(
         "playwright",
     ],
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/instaharvest/issues",
-        "Source": "https://github.com/yourusername/instaharvest",
-        "Documentation": "https://github.com/yourusername/instaharvest#readme",
+        "Bug Reports": "https://github.com/mpython77/insta-harvester/issues",
+        "Source": "https://github.com/mpython77/insta-harvester",
+        "Documentation": "https://github.com/mpython77/insta-harvester#readme",
     },
     include_package_data=True,
     zip_safe=False,

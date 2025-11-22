@@ -95,7 +95,9 @@ from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
 
 __version__ = '2.5.0'
-__author__ = 'AI Assistant'
+__author__ = 'Artem'
+__email__ = 'kelajak054@gmail.com'
+__url__ = 'https://github.com/mpython77/insta-harvester'
 
 __all__ = [
     # Configuration
