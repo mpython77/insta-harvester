@@ -25,16 +25,19 @@ class InstagramOrchestrator:
     """
     Main orchestrator for complete Instagram scraping workflow
 
-    Workflow:
-    1. Scrape profile (posts, followers, following)
-    2. Collect all post links
-    3. Scrape data from each post (tags, likes, timestamp)
+    Workflow (COMPLETE SEPARATION OF POSTS AND REELS):
+    1. Scrape profile stats (posts, followers, following)
+    2. Collect POST links from main profile (POSTS ONLY)
+    3. Collect REEL links from /reels/ page (REELS ONLY - SEPARATE!)
+    4. Scrape data from posts (tags, likes, timestamp)
+    5. Scrape data from reels (tags, likes, timestamp - SEPARATE!)
 
     Features:
     - Complete end-to-end scraping
+    - Separate handling of posts and reels (no mixing!)
     - Progress tracking
     - Error resilience
-    - Data export
+    - Data export with Type column (Post/Reel)
     """
 
     def __init__(self, config: Optional[ScraperConfig] = None):
@@ -140,10 +143,12 @@ class InstagramOrchestrator:
 
     def _collect_post_links(self, username: str) -> List[Dict[str, str]]:
         """
-        Collect all post/reel links from profile
+        Collect all POST links from main profile (POSTS ONLY - NO REELS!)
 
         Returns:
-            List of dictionaries with 'url' and 'type' keys
+            List of dictionaries with 'url' and 'type' keys (all type='Post')
+
+        NOTE: Reels are collected separately by _collect_reel_links()
         """
         scraper = PostLinksScraper(self.config)
         return scraper.scrape(
