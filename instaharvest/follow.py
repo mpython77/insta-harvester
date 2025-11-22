@@ -465,14 +465,57 @@ class FollowManager(BaseScraper):
                 self.logger.debug(f"⏱️ Waiting {delay_confirm:.1f}s before clicking Unfollow confirmation...")
                 time.sleep(delay_confirm)
 
-                # Look for "Unfollow" button in dialog
-                unfollow_confirm_button = self.page.locator('button:has-text("Unfollow")').first
+                # Try to find unfollow button with multiple selectors (different languages/HTML structures)
+                unfollow_confirm_button = None
 
-                if unfollow_confirm_button.count() == 0:
-                    self.logger.warning("Unfollow confirmation button not found")
+                # Method 1: Try common English text variations
+                selectors_to_try = [
+                    'button:has-text("Unfollow")',
+                    'button:has-text("unfollow")',
+                    # Method 2: Try dialog/modal buttons (works for any language)
+                    'div[role="dialog"] button:nth-child(1)',  # First button in dialog
+                    'div[role="dialog"] button._acan._acap._acas._aj1-',  # Instagram's button classes
+                    'div[role="dialog"] button',  # Any button in dialog
+                    # Method 3: Try by button color/style (red buttons are usually confirm)
+                    'button[style*="background"]',
+                    # Method 4: Generic button in popup
+                    'div._aano button',
+                ]
+
+                for selector in selectors_to_try:
+                    try:
+                        button = self.page.locator(selector).first
+                        if button.count() > 0:
+                            # Found a button, check if it's visible
+                            if button.is_visible(timeout=1000):
+                                unfollow_confirm_button = button
+                                self.logger.debug(f"✓ Found unfollow button using selector: {selector}")
+                                break
+                    except Exception as e:
+                        self.logger.debug(f"Selector {selector} failed: {e}")
+                        continue
+
+                if unfollow_confirm_button is None or unfollow_confirm_button.count() == 0:
+                    # Last resort: Get all buttons in dialog and click the first one
+                    try:
+                        dialog_buttons = self.page.locator('div[role="dialog"] button')
+                        if dialog_buttons.count() > 0:
+                            unfollow_confirm_button = dialog_buttons.first
+                            self.logger.debug(f"✓ Using first button in dialog (found {dialog_buttons.count()} buttons)")
+                        else:
+                            self.logger.warning("Unfollow confirmation button not found - no buttons in dialog")
+                            return False
+                    except Exception as e:
+                        self.logger.warning(f"Unfollow confirmation button not found: {e}")
+                        return False
+
+                # Click the button
+                try:
+                    unfollow_confirm_button.click(timeout=3000)
+                    self.logger.debug("✓ Unfollow button clicked")
+                except Exception as e:
+                    self.logger.warning(f"Failed to click unfollow button: {e}")
                     return False
-
-                unfollow_confirm_button.click(timeout=3000)
 
                 # Wait for action to complete
                 self.logger.debug(f"⏱️ Waiting {self.config.button_click_delay}s for unfollow action to complete...")
