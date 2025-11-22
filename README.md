@@ -24,28 +24,183 @@
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Installation
 
-### Installation
+### Method 1: Install from PyPI (Recommended)
 
 ```bash
+# Install the package
 pip install instaharvest
-```
 
-### Install Playwright Browser
-
-```bash
+# Install Playwright browser
 playwright install chrome
 ```
 
-### Basic Usage
+### Method 2: Install from GitHub (Latest Development Version)
+
+#### Step 1: Clone the Repository
+```bash
+git clone https://github.com/mpython77/insta-harvester.git
+cd insta-harvester
+```
+
+#### Step 2: Install Dependencies
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Install Playwright browser
+playwright install chrome
+```
+
+#### Step 3: Install Package in Development Mode (Optional)
+```bash
+# Install as editable package
+pip install -e .
+```
+
+**OR** simply use it without installation:
+```bash
+# Just make sure you're in the project directory
+cd /path/to/insta-harvester
+
+# Then run examples
+python examples/save_session.py
+```
+
+---
+
+## 🔧 Complete Setup Guide
+
+### Step 1: Verify Python Installation
+```bash
+# Check Python version (requires 3.8+)
+python --version
+
+# Should show: Python 3.8.0 or higher
+```
+
+### Step 2: Install InstaHarvest
+
+**From GitHub:**
+```bash
+git clone https://github.com/mpython77/insta-harvester.git
+cd insta-harvester
+pip install -r requirements.txt
+playwright install chrome
+```
+
+**From PyPI:**
+```bash
+pip install instaharvest
+playwright install chrome
+```
+
+### Step 3: Create Instagram Session (REQUIRED!)
+
+```bash
+# Navigate to examples directory
+cd examples
+
+# Run session setup script
+python save_session.py
+```
+
+This will:
+1. Open Chrome browser
+2. Navigate to Instagram
+3. Let you log in manually
+4. Save your session to `instagram_session.json`
+5. All future scripts will use this session (no re-login needed!)
+
+**Important:** Without this session file, the library won't work!
+
+### Step 4: Test Your Setup
+
+```bash
+# Try following a user
+python examples/follow_user.py
+
+# Try collecting followers
+python examples/get_followers.py
+
+# Try the all-in-one demo
+python examples/all_in_one.py
+```
+
+---
+
+## 📖 Quick Start Examples
+
+### Example 1: Follow a User
 
 ```python
-from instaharvest import quick_scrape
+from instaharvest import FollowManager
 
-# Simple profile scraping
-results = quick_scrape('username')
-print(f"Followers: {results['profile']['followers']}")
+# Create manager
+manager = FollowManager()
+
+# Load session
+session_data = manager.load_session()
+manager.setup_browser(session_data)
+
+# Follow someone
+result = manager.follow("instagram")
+print(result)  # {'success': True, 'status': 'followed', ...}
+
+# Clean up
+manager.close()
+```
+
+### Example 2: Send Direct Message
+
+```python
+from instaharvest import MessageManager
+
+manager = MessageManager()
+session_data = manager.load_session()
+manager.setup_browser(session_data)
+
+# Send message
+result = manager.send_message("username", "Hello from Python!")
+print(result)
+
+manager.close()
+```
+
+### Example 3: Collect Followers
+
+```python
+from instaharvest import FollowersCollector
+
+collector = FollowersCollector()
+session_data = collector.load_session()
+collector.setup_browser(session_data)
+
+# Collect first 100 followers
+followers = collector.get_followers("username", limit=100, print_realtime=True)
+print(f"Collected {len(followers)} followers")
+
+collector.close()
+```
+
+### Example 4: All Operations in One Browser
+
+```python
+from instaharvest import SharedBrowser
+
+# One browser for everything!
+with SharedBrowser() as browser:
+    # Follow users
+    browser.follow("user1")
+    browser.follow("user2")
+
+    # Send messages
+    browser.send_message("user1", "Thanks for the follow!")
+
+    # Collect followers
+    followers = browser.get_followers("my_account", limit=50)
+    print(f"Followers: {len(followers)}")
 ```
 
 ---
@@ -287,6 +442,154 @@ config = ScraperConfig(
 3. **Session Management** - Auto-refreshes session to prevent expiration
 4. **Error Handling** - Comprehensive exception handling
 5. **Logging** - Professional logging for debugging
+
+---
+
+## 🔧 Troubleshooting
+
+### Installation Issues
+
+#### Error: "playwright command not found"
+```bash
+# Solution: Install Playwright first
+pip install playwright
+playwright install chrome
+```
+
+#### Error: "No module named 'instaharvest'"
+```bash
+# Solution 1: If installed from PyPI
+pip install instaharvest
+
+# Solution 2: If using GitHub clone
+cd /path/to/insta-harvester
+pip install -e .
+
+# Solution 3: Run from project directory
+cd /path/to/insta-harvester
+python examples/save_session.py  # Works without installation
+```
+
+#### Error: "Could not find Chrome browser"
+```bash
+# Solution: Install Playwright browsers
+playwright install chrome
+```
+
+---
+
+### Session Issues
+
+#### Error: "Session file not found"
+```bash
+# Solution: Create session first (REQUIRED!)
+cd examples
+python save_session.py
+
+# Then run your script
+python follow_user.py
+```
+
+#### Error: "Login required" or "Session expired"
+```bash
+# Solution: Re-create session
+cd examples
+python save_session.py
+
+# Log in again when browser opens
+```
+
+---
+
+### Operation Errors
+
+#### Error: "Could not unfollow @username"
+
+**Cause:** Unfollow popup appears too slowly for the program
+
+**Solution:** Increase popup delays in configuration
+```python
+from instaharvest import FollowManager
+from instaharvest.config import ScraperConfig
+
+config = ScraperConfig(
+    popup_open_delay=4.0,       # Wait longer for popup
+    action_delay_min=3.0,
+    action_delay_max=4.5,
+)
+
+manager = FollowManager(config=config)
+```
+
+See **CONFIGURATION_EXPLAINED.md** for detailed fixes.
+
+#### Error: "Could not follow @username"
+
+**Solution:**
+```python
+config = ScraperConfig(
+    button_click_delay=3.0,
+    action_delay_min=2.5,
+    action_delay_max=4.0,
+)
+```
+
+#### Error: "Instagram says 'Try again later'"
+
+**Cause:** Instagram rate limiting - you're doing too much too quickly
+
+**Solution:** Increase rate limiting delays
+```python
+config = ScraperConfig(
+    follow_delay_min=10.0,      # Wait 10-15 seconds between follows
+    follow_delay_max=15.0,
+    message_delay_min=15.0,     # Wait 15-20 seconds between messages
+    message_delay_max=20.0,
+)
+```
+
+---
+
+### Slow Internet Issues
+
+**Problem:** You have slow internet, pages load slowly, getting errors
+
+**Solution:**
+```python
+from instaharvest.config import ScraperConfig
+
+config = ScraperConfig(
+    page_load_delay=5.0,        # Wait longer for pages
+    popup_open_delay=4.0,       # Wait longer for popups
+    scroll_delay_min=3.0,       # Slower scrolling
+    scroll_delay_max=5.0,
+)
+
+# Use with any manager
+from instaharvest import FollowManager
+manager = FollowManager(config=config)
+```
+
+---
+
+### Getting Help
+
+1. **Check documentation:**
+   - `README.md` - Main guide (this file)
+   - `CONFIGURATION_EXPLAINED.md` - Configuration help with examples
+   - `CONFIGURATION_GUIDE.md` - Technical reference
+   - `examples/README.md` - Example scripts guide
+
+2. **Common issues:**
+   - Unfollow errors → Increase `popup_open_delay`
+   - Slow internet → Increase all delays
+   - Rate limiting → Increase `follow_delay_*` and `message_delay_*`
+
+3. **Report bugs:**
+   - GitHub Issues: https://github.com/mpython77/insta-harvester/issues
+
+4. **Email support:**
+   - kelajak054@gmail.com
 
 ---
 
