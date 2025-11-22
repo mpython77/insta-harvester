@@ -301,110 +301,91 @@ class PostDataScraper(BaseScraper):
 
     def get_tagged_accounts(self) -> List[str]:
         """
-        ROBUST tag extraction - ONLY from div._aa1y (NOT from comments!)
+        Extract tagged accounts from IMAGE posts using div._aa1y structure
 
-        CRITICAL: Tags are ONLY in: <div class="_aa1y"><a href="/username/"></a></div>
-        Comments (class="x5yr21d xw2csxc x1odjw0f x1n2onr6") are EXCLUDED!
+        Instagram structure for IMAGE posts with tags:
+        - Each tagged user is in: <div class="_aa1y">
+        - Inside: <a href="/username/">
+        - Username in: <span class="x972fbf...">username</span>
 
         Returns:
             List of usernames (without @)
         """
         tagged = []
 
-        # CRITICAL: Wait for tags to load
+        # Check if this post has tags (look for Tags SVG)
         try:
-            self.page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
+            has_tags = self.page.locator('svg[aria-label="Tags"]').count() > 0
+            if not has_tags:
+                self.logger.debug("No tag icon found - post has no tags")
+                return ['No tags']
         except:
-            pass  # Tags might not exist, continue
+            pass
 
-        # METHOD 1: Playwright - div._aa1y > a[href] (STRICT - no comments!)
+        # METHOD 1: Extract from div._aa1y containers (IMAGE posts)
         try:
+            # Find all tag containers
             tag_containers = self.page.locator('div._aa1y').all()
+            self.logger.debug(f"Found {len(tag_containers)} div._aa1y tag containers")
+
             for container in tag_containers:
                 try:
+                    # Get the link inside this container
                     link = container.locator('a[href]').first
                     href = link.get_attribute('href', timeout=2000)
+
                     if href:
+                        # Extract username from href="/username/"
                         username = href.strip('/').split('/')[-1]
+
+                        # Filter out system paths
+                        if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                            continue
+
                         if username and username not in tagged:
                             tagged.append(username)
+                            self.logger.debug(f"✓ Found tag: {username}")
                 except:
                     continue
 
             if tagged:
-                self.logger.info(f"✓ Found {len(tagged)} tags (Playwright Method 1): {tagged}")
+                self.logger.info(f"✓ Found {len(tagged)} tags: {tagged}")
                 return tagged
+
         except Exception as e:
-            self.logger.warning(f"Tag extraction method 1 failed: {e}")
+            self.logger.warning(f"Tag extraction from div._aa1y failed: {e}")
 
-        # METHOD 2: Playwright XPath (STRICT - only div._aa1y)
-        try:
-            xpath = '//div[@class="_aa1y"]//a[@href]'
-            tag_links = self.page.locator(f'xpath={xpath}').all()
-            for link in tag_links:
-                try:
-                    href = link.get_attribute('href', timeout=2000)
-                    if href:
-                        username = href.strip('/').split('/')[-1]
-                        if username and username not in tagged:
-                            tagged.append(username)
-                except:
-                    continue
-
-            if tagged:
-                self.logger.info(f"✓ Found {len(tagged)} tags (XPath Method 2): {tagged}")
-                return tagged
-        except Exception as e:
-            self.logger.warning(f"Tag extraction method 2 failed: {e}")
-
-        # METHOD 3: BeautifulSoup - ONLY div._aa1y (STRICT - no comments!)
+        # FALLBACK: BeautifulSoup method
         try:
             from bs4 import BeautifulSoup
             html = self.page.content()
             soup = BeautifulSoup(html, 'lxml')
 
             tag_containers = soup.find_all('div', class_='_aa1y')
+            self.logger.debug(f"BS4: Found {len(tag_containers)} div._aa1y containers")
+
             for container in tag_containers:
                 link = container.find('a', href=True)
                 if link and link.get('href'):
                     href = link['href']
                     username = href.strip('/').split('/')[-1]
+
+                    # Filter out system paths
+                    if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                        continue
+
                     if username and username not in tagged:
                         tagged.append(username)
 
             if tagged:
-                self.logger.info(f"✓ Found {len(tagged)} tags (BS4 Method 3): {tagged}")
+                self.logger.info(f"✓ Found {len(tagged)} tags (BS4 method): {tagged}")
                 return tagged
+
         except Exception as e:
-            self.logger.warning(f"Tag extraction method 3 failed: {e}")
+            self.logger.warning(f"BS4 tag extraction failed: {e}")
 
-        # METHOD 4: REMOVED - was including comment section users!
-        # (Old METHOD 4 was getting ALL links, including comments)
-
-        # METHOD 5: Extract from image alt text
-        try:
-            from bs4 import BeautifulSoup
-            import re
-            html = self.page.content()
-            soup = BeautifulSoup(html, 'lxml')
-
-            imgs = soup.find_all('img', alt=True)
-            for img in imgs:
-                alt_text = img.get('alt', '')
-                if 'tagging' in alt_text.lower():
-                    usernames_in_alt = re.findall(r'@(\w+\.?\w*)', alt_text)
-                    for username in usernames_in_alt:
-                        if username and username not in tagged:
-                            tagged.append(username)
-
-            if tagged:
-                self.logger.info(f"✓ Found {len(tagged)} tags (Alt text Method 5): {tagged}")
-                return tagged
-        except Exception as e:
-            self.logger.warning(f"Tag extraction method 5 failed: {e}")
-
-        # ALL METHODS FAILED
-        self.logger.warning("⚠️ WARNING: No tags found after trying all methods!")
+        # No tags found
+        self.logger.warning("⚠️ No tags found in this post")
         return ['No tags']
 
     def get_likes_count(self) -> str:
