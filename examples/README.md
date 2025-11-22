@@ -1,10 +1,83 @@
-# 📚 Examples & Test Scripts
+# 📚 Examples Directory
 
-This folder contains example code for testing various functions of Instagram Scraper.
+This folder contains all example scripts and usage demonstrations for InstaHarvest.
 
 ---
 
-## 📋 Files
+## 📁 Directory Structure
+
+```
+examples/
+├── README.md                    # This file
+├── save_session.py             # Create Instagram session
+├── example_custom_config.py    # Configuration examples
+│
+├── Basic Operations:
+│   ├── follow_user.py          # Follow users
+│   ├── unfollow_user.py        # Unfollow users
+│   ├── send_message.py         # Send direct messages
+│   ├── get_followers.py        # Collect followers
+│   └── get_following.py        # Collect following
+│
+├── Testing Scripts:
+│   ├── test_phase1.py          # Test link collection
+│   ├── test_phase2.py          # Test data extraction
+│   ├── test_professional.py    # Test professional features
+│   ├── test_follow.py          # Test follow operations
+│   ├── test_followers.py       # Test follower collection
+│   ├── test_message.py         # Test messaging
+│   └── test_shared_browser.py  # Test shared browser
+│
+└── Complete Examples:
+    ├── main.py                  # Simple scraping example
+    ├── main_advanced.py         # Advanced scraping
+    └── all_in_one.py           # All features demo
+```
+
+---
+
+## 🚀 Quick Start
+
+### 1. Create Session (Required First!)
+```bash
+cd examples
+python save_session.py
+```
+
+### 2. Try Basic Operations
+
+**Follow/Unfollow:**
+```bash
+python follow_user.py     # Follow a user
+python unfollow_user.py   # Unfollow a user
+```
+
+**Messaging:**
+```bash
+python send_message.py    # Send a DM
+```
+
+**Collect Data:**
+```bash
+python get_followers.py   # Get followers list
+python get_following.py   # Get following list
+```
+
+### 3. Advanced Usage
+
+**Custom Configuration:**
+```bash
+python example_custom_config.py
+```
+
+**Full Scraping:**
+```bash
+python main_advanced.py   # Production scraping
+```
+
+---
+
+## 📖 Detailed Examples
 
 ### 1️⃣ **test_phase1.py** - Link Collection Test
 Tests Phase 1 functionality: Collecting Post and Reel links
@@ -330,29 +403,54 @@ python examples/test_message.py
 
 ### Full Production Scraping:
 ```bash
-python main_advanced.py
+python examples/main_advanced.py
 # This is not a test, full scraping!
 ```
+
+---
+
+## 🎯 Configuration Examples
+
+### Using Custom Configuration:
+```bash
+python examples/example_custom_config.py
+```
+
+This shows:
+- Custom delays for slow/fast internet
+- Headless mode control
+- Rate limiting configuration
+- All 41+ configurable parameters
+
+See `../CONFIGURATION_GUIDE.md` for complete documentation.
 
 ---
 
 ## 💡 Tips
 
 1. **Before testing:**
-   - Create Instagram session: `python save_session.py`
+   - Create Instagram session: `python examples/save_session.py`
    - Check internet connection
 
-2. **Which test to use:**
+2. **Which script to use:**
    - Link collection issue → `test_phase1.py`
    - Data extraction issue → `test_phase2.py`
    - HTML changes → `test_professional.py`
    - Follow/Unfollow testing → `test_follow.py`
    - Direct messaging testing → `test_message.py`
+   - Configuration testing → `example_custom_config.py`
 
 3. **For production:**
    - Scraping: use `main_advanced.py`
    - Following: use `follow_user.py` or `unfollow_user.py`
    - Messaging: use `send_message.py`
+   - Custom config: see `example_custom_config.py`
+
+4. **All scripts must be run from root directory:**
+   ```bash
+   # From project root
+   python examples/script_name.py
+   ```
 
 ---
 
@@ -371,25 +469,48 @@ python main_advanced.py
 ## 🎯 Example Workflow
 
 ```bash
-# 1. Test Phase 1 (link collection)
+# From project root directory:
+
+# 1. Create session (required!)
+python examples/save_session.py
+
+# 2. Test Phase 1 (link collection)
 python examples/test_phase1.py
 # Check: Are links collected correctly?
 
-# 2. Test Phase 2 (data extraction)
+# 3. Test Phase 2 (data extraction)
 python examples/test_phase2.py
 # Check: Is data extracted correctly?
 
-# 3. Test Professional features
+# 4. Test Professional features
 python examples/test_professional.py
 # Check: Do diagnostics work?
 
-# 4. Full production scraping
-python main_advanced.py
+# 5. Try custom configuration
+python examples/example_custom_config.py
+# Learn how to customize delays
+
+# 6. Full production scraping
+python examples/main_advanced.py
 # Real scraping with all features!
 ```
 
 ---
 
-All test scripts are for **development and debugging** purposes.
+## 📚 Related Documentation
 
-For **production scraping** use only `main_advanced.py`! 🚀
+- `../CONFIGURATION_GUIDE.md` - Complete configuration guide (300+ lines)
+- `../README.md` - Main project documentation
+- `../instaharvest/` - Library source code
+
+---
+
+All scripts in this directory are **examples and demonstrations**.
+
+For **library usage** in your code, import from `instaharvest`:
+```python
+from instaharvest import FollowManager, MessageManager
+from instaharvest.config import ScraperConfig
+```
+
+For **production scraping** use `examples/main_advanced.py`! 🚀

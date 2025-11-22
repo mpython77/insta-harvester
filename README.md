@@ -229,7 +229,7 @@ with SharedBrowser() as browser:
 **First-time setup** - Save your Instagram session:
 
 ```bash
-python save_session.py
+python examples/save_session.py
 ```
 
 This will:
