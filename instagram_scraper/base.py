@@ -86,12 +86,38 @@ class BaseScraper(ABC):
             self.logger.error(f"Invalid session file format: {e}")
             raise SessionNotFoundError(f"Invalid session file: {e}")
 
-    def setup_browser(self, session_data: Optional[Dict] = None) -> None:
+    def update_session(self) -> None:
+        """
+        Update and save current session to file
+
+        This keeps the session fresh and prevents expiration.
+        Should be called after successful browser setup with session.
+        """
+        if not self.context:
+            self.logger.warning("Cannot update session: browser context not available")
+            return
+
+        try:
+            # Get current storage state (cookies, localStorage, etc.)
+            storage_state = self.context.storage_state()
+
+            # Save to session file
+            with open(self.config.session_file, 'w', encoding='utf-8') as f:
+                json.dump(storage_state, f, indent=2)
+
+            cookies_count = len(storage_state.get('cookies', []))
+            self.logger.info(f"✓ Session updated and saved: {cookies_count} cookies")
+
+        except Exception as e:
+            self.logger.warning(f"Failed to update session: {e}")
+
+    def setup_browser(self, session_data: Optional[Dict] = None, auto_update_session: bool = True) -> None:
         """
         Setup browser with Playwright
 
         Args:
             session_data: Optional session data for authenticated browsing
+            auto_update_session: If True, automatically update session after browser setup (default: True)
         """
         self.logger.info("Setting up browser...")
 
@@ -125,6 +151,19 @@ class BaseScraper(ABC):
         self.page = self.context.new_page()
         self.page.set_default_timeout(self.config.default_timeout)
         self.logger.info("Browser setup complete")
+
+        # Auto-update session to keep it fresh
+        if session_data and auto_update_session:
+            self.logger.debug("Auto-updating session to keep it fresh...")
+            try:
+                # Visit Instagram to refresh session
+                self.page.goto('https://www.instagram.com/', wait_until='domcontentloaded', timeout=30000)
+                time.sleep(2)  # Wait for page to fully load
+
+                # Update and save session
+                self.update_session()
+            except Exception as e:
+                self.logger.warning(f"Auto-update session failed: {e}")
 
     def goto_url(
         self,
@@ -221,9 +260,22 @@ class BaseScraper(ABC):
                 )
             return default
 
-    def close(self) -> None:
-        """Close browser and cleanup"""
+    def close(self, update_session_before_close: bool = True) -> None:
+        """
+        Close browser and cleanup
+
+        Args:
+            update_session_before_close: If True, update session before closing (default: True)
+        """
         self.logger.info("Closing browser...")
+
+        # Update session one last time before closing
+        if update_session_before_close and self.context:
+            try:
+                self.logger.debug("Updating session before closing...")
+                self.update_session()
+            except Exception as e:
+                self.logger.warning(f"Failed to update session before closing: {e}")
 
         if self.page:
             self.page.close()
