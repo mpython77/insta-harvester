@@ -136,19 +136,31 @@ class InstagramOrchestrator:
         scraper = ProfileScraper(self.config)
         return scraper.scrape(username)
 
-    def _collect_post_links(self, username: str) -> List[str]:
-        """Collect all post links from profile"""
+    def _collect_post_links(self, username: str) -> List[Dict[str, str]]:
+        """
+        Collect all post/reel links from profile
+
+        Returns:
+            List of dictionaries with 'url' and 'type' keys
+        """
         scraper = PostLinksScraper(self.config)
         return scraper.scrape(
             username,
             save_to_file=True
         )
 
-    def _scrape_posts_data(self, post_links: List[str]) -> List[PostData]:
-        """Scrape data from all posts"""
+    def _scrape_posts_data(self, post_links: List[Dict[str, str]]) -> List[PostData]:
+        """
+        Scrape data from all posts
+
+        Args:
+            post_links: List of dictionaries with 'url' and 'type' keys
+        """
         scraper = PostDataScraper(self.config)
+        # Extract URLs from dictionaries
+        urls = [link['url'] for link in post_links]
         return scraper.scrape_multiple(
-            post_links,
+            urls,
             delay_between_posts=True
         )
 
@@ -279,7 +291,7 @@ class InstagramOrchestrator:
 
     def _scrape_posts_parallel(
         self,
-        post_links: List[str],
+        post_links: List[Dict[str, str]],
         parallel: int,
         excel_exporter: Optional[ExcelExporter] = None
     ) -> List[PostData]:
@@ -287,7 +299,7 @@ class InstagramOrchestrator:
         Scrape posts in parallel with REAL-TIME Excel writing
 
         Args:
-            post_links: List of post URLs
+            post_links: List of dictionaries with 'url' and 'type' keys
             parallel: Number of parallel contexts
             excel_exporter: Optional Excel exporter for real-time save
 
@@ -298,8 +310,10 @@ class InstagramOrchestrator:
         self.logger.info(f"📊 Real-time Excel writing: {'ENABLED' if excel_exporter else 'DISABLED'}")
 
         scraper = ParallelPostDataScraper(self.config)
+        # Extract URLs from dictionaries
+        urls = [link['url'] for link in post_links]
         posts_data = scraper.scrape_multiple(
-            post_links,
+            urls,
             parallel=parallel,
             session_file=self.config.session_file,
             excel_exporter=excel_exporter  # Pass to enable real-time writing!
@@ -313,14 +327,14 @@ class InstagramOrchestrator:
 
     def _scrape_posts_sequential(
         self,
-        post_links: List[str],
+        post_links: List[Dict[str, str]],
         excel_exporter: Optional[ExcelExporter] = None
     ) -> List[PostData]:
         """
         Scrape posts sequentially with real-time Excel export
 
         Args:
-            post_links: List of post URLs
+            post_links: List of dictionaries with 'url' and 'type' keys
             excel_exporter: Optional Excel exporter
 
         Returns:
@@ -333,13 +347,17 @@ class InstagramOrchestrator:
         scraper.setup_browser(scraper.load_session())
 
         try:
-            for i, url in enumerate(post_links, 1):
+            for i, link_data in enumerate(post_links, 1):
+                # Extract URL from dictionary
+                url = link_data['url']
+                content_type = link_data.get('type', 'Unknown')
+
                 # Check for shutdown request before each post
                 if self.shutdown_requested:
                     self.logger.warning(f"Shutdown requested at post {i}/{len(post_links)}")
                     break
 
-                self.logger.info(f"[{i}/{len(post_links)}] Scraping: {url}")
+                self.logger.info(f"[{i}/{len(post_links)}] Scraping [{content_type}]: {url}")
 
                 try:
                     data = scraper.scrape(url)
@@ -355,7 +373,8 @@ class InstagramOrchestrator:
                             post_url=data.url,
                             tagged_accounts=data.tagged_accounts,
                             likes=data.likes,
-                            post_date=data.timestamp
+                            post_date=data.timestamp,
+                            content_type=data.content_type
                         )
 
                 except Exception as e:

@@ -77,14 +77,16 @@ def main():
             scraper = PostLinksScraper(config)
             links = scraper.scrape(username, save_to_file=True)
 
-            print(f"\n✅ Collected {len(links)} post links")
+            print(f"\n✅ Collected {len(links)} post/reel links")
             print(f"📁 Saved to: {config.links_file}")
 
             # Show first 5
             if links:
                 print("\n🔗 First 5 links:")
-                for i, link in enumerate(links[:5], 1):
-                    print(f"  {i}. {link}")
+                for i, link_data in enumerate(links[:5], 1):
+                    url = link_data['url']
+                    content_type = link_data['type']
+                    print(f"  {i}. [{content_type}] {url}")
 
         elif choice == '4':
             # Quick scrape

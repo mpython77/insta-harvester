@@ -16,10 +16,11 @@ class ExcelExporter:
 
     Columns:
     1. Post URL
-    2. Tagged Accounts
-    3. Likes Count
-    4. Post Date
-    5. Scraping Date/Time
+    2. Type (Post/Reel)
+    3. Tagged Accounts
+    4. Likes Count
+    5. Post Date
+    6. Scraping Date/Time
     """
 
     def __init__(self, filename: str, logger: Optional[logging.Logger] = None):
@@ -36,6 +37,7 @@ class ExcelExporter:
         # Initialize DataFrame
         self.df = pd.DataFrame(columns=[
             'Post URL',
+            'Type',
             'Tagged Accounts',
             'Likes Count',
             'Post Date',
@@ -61,7 +63,8 @@ class ExcelExporter:
         post_url: str,
         tagged_accounts: List[str],
         likes: str,
-        post_date: str
+        post_date: str,
+        content_type: str = 'Post'
     ) -> None:
         """
         Add a single row to Excel (real-time)
@@ -71,6 +74,7 @@ class ExcelExporter:
             tagged_accounts: List of tagged usernames
             likes: Likes count
             post_date: Post timestamp
+            content_type: Content type ('Post' or 'Reel')
         """
         try:
             # Format tags
@@ -82,6 +86,7 @@ class ExcelExporter:
             # Create new row
             new_row = pd.DataFrame([{
                 'Post URL': post_url,
+                'Type': content_type,
                 'Tagged Accounts': tags_str,
                 'Likes Count': likes,
                 'Post Date': post_date,
@@ -94,7 +99,7 @@ class ExcelExporter:
             # Write to file (real-time)
             self.df.to_excel(self.filename, index=False, engine='openpyxl')
 
-            self.logger.debug(f"Added row to Excel: {post_url}")
+            self.logger.debug(f"Added row to Excel [{content_type}]: {post_url}")
 
         except Exception as e:
             self.logger.error(f"Failed to add row to Excel: {e}")
@@ -111,7 +116,8 @@ class ExcelExporter:
                 post_url=item.get('url', 'N/A'),
                 tagged_accounts=item.get('tagged_accounts', []),
                 likes=item.get('likes', 'N/A'),
-                post_date=item.get('timestamp', 'N/A')
+                post_date=item.get('timestamp', 'N/A'),
+                content_type=item.get('content_type', 'Post')
             )
 
     def get_row_count(self) -> int:

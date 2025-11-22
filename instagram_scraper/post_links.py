@@ -5,7 +5,7 @@ Scroll through profile and collect all post/reel links
 
 import time
 import random
-from typing import List, Set, Optional
+from typing import List, Set, Optional, Dict
 from pathlib import Path
 
 from .base import BaseScraper
@@ -35,9 +35,9 @@ class PostLinksScraper(BaseScraper):
         username: str,
         target_count: Optional[int] = None,
         save_to_file: bool = True
-    ) -> List[str]:
+    ) -> List[Dict[str, str]]:
         """
-        Scrape all post links from profile
+        Scrape all post/reel links from profile
 
         Args:
             username: Instagram username
@@ -45,7 +45,8 @@ class PostLinksScraper(BaseScraper):
             save_to_file: Save links to file
 
         Returns:
-            List of post URLs
+            List of dictionaries with 'url' and 'type' keys
+            Example: [{'url': 'https://...', 'type': 'Post'}, {'url': 'https://...', 'type': 'Reel'}]
         """
         username = username.strip().lstrip('@')
         self.logger.info(f"Starting post links scrape for: @{username}")
@@ -101,13 +102,21 @@ class PostLinksScraper(BaseScraper):
             self.logger.warning(f"Could not get posts count: {e}")
             return 9999  # Large number as fallback
 
-    def _extract_current_links(self) -> Set[str]:
-        """Extract all visible post/reel links from current viewport"""
+    def _extract_current_links(self) -> List[Dict[str, str]]:
+        """
+        Extract all visible post/reel links from current viewport
+
+        Returns:
+            List of dictionaries with 'url' and 'type' keys
+            Example: [{'url': 'https://...', 'type': 'Post'}, {'url': 'https://...', 'type': 'Reel'}]
+        """
         try:
             # Find all post and reel links
             links = self.page.locator('a[href*="/p/"], a[href*="/reel/"]').all()
 
-            hrefs = set()
+            results = []
+            seen_urls = set()
+
             for link in links:
                 try:
                     href = link.get_attribute('href')
@@ -115,16 +124,28 @@ class PostLinksScraper(BaseScraper):
                         # Make full URL
                         if href.startswith('/'):
                             href = f'https://www.instagram.com{href}'
-                        hrefs.add(href)
+
+                        # Skip duplicates
+                        if href in seen_urls:
+                            continue
+                        seen_urls.add(href)
+
+                        # Detect type
+                        content_type = 'Reel' if '/reel/' in href else 'Post'
+
+                        results.append({
+                            'url': href,
+                            'type': content_type
+                        })
                 except Exception:
                     continue
 
-            return hrefs
+            return results
         except Exception as e:
             self.logger.error(f"Error extracting links: {e}")
-            return set()
+            return []
 
-    def _scroll_and_collect(self, target_count: int) -> List[str]:
+    def _scroll_and_collect(self, target_count: int) -> List[Dict[str, str]]:
         """
         Scroll through profile and collect all links
 
@@ -132,11 +153,11 @@ class PostLinksScraper(BaseScraper):
             target_count: Target number of links
 
         Returns:
-            List of unique post URLs
+            List of dictionaries with 'url' and 'type' keys
         """
         self.logger.info(f"Starting scroll collection (target: {target_count})...")
 
-        all_links: Set[str] = set()
+        all_links: Dict[str, str] = {}  # url -> type mapping
         scroll_attempts = 0
         no_new_links_count = 0
 
@@ -144,7 +165,14 @@ class PostLinksScraper(BaseScraper):
             # Extract current links
             current_links = self._extract_current_links()
             previous_count = len(all_links)
-            all_links.update(current_links)
+
+            # Add new links (url as key, type as value)
+            for link_data in current_links:
+                url = link_data['url']
+                content_type = link_data['type']
+                if url not in all_links:
+                    all_links[url] = content_type
+
             new_count = len(all_links)
 
             # Log progress
@@ -182,7 +210,9 @@ class PostLinksScraper(BaseScraper):
 
             scroll_attempts += 1
 
-        return sorted(list(all_links))
+        # Convert dict back to list of dicts, sorted by URL
+        result = [{'url': url, 'type': content_type} for url, content_type in sorted(all_links.items())]
+        return result
 
     def _human_like_scroll(self) -> None:
         """Scroll down with human-like behavior"""
@@ -196,19 +226,21 @@ class PostLinksScraper(BaseScraper):
         )
         time.sleep(delay)
 
-    def _save_links(self, links: List[str]) -> None:
+    def _save_links(self, links: List[Dict[str, str]]) -> None:
         """
         Save links to file
 
         Args:
-            links: List of URLs to save
+            links: List of link dictionaries with 'url' and 'type' keys
         """
         output_file = Path(self.config.links_file)
 
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
-                for link in links:
-                    f.write(link + '\n')
+                for link_data in links:
+                    url = link_data['url']
+                    content_type = link_data['type']
+                    f.write(f"{url}\t{content_type}\n")
 
             self.logger.info(f"Links saved to: {output_file}")
 
