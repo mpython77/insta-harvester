@@ -301,110 +301,168 @@ class PostDataScraper(BaseScraper):
 
     def get_tagged_accounts(self) -> List[str]:
         """
-        ROBUST tag extraction - ONLY from div._aa1y (NOT from comments!)
+        Extract tagged accounts from posts (handles both IMAGE and VIDEO posts)
 
-        CRITICAL: Tags are ONLY in: <div class="_aa1y"><a href="/username/"></a></div>
-        Comments (class="x5yr21d xw2csxc x1odjw0f x1n2onr6") are EXCLUDED!
+        Instagram tag structure:
+        - IMAGE posts: Tags in <div class="_aa1y"> containers
+        - VIDEO posts: Tags in popup (click button, then extract from popup)
 
         Returns:
             List of usernames (without @)
         """
         tagged = []
 
-        # CRITICAL: Wait for tags to load
+        # Check if this post has tags (look for Tags SVG)
         try:
-            self.page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
+            has_tags = self.page.locator('svg[aria-label="Tags"]').count() > 0
+            if not has_tags:
+                self.logger.debug("No tag icon found - post has no tags")
+                return ['No tags']
         except:
-            pass  # Tags might not exist, continue
+            pass
 
-        # METHOD 1: Playwright - div._aa1y > a[href] (STRICT - no comments!)
+        # STEP 1: Detect if this is a VIDEO post or IMAGE post
+        is_video_post = False
         try:
+            # Check for video element
+            video_count = self.page.locator('video').count()
+            if video_count > 0:
+                is_video_post = True
+                self.logger.debug("Detected VIDEO post")
+            else:
+                self.logger.debug("Detected IMAGE post")
+        except:
+            pass
+
+        # STEP 2: If VIDEO post, use POPUP extraction (like reels)
+        if is_video_post:
+            self.logger.debug("Using VIDEO post tag extraction (popup method)...")
+            try:
+                # Find and click tag button
+                tag_button = self.page.locator('button:has(svg[aria-label="Tags"])').first
+
+                if tag_button.count() == 0:
+                    self.logger.debug("No tag button found")
+                    return ['No tags']
+
+                # Click the tag button
+                self.logger.debug("Clicking tag button...")
+                tag_button.click(timeout=3000)
+                time.sleep(1.5)  # Wait for popup animation
+                time.sleep(0.5)  # Extra wait for popup content
+
+                # CRITICAL: Extract from popup container ONLY
+                self.logger.debug("Extracting tags from popup...")
+                popup_container = self.page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+
+                if popup_container.count() == 0:
+                    # Fallback: Try role="dialog"
+                    popup_container = self.page.locator('div[role="dialog"]').first
+
+                if popup_container.count() > 0:
+                    # Extract links ONLY from popup
+                    popup_links = popup_container.locator('a[href^="/"]').all()
+
+                    for link in popup_links:
+                        try:
+                            href = link.get_attribute('href', timeout=1000)
+                            if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
+                                username = href.strip('/').split('/')[-1]
+
+                                # Filter out system paths
+                                if username in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories']:
+                                    continue
+
+                                if username and username not in tagged:
+                                    tagged.append(username)
+                                    self.logger.debug(f"✓ Found tag: {username}")
+                        except:
+                            continue
+
+                    # Close popup
+                    try:
+                        close_button = self.page.locator('button:has(svg[aria-label="Close"])').first
+                        close_button.click(timeout=2000)
+                    except:
+                        self.page.keyboard.press('Escape')
+
+                if tagged:
+                    self.logger.info(f"✓ Found {len(tagged)} tags (VIDEO popup): {tagged}")
+                    return tagged
+
+            except Exception as e:
+                self.logger.warning(f"VIDEO post popup extraction failed: {e}")
+                # Try closing popup
+                try:
+                    self.page.keyboard.press('Escape')
+                except:
+                    pass
+
+        # STEP 3: If IMAGE post (or video extraction failed), use div._aa1y extraction
+        self.logger.debug("Using IMAGE post tag extraction (div._aa1y method)...")
+        try:
+            # Find all tag containers
             tag_containers = self.page.locator('div._aa1y').all()
+            self.logger.debug(f"Found {len(tag_containers)} div._aa1y tag containers")
+
             for container in tag_containers:
                 try:
+                    # Get the link inside this container
                     link = container.locator('a[href]').first
                     href = link.get_attribute('href', timeout=2000)
+
                     if href:
+                        # Extract username from href="/username/"
                         username = href.strip('/').split('/')[-1]
+
+                        # Filter out system paths
+                        if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                            continue
+
                         if username and username not in tagged:
                             tagged.append(username)
+                            self.logger.debug(f"✓ Found tag: {username}")
                 except:
                     continue
 
             if tagged:
-                self.logger.info(f"✓ Found {len(tagged)} tags (Playwright Method 1): {tagged}")
+                self.logger.info(f"✓ Found {len(tagged)} tags (IMAGE): {tagged}")
                 return tagged
+
         except Exception as e:
-            self.logger.warning(f"Tag extraction method 1 failed: {e}")
+            self.logger.warning(f"Tag extraction from div._aa1y failed: {e}")
 
-        # METHOD 2: Playwright XPath (STRICT - only div._aa1y)
-        try:
-            xpath = '//div[@class="_aa1y"]//a[@href]'
-            tag_links = self.page.locator(f'xpath={xpath}').all()
-            for link in tag_links:
-                try:
-                    href = link.get_attribute('href', timeout=2000)
-                    if href:
-                        username = href.strip('/').split('/')[-1]
-                        if username and username not in tagged:
-                            tagged.append(username)
-                except:
-                    continue
-
-            if tagged:
-                self.logger.info(f"✓ Found {len(tagged)} tags (XPath Method 2): {tagged}")
-                return tagged
-        except Exception as e:
-            self.logger.warning(f"Tag extraction method 2 failed: {e}")
-
-        # METHOD 3: BeautifulSoup - ONLY div._aa1y (STRICT - no comments!)
+        # FALLBACK: BeautifulSoup method
         try:
             from bs4 import BeautifulSoup
             html = self.page.content()
             soup = BeautifulSoup(html, 'lxml')
 
             tag_containers = soup.find_all('div', class_='_aa1y')
+            self.logger.debug(f"BS4: Found {len(tag_containers)} div._aa1y containers")
+
             for container in tag_containers:
                 link = container.find('a', href=True)
                 if link and link.get('href'):
                     href = link['href']
                     username = href.strip('/').split('/')[-1]
+
+                    # Filter out system paths
+                    if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                        continue
+
                     if username and username not in tagged:
                         tagged.append(username)
 
             if tagged:
-                self.logger.info(f"✓ Found {len(tagged)} tags (BS4 Method 3): {tagged}")
+                self.logger.info(f"✓ Found {len(tagged)} tags (BS4 method): {tagged}")
                 return tagged
+
         except Exception as e:
-            self.logger.warning(f"Tag extraction method 3 failed: {e}")
+            self.logger.warning(f"BS4 tag extraction failed: {e}")
 
-        # METHOD 4: REMOVED - was including comment section users!
-        # (Old METHOD 4 was getting ALL links, including comments)
-
-        # METHOD 5: Extract from image alt text
-        try:
-            from bs4 import BeautifulSoup
-            import re
-            html = self.page.content()
-            soup = BeautifulSoup(html, 'lxml')
-
-            imgs = soup.find_all('img', alt=True)
-            for img in imgs:
-                alt_text = img.get('alt', '')
-                if 'tagging' in alt_text.lower():
-                    usernames_in_alt = re.findall(r'@(\w+\.?\w*)', alt_text)
-                    for username in usernames_in_alt:
-                        if username and username not in tagged:
-                            tagged.append(username)
-
-            if tagged:
-                self.logger.info(f"✓ Found {len(tagged)} tags (Alt text Method 5): {tagged}")
-                return tagged
-        except Exception as e:
-            self.logger.warning(f"Tag extraction method 5 failed: {e}")
-
-        # ALL METHODS FAILED
-        self.logger.warning("⚠️ WARNING: No tags found after trying all methods!")
+        # No tags found
+        self.logger.warning("⚠️ No tags found in this post")
         return ['No tags']
 
     def get_likes_count(self) -> str:

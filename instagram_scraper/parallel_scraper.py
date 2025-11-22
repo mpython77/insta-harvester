@@ -287,14 +287,88 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: int) -> List[str]:
     """
-    ROBUST tag extraction - ONLY from div._aa1y (NOT from comments!)
+    Extract tags from posts (handles both IMAGE and VIDEO posts)
 
-    CRITICAL: Tags are ONLY in: <div class="_aa1y"><a href="/username/"></a></div>
-    Comments (class="x5yr21d xw2csxc x1odjw0f x1n2onr6") are EXCLUDED!
+    Instagram tag structure:
+    - IMAGE posts: Tags in <div class="_aa1y"> containers
+    - VIDEO posts: Tags in popup (click button, then extract from popup)
     """
     tagged = []
 
-    # METHOD 1: BeautifulSoup - div._aa1y > a[href] (STRICT - no comments!)
+    # STEP 1: Detect if this is a VIDEO post or IMAGE post
+    is_video_post = False
+    try:
+        video_count = page.locator('video').count()
+        if video_count > 0:
+            is_video_post = True
+            print(f"[Worker {worker_id}] Detected VIDEO post")
+        else:
+            print(f"[Worker {worker_id}] Detected IMAGE post")
+    except:
+        pass
+
+    # STEP 2: If VIDEO post, use POPUP extraction (like reels)
+    if is_video_post:
+        print(f"[Worker {worker_id}] Using VIDEO post tag extraction (popup method)...")
+        try:
+            # Find and click tag button
+            tag_button = page.locator('button:has(svg[aria-label="Tags"])').first
+
+            if tag_button.count() > 0:
+                # Click the tag button
+                tag_button.click(timeout=3000)
+                time.sleep(1.5)  # Wait for popup animation
+                time.sleep(0.5)  # Extra wait for popup content
+
+                # CRITICAL: Extract from popup container ONLY
+                popup_container = page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+
+                if popup_container.count() == 0:
+                    # Fallback: Try role="dialog"
+                    popup_container = page.locator('div[role="dialog"]').first
+
+                if popup_container.count() > 0:
+                    # Extract links ONLY from popup
+                    popup_links = popup_container.locator('a[href^="/"]').all()
+
+                    for link in popup_links:
+                        try:
+                            href = link.get_attribute('href', timeout=1000)
+                            if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
+                                username = href.strip('/').split('/')[-1]
+
+                                # Filter out system paths
+                                if username in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories']:
+                                    continue
+
+                                if username and username not in tagged:
+                                    tagged.append(username)
+                        except:
+                            continue
+
+                    # Close popup
+                    try:
+                        close_button = page.locator('button:has(svg[aria-label="Close"])').first
+                        close_button.click(timeout=2000)
+                    except:
+                        page.keyboard.press('Escape')
+
+                if tagged:
+                    print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (VIDEO popup): {tagged}")
+                    return tagged
+
+        except Exception as e:
+            print(f"[Worker {worker_id}] VIDEO popup extraction failed: {e}")
+            # Try closing popup
+            try:
+                page.keyboard.press('Escape')
+            except:
+                pass
+
+    # STEP 3: If IMAGE post (or video extraction failed), use div._aa1y extraction
+    print(f"[Worker {worker_id}] Using IMAGE post tag extraction (div._aa1y method)...")
+
+    # METHOD 1: BeautifulSoup - div._aa1y > a[href]
     try:
         tag_containers = soup.find_all('div', class_='_aa1y')
         for container in tag_containers:
@@ -302,6 +376,11 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
             if link and link.get('href'):
                 href = link['href']
                 username = href.strip('/').split('/')[-1]
+
+                # Filter out system paths
+                if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                    continue
+
                 if username and username not in tagged:
                     tagged.append(username)
 
@@ -311,10 +390,7 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
     except Exception as e:
         print(f"[Worker {worker_id}] Method 1 failed: {e}")
 
-    # METHOD 2: REMOVED - was slow and potentially included comments
-    # (Old METHOD 2 was getting ALL links and checking parent)
-
-    # METHOD 2: Playwright - div._aa1y locator (STRICT - no comments!)
+    # METHOD 2: Playwright - div._aa1y locator
     try:
         tag_divs = page.locator('div._aa1y').all()
         for tag_div in tag_divs:
@@ -323,6 +399,11 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
                 href = link.get_attribute('href', timeout=2000)
                 if href:
                     username = href.strip('/').split('/')[-1]
+
+                    # Filter out system paths
+                    if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                        continue
+
                     if username and username not in tagged:
                         tagged.append(username)
             except:
@@ -334,48 +415,8 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
     except Exception as e:
         print(f"[Worker {worker_id}] Method 2 failed: {e}")
 
-    # METHOD 3: Playwright XPath - ONLY div._aa1y (STRICT - no comments!)
-    try:
-        xpath = '//div[@class="_aa1y"]//a[@href]'
-        tag_links = page.locator(f'xpath={xpath}').all()
-        for link in tag_links:
-            try:
-                href = link.get_attribute('href', timeout=2000)
-                if href:
-                    username = href.strip('/').split('/')[-1]
-                    if username and username not in tagged:
-                        tagged.append(username)
-            except:
-                continue
-
-        if tagged:
-            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Playwright XPath Method 3): {tagged}")
-            return tagged
-    except Exception as e:
-        print(f"[Worker {worker_id}] Method 3 failed: {e}")
-
-    # METHOD 5: BeautifulSoup - Search in alt text and aria-label
-    try:
-        # Sometimes tagged usernames appear in alt text or aria-labels
-        imgs = soup.find_all('img', alt=True)
-        for img in imgs:
-            alt_text = img.get('alt', '')
-            if 'tagging' in alt_text.lower():
-                # Extract @username patterns
-                import re
-                usernames_in_alt = re.findall(r'@(\w+\.?\w*)', alt_text)
-                for username in usernames_in_alt:
-                    if username and username not in tagged:
-                        tagged.append(username)
-
-        if tagged:
-            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Alt text Method 5): {tagged}")
-            return tagged
-    except Exception as e:
-        print(f"[Worker {worker_id}] Method 5 failed: {e}")
-
     # ALL METHODS FAILED - Log warning
-    print(f"[Worker {worker_id}] ⚠️ WARNING: No tags found in {url} after 5 methods!")
+    print(f"[Worker {worker_id}] ⚠️ WARNING: No tags found in {url}")
     return ['No tags']
 
 
