@@ -133,6 +133,91 @@ Diagnostics: PARTIAL (83.3% success rate)
 
 ---
 
+### 4️⃣ **test_follow.py** - Follow/Unfollow Management Test
+Tests Follow/Unfollow functionality
+
+**What it does:**
+- Follow Instagram users
+- Unfollow Instagram users
+- Check following status
+- Batch follow multiple users
+- Smart follow with status check
+
+**How to use:**
+```bash
+python examples/test_follow.py
+
+# Choose from 5 examples:
+# 1. Follow a single user
+# 2. Check if following a user
+# 3. Unfollow a user
+# 4. Batch follow multiple users
+# 5. Smart follow (check status first)
+```
+
+**Example 1 - Single Follow:**
+```
+Enter username to follow (without @): instagram
+
+🔄 Following @instagram...
+✅ Successfully followed @instagram
+Status: followed
+```
+
+**Example 2 - Check Status:**
+```
+Enter username to check (without @): instagram
+
+🔍 Checking status for @instagram...
+✅ You are following @instagram
+```
+
+**Example 3 - Unfollow:**
+```
+Enter username to unfollow (without @): instagram
+
+🔄 Unfollowing @instagram...
+✅ Successfully unfollowed @instagram
+Status: unfollowed
+```
+
+**Example 4 - Batch Follow:**
+```
+Enter usernames to follow (one per line, empty line to finish):
+  Username 1: user1
+  Username 2: user2
+  Username 3: user3
+  Username 4: [Enter]
+
+🔄 Following 3 users...
+
+📊 BATCH FOLLOW SUMMARY
+Total users: 3
+Successfully followed: 2
+Already following: 1
+Failed: 0
+
+Individual results:
+  ✅ @user1: followed
+  ✅ @user2: already_following
+  ✅ @user3: followed
+```
+
+**Example 5 - Smart Follow:**
+```
+Enter username (without @): instagram
+
+🔍 Checking current status for @instagram...
+ℹ️ You are not following @instagram
+
+Do you want to follow? (yes/no): yes
+
+🔄 Following @instagram...
+✅ Successfully followed @instagram
+```
+
+---
+
 ## 🚀 When to Use Which Test
 
 ### Testing New Profile:
@@ -153,6 +238,12 @@ python examples/test_professional.py
 # Find out if Instagram HTML changed
 ```
 
+### Testing Follow/Unfollow:
+```bash
+python examples/test_follow.py
+# Test follow and unfollow operations
+```
+
 ### Full Production Scraping:
 ```bash
 python main_advanced.py
@@ -171,9 +262,11 @@ python main_advanced.py
    - Link collection issue → `test_phase1.py`
    - Data extraction issue → `test_phase2.py`
    - HTML changes → `test_professional.py`
+   - Follow/Unfollow testing → `test_follow.py`
 
 3. **For production:**
-   - Don't use tests, use `main_advanced.py`!
+   - Scraping: use `main_advanced.py`
+   - Following: use `follow_user.py` or `unfollow_user.py`
 
 ---
 

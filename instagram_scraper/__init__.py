@@ -10,6 +10,7 @@ Features:
 - Complete workflow orchestration
 - **Parallel processing** - Scrape multiple posts simultaneously
 - **Excel export** - Real-time data export to Excel
+- **Follow/Unfollow management** - Professional follow operations with rate limiting
 - HTML structure change detection
 - Professional logging
 - Modular design for library usage
@@ -31,8 +32,15 @@ Usage:
         save_excel=True    # Real-time Excel export
     )
 
+    # Follow/Unfollow management
+    from instagram_scraper import FollowManager
+
+    manager = FollowManager()
+    manager.setup_browser(session_data)
+    result = manager.follow('username')
+
 Author: AI Assistant
-Version: 2.1.0 (Separate Reel Scrapers)
+Version: 2.2.0 (Added Follow/Unfollow Management)
 """
 
 from .config import ScraperConfig
@@ -53,9 +61,10 @@ from .reel_links import ReelLinksScraper
 from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
+from .follow import FollowManager
 from .orchestrator import InstagramOrchestrator, quick_scrape
 
-__version__ = '2.1.0'
+__version__ = '2.2.0'
 __author__ = 'AI Assistant'
 
 __all__ = [
@@ -81,6 +90,7 @@ __all__ = [
     'ReelLinksScraper',
     'ReelDataScraper',
     'ParallelPostDataScraper',
+    'FollowManager',
 
     # Data structures
     'ProfileData',
