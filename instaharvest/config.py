@@ -37,8 +37,8 @@ class ScraperConfig:
 
     # ==================== BROWSER SETTINGS ====================
     headless: bool = True  # Run Chrome in headless mode (no visible window)
-    viewport_width: int = 1920
-    viewport_height: int = 1080
+    viewport_width: int = 1280  # Browser window width (smaller for better fit)
+    viewport_height: int = 720   # Browser window height (smaller for better fit)
     user_agent: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
     # ==================== TIMEOUTS (milliseconds) ====================
