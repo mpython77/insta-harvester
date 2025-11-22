@@ -147,6 +147,36 @@ class SharedBrowser:
         if self.context:
             self._update_session()
 
+        # Clean up manager instances
+        if self._follow_manager:
+            self._follow_manager.playwright = None
+            self._follow_manager.browser = None
+            self._follow_manager.context = None
+            self._follow_manager.page = None
+            self._follow_manager = None
+
+        if self._message_manager:
+            self._message_manager.playwright = None
+            self._message_manager.browser = None
+            self._message_manager.context = None
+            self._message_manager.page = None
+            self._message_manager = None
+
+        if self._followers_collector:
+            self._followers_collector.playwright = None
+            self._followers_collector.browser = None
+            self._followers_collector.context = None
+            self._followers_collector.page = None
+            self._followers_collector = None
+
+        if self._profile_scraper:
+            self._profile_scraper.playwright = None
+            self._profile_scraper.browser = None
+            self._profile_scraper.context = None
+            self._profile_scraper.page = None
+            self._profile_scraper = None
+
+        # Close browser resources
         if self.page:
             self.page.close()
         if self.context:

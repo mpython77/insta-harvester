@@ -82,9 +82,9 @@ class BaseScraper(ABC):
                 session_data = json.load(f)
             self.logger.info(f"Session loaded: {len(session_data.get('cookies', []))} cookies")
             return session_data
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Invalid session file format: {e}")
-            raise SessionNotFoundError(f"Invalid session file: {e}")
+        except (json.JSONDecodeError, IOError, OSError, PermissionError) as e:
+            self.logger.error(f"Session file error: {e}")
+            raise SessionNotFoundError(f"Failed to load session: {e}")
 
     def update_session(self) -> None:
         """
@@ -121,49 +121,75 @@ class BaseScraper(ABC):
         """
         self.logger.info("Setting up browser...")
 
-        if self.playwright is None:
-            self.playwright = sync_playwright().start()
+        try:
+            if self.playwright is None:
+                self.playwright = sync_playwright().start()
 
-        # Launch browser with real Chrome
-        self.browser = self.playwright.chromium.launch(
-            channel='chrome',  # Use real Chrome instead of Chromium
-            headless=self.config.headless,
-            args=['--start-maximized'] if not self.config.headless else []
-        )
-        self.logger.debug(f"Browser launched (Chrome, headless={self.config.headless})")
+            # Launch browser with real Chrome
+            self.browser = self.playwright.chromium.launch(
+                channel='chrome',  # Use real Chrome instead of Chromium
+                headless=self.config.headless,
+                args=['--start-maximized'] if not self.config.headless else []
+            )
+            self.logger.debug(f"Browser launched (Chrome, headless={self.config.headless})")
 
-        # Create context
-        context_options = {
-            'viewport': {
-                'width': self.config.viewport_width,
-                'height': self.config.viewport_height
-            },
-            'user_agent': self.config.user_agent
-        }
+            # Create context
+            context_options = {
+                'viewport': {
+                    'width': self.config.viewport_width,
+                    'height': self.config.viewport_height
+                },
+                'user_agent': self.config.user_agent
+            }
 
-        if session_data:
-            context_options['storage_state'] = session_data
-            self.logger.debug("Context created with session data")
+            if session_data:
+                context_options['storage_state'] = session_data
+                self.logger.debug("Context created with session data")
 
-        self.context = self.browser.new_context(**context_options)
+            self.context = self.browser.new_context(**context_options)
 
-        # Create page
-        self.page = self.context.new_page()
-        self.page.set_default_timeout(self.config.default_timeout)
-        self.logger.info("Browser setup complete")
+            # Create page
+            self.page = self.context.new_page()
+            self.page.set_default_timeout(self.config.default_timeout)
+            self.logger.info("Browser setup complete")
 
-        # Auto-update session to keep it fresh
-        if session_data and auto_update_session:
-            self.logger.debug("Auto-updating session to keep it fresh...")
-            try:
-                # Visit Instagram to refresh session
-                self.page.goto('https://www.instagram.com/', wait_until='domcontentloaded', timeout=30000)
-                time.sleep(2)  # Wait for page to fully load
+            # Auto-update session to keep it fresh
+            if session_data and auto_update_session:
+                self.logger.debug("Auto-updating session to keep it fresh...")
+                try:
+                    # Visit Instagram to refresh session
+                    self.page.goto('https://www.instagram.com/', wait_until='domcontentloaded', timeout=30000)
+                    time.sleep(2)  # Wait for page to fully load
 
-                # Update and save session
-                self.update_session()
-            except Exception as e:
-                self.logger.warning(f"Auto-update session failed: {e}")
+                    # Update and save session
+                    self.update_session()
+                except Exception as e:
+                    self.logger.warning(f"Auto-update session failed: {e}")
+
+        except Exception as e:
+            # Cleanup partial initialization on failure
+            self.logger.error(f"Browser setup failed: {e}")
+            if self.context:
+                try:
+                    self.context.close()
+                except:
+                    pass
+            if self.browser:
+                try:
+                    self.browser.close()
+                except:
+                    pass
+            if self.playwright:
+                try:
+                    self.playwright.stop()
+                except:
+                    pass
+            # Reset all to None
+            self.page = None
+            self.context = None
+            self.browser = None
+            self.playwright = None
+            raise
 
     def goto_url(
         self,
