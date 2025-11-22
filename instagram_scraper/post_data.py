@@ -301,10 +301,10 @@ class PostDataScraper(BaseScraper):
 
     def get_tagged_accounts(self) -> List[str]:
         """
-        ROBUST tag extraction with 5 fallback methods
+        ROBUST tag extraction - ONLY from div._aa1y (NOT from comments!)
 
-        CRITICAL: Tags are very important - we cannot miss them!
-        Always in: <div class="_aa1y"><a href="/username/"></a></div>
+        CRITICAL: Tags are ONLY in: <div class="_aa1y"><a href="/username/"></a></div>
+        Comments (class="x5yr21d xw2csxc x1odjw0f x1n2onr6") are EXCLUDED!
 
         Returns:
             List of usernames (without @)
@@ -317,7 +317,7 @@ class PostDataScraper(BaseScraper):
         except:
             pass  # Tags might not exist, continue
 
-        # METHOD 1: Playwright - div._aa1y > a[href]
+        # METHOD 1: Playwright - div._aa1y > a[href] (STRICT - no comments!)
         try:
             tag_containers = self.page.locator('div._aa1y').all()
             for container in tag_containers:
@@ -337,7 +337,7 @@ class PostDataScraper(BaseScraper):
         except Exception as e:
             self.logger.warning(f"Tag extraction method 1 failed: {e}")
 
-        # METHOD 2: Playwright XPath
+        # METHOD 2: Playwright XPath (STRICT - only div._aa1y)
         try:
             xpath = '//div[@class="_aa1y"]//a[@href]'
             tag_links = self.page.locator(f'xpath={xpath}').all()
@@ -357,7 +357,7 @@ class PostDataScraper(BaseScraper):
         except Exception as e:
             self.logger.warning(f"Tag extraction method 2 failed: {e}")
 
-        # METHOD 3: BeautifulSoup from page HTML
+        # METHOD 3: BeautifulSoup - ONLY div._aa1y (STRICT - no comments!)
         try:
             from bs4 import BeautifulSoup
             html = self.page.content()
@@ -378,26 +378,10 @@ class PostDataScraper(BaseScraper):
         except Exception as e:
             self.logger.warning(f"Tag extraction method 3 failed: {e}")
 
-        # METHOD 4: All links with /username/ pattern
-        try:
-            all_links = self.page.locator('a[href]').all()
-            for link in all_links:
-                try:
-                    href = link.get_attribute('href', timeout=1000)
-                    if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
-                        username = href.strip('/').split('/')[-1]
-                        if username and username not in ['p', 'reel', 'explore', 'accounts'] and username not in tagged:
-                            tagged.append(username)
-                except:
-                    continue
+        # METHOD 4: REMOVED - was including comment section users!
+        # (Old METHOD 4 was getting ALL links, including comments)
 
-            if tagged:
-                self.logger.info(f"✓ Found {len(tagged)} tags (Pattern Method 4): {tagged}")
-                return tagged
-        except Exception as e:
-            self.logger.warning(f"Tag extraction method 4 failed: {e}")
-
-        # METHOD 5: Extract from alt text
+        # METHOD 5: Extract from image alt text
         try:
             from bs4 import BeautifulSoup
             import re
@@ -420,7 +404,7 @@ class PostDataScraper(BaseScraper):
             self.logger.warning(f"Tag extraction method 5 failed: {e}")
 
         # ALL METHODS FAILED
-        self.logger.warning("⚠️ WARNING: No tags found after trying 5 methods!")
+        self.logger.warning("⚠️ WARNING: No tags found after trying all methods!")
         return ['No tags']
 
     def get_likes_count(self) -> str:

@@ -337,19 +337,39 @@ class ReelDataScraper(BaseScraper):
             # Step 2: Wait for popup to appear
             time.sleep(1.5)  # Wait for animation
 
-            # Step 3: Extract tagged accounts from popup
+            # Step 3: Extract tagged accounts from popup (EXCLUDE comment section!)
             self.logger.debug("Extracting tagged accounts from popup...")
 
-            # Method 1: All links in the popup with username pattern
+            # Method 1: Links in popup container (NOT from comment section!)
             try:
+                # Wait for popup content to load
+                time.sleep(0.5)
+
                 links = self.page.locator('a[href^="/"]').all()
                 for link in links:
                     try:
                         href = link.get_attribute('href', timeout=1000)
                         if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
                             username = href.strip('/').split('/')[-1]
+
                             # Filter out Instagram system paths
-                            if username and username not in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories'] and username not in tagged:
+                            if username in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories']:
+                                continue
+
+                            # CRITICAL: Check if link is NOT in comment section
+                            # Comment class: x5yr21d xw2csxc x1odjw0f x1n2onr6
+                            try:
+                                # Get parent div classes
+                                parent_classes = link.evaluate('(element) => { const parent = element.closest("div"); return parent ? parent.className : ""; }')
+
+                                # Skip if it's in comment section
+                                if 'x5yr21d' in parent_classes and 'xw2csxc' in parent_classes:
+                                    self.logger.debug(f"Skipping {username} (in comment section)")
+                                    continue
+                            except:
+                                pass  # If check fails, include the username
+
+                            if username not in tagged:
                                 tagged.append(username)
                     except:
                         continue
