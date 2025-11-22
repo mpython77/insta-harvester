@@ -32,9 +32,10 @@ def _worker_signal_handler(signum, frame):
 
 def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int) -> List[str]:
     """
-    Extract tagged accounts from REEL via popup button
+    Extract tagged accounts from REEL via popup button (EXCLUDE comment section!)
 
     Reels show tags in a popup, not directly in HTML
+    Comment class: x5yr21d xw2csxc x1odjw0f x1n2onr6 - MUST BE EXCLUDED!
     """
     tagged = []
 
@@ -44,16 +45,37 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
         tag_button.click(timeout=3000)
         print(f"[Worker {worker_id}] ✓ Clicked tag button, waiting for popup...")
         time.sleep(1.5)  # Wait for popup animation
+        time.sleep(0.5)  # Extra wait for popup content
 
-        # Extract usernames from popup
-        popup_links = page.locator('a[href^="/"]').all()
+        # CRITICAL FIX: Extract usernames ONLY from popup container (NOT comment section!)
+        # Popup class: x1cy8zhl x9f619 x78zum5 xl56j7k x2lwn1j xeuugli x47corl
+        print(f"[Worker {worker_id}] Looking for popup container...")
+
+        # Find popup container
+        popup_container = page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+
+        if popup_container.count() == 0:
+            print(f"[Worker {worker_id}] Popup container not found, trying alternative selectors...")
+            # Alternative: role="dialog"
+            popup_container = page.locator('div[role="dialog"]').first
+
+        # Extract links ONLY from within popup container
+        popup_links = popup_container.locator('a[href^="/"]').all()
+        print(f"[Worker {worker_id}] Found {len(popup_links)} links in popup")
+
         for link in popup_links:
             try:
                 href = link.get_attribute('href', timeout=1000)
-                if href and href.startswith('/') and href.count('/') == 2:
+                if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
                     username = href.strip('/').split('/')[-1]
-                    if username and username not in ['explore', 'accounts', 'p', 'reel'] and username not in tagged:
+
+                    # Filter system paths
+                    if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                        continue
+
+                    if username not in tagged:
                         tagged.append(username)
+                        print(f"[Worker {worker_id}] ✓ Added tag: {username}")
             except:
                 continue
 
@@ -265,14 +287,14 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: int) -> List[str]:
     """
-    ROBUST tag extraction with 5 fallback methods
+    ROBUST tag extraction - ONLY from div._aa1y (NOT from comments!)
 
-    CRITICAL: Tags are very important - we cannot miss them!
-    Always in: <div class="_aa1y"><a href="/username/"></a></div>
+    CRITICAL: Tags are ONLY in: <div class="_aa1y"><a href="/username/"></a></div>
+    Comments (class="x5yr21d xw2csxc x1odjw0f x1n2onr6") are EXCLUDED!
     """
     tagged = []
 
-    # METHOD 1: BeautifulSoup - div._aa1y > a[href]
+    # METHOD 1: BeautifulSoup - div._aa1y > a[href] (STRICT - no comments!)
     try:
         tag_containers = soup.find_all('div', class_='_aa1y')
         for container in tag_containers:
@@ -289,27 +311,10 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
     except Exception as e:
         print(f"[Worker {worker_id}] Method 1 failed: {e}")
 
-    # METHOD 2: BeautifulSoup - all <a> tags with href containing single /username/
-    try:
-        all_links = soup.find_all('a', href=True)
-        for link in all_links:
-            href = link.get('href', '')
-            # Pattern: /username/ (not /p/ or /reel/)
-            if href.startswith('/') and href.endswith('/') and href.count('/') == 2:
-                username = href.strip('/').split('/')[-1]
-                if username and username not in ['p', 'reel', 'explore', 'accounts'] and username not in tagged:
-                    # Check if parent has _aa1y class
-                    parent = link.find_parent('div', class_='_aa1y')
-                    if parent:
-                        tagged.append(username)
+    # METHOD 2: REMOVED - was slow and potentially included comments
+    # (Old METHOD 2 was getting ALL links and checking parent)
 
-        if tagged:
-            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (BS4 Method 2): {tagged}")
-            return tagged
-    except Exception as e:
-        print(f"[Worker {worker_id}] Method 2 failed: {e}")
-
-    # METHOD 3: Playwright - div._aa1y locator
+    # METHOD 2: Playwright - div._aa1y locator (STRICT - no comments!)
     try:
         tag_divs = page.locator('div._aa1y').all()
         for tag_div in tag_divs:
@@ -324,12 +329,12 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
                 continue
 
         if tagged:
-            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Playwright Method 3): {tagged}")
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Playwright Method 2): {tagged}")
             return tagged
     except Exception as e:
-        print(f"[Worker {worker_id}] Method 3 failed: {e}")
+        print(f"[Worker {worker_id}] Method 2 failed: {e}")
 
-    # METHOD 4: Playwright - XPath for div with class _aa1y
+    # METHOD 3: Playwright XPath - ONLY div._aa1y (STRICT - no comments!)
     try:
         xpath = '//div[@class="_aa1y"]//a[@href]'
         tag_links = page.locator(f'xpath={xpath}').all()
@@ -344,10 +349,10 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
                 continue
 
         if tagged:
-            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Playwright XPath Method 4): {tagged}")
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Playwright XPath Method 3): {tagged}")
             return tagged
     except Exception as e:
-        print(f"[Worker {worker_id}] Method 4 failed: {e}")
+        print(f"[Worker {worker_id}] Method 3 failed: {e}")
 
     # METHOD 5: BeautifulSoup - Search in alt text and aria-label
     try:
@@ -492,11 +497,14 @@ class ParallelPostDataScraper:
 
     def _scrape_sequential(
         self,
-        post_urls: List[str],
+        post_links: List[Dict[str, str]],
         session_data: dict
     ) -> List[PostData]:
         """Sequential scraping (original method)"""
         from .post_data import PostDataScraper
+
+        # Extract URLs from dictionaries
+        post_urls = [link['url'] for link in post_links]
 
         scraper = PostDataScraper(self.config)
         results = scraper.scrape_multiple(
@@ -561,7 +569,7 @@ class ParallelPostDataScraper:
         # Use multiprocessing Pool with async
         results = []
         completed_count = 0
-        total_posts = len(post_urls)
+        total_posts = len(post_links)
 
         with Pool(processes=num_workers) as pool:
             # Start workers asynchronously

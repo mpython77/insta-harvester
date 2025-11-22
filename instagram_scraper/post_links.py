@@ -157,7 +157,7 @@ class PostLinksScraper(BaseScraper):
 
     def _scroll_and_collect(self, target_count: int) -> List[Dict[str, str]]:
         """
-        Scroll through profile and collect all links
+        Scroll through profile and collect all links (IMPROVED for Instagram lazy loading)
 
         Args:
             target_count: Target number of links
@@ -170,6 +170,7 @@ class PostLinksScraper(BaseScraper):
         all_links: Dict[str, str] = {}  # url -> type mapping
         scroll_attempts = 0
         no_new_links_count = 0
+        MAX_NO_NEW = 5  # Increased from 3 to 5 for better coverage
 
         while True:
             # Extract current links
@@ -202,9 +203,9 @@ class PostLinksScraper(BaseScraper):
                 self.logger.info("✓ Target reached!")
                 break
 
-            if no_new_links_count >= self.config.no_new_content_threshold:
+            if no_new_links_count >= MAX_NO_NEW:
                 self.logger.warning(
-                    f"No new links after {self.config.no_new_content_threshold} attempts. "
+                    f"No new links after {MAX_NO_NEW} attempts. "
                     f"Collected: {new_count}/{target_count}"
                 )
                 break
@@ -215,8 +216,8 @@ class PostLinksScraper(BaseScraper):
                 )
                 break
 
-            # Scroll down (human-like)
-            self._human_like_scroll()
+            # IMPROVED: Scroll to bottom and wait for lazy loading
+            self._aggressive_scroll()
 
             scroll_attempts += 1
 
@@ -224,17 +225,34 @@ class PostLinksScraper(BaseScraper):
         result = [{'url': url, 'type': content_type} for url, content_type in sorted(all_links.items())]
         return result
 
-    def _human_like_scroll(self) -> None:
-        """Scroll down with human-like behavior"""
-        # Scroll 80% of viewport height
-        self.page.evaluate('window.scrollBy(0, window.innerHeight * 0.8)')
+    def _aggressive_scroll(self) -> None:
+        """
+        Optimized scrolling for Instagram lazy loading (FAST but EFFECTIVE)
 
-        # Random delay
-        delay = random.uniform(
-            self.config.scroll_delay_min,
-            self.config.scroll_delay_max
-        )
-        time.sleep(delay)
+        Balance between speed and completeness
+        """
+        # Strategy 1: Scroll to bottom (fast)
+        self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+        time.sleep(1.2)  # Quick wait for lazy loading
+
+        # Strategy 2: Trigger loading by scrolling to last visible element
+        try:
+            posts = self.page.locator('a[href*="/p/"]').all()
+            if len(posts) > 2:
+                # Scroll the last post into view to trigger next batch
+                last_post = posts[-1]
+                last_post.scroll_into_view_if_needed()
+                time.sleep(0.4)
+        except:
+            pass
+
+        # Strategy 3: Small bounce to ensure loading
+        self.page.evaluate('window.scrollBy(0, -100)')
+        time.sleep(0.2)
+        self.page.evaluate('window.scrollBy(0, 100)')
+
+        # Final minimal delay
+        time.sleep(0.3)
 
     def _save_links(self, links: List[Dict[str, str]]) -> None:
         """

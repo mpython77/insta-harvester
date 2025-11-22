@@ -337,20 +337,43 @@ class ReelDataScraper(BaseScraper):
             # Step 2: Wait for popup to appear
             time.sleep(1.5)  # Wait for animation
 
-            # Step 3: Extract tagged accounts from popup
+            # Step 3: Extract tagged accounts from popup (EXCLUDE comment section!)
             self.logger.debug("Extracting tagged accounts from popup...")
 
-            # Method 1: All links in the popup with username pattern
+            # Method 1: Links ONLY from popup container (NOT from comment section!)
             try:
-                links = self.page.locator('a[href^="/"]').all()
+                # Wait for popup content to load
+                time.sleep(0.5)
+
+                # CRITICAL FIX: Extract links ONLY from within popup container
+                # Popup class: x1cy8zhl x9f619 x78zum5 xl56j7k x2lwn1j xeuugli x47corl
+                self.logger.debug("Looking for popup container...")
+
+                # Find popup container - look for div with these specific classes
+                popup_container = self.page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+
+                if popup_container.count() == 0:
+                    self.logger.debug("Popup container not found, trying alternative selectors...")
+                    # Alternative: any div with role="dialog" or similar popup indicators
+                    popup_container = self.page.locator('div[role="dialog"]').first
+
+                # Extract links ONLY from within the popup container
+                links = popup_container.locator('a[href^="/"]').all()
+                self.logger.debug(f"Found {len(links)} links in popup")
+
                 for link in links:
                     try:
                         href = link.get_attribute('href', timeout=1000)
                         if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
                             username = href.strip('/').split('/')[-1]
+
                             # Filter out Instagram system paths
-                            if username and username not in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories'] and username not in tagged:
+                            if username in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories']:
+                                continue
+
+                            if username not in tagged:
                                 tagged.append(username)
+                                self.logger.debug(f"✓ Added tag: {username}")
                     except:
                         continue
 
