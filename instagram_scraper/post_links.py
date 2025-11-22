@@ -226,19 +226,58 @@ class PostLinksScraper(BaseScraper):
         return result
 
     def _aggressive_scroll(self) -> None:
-        """Aggressive scrolling to ensure all content loads (Instagram lazy loading fix)"""
-        # Scroll to bottom of page
+        """
+        Multi-stage scrolling strategy for Instagram's aggressive lazy loading
+
+        Instagram requires:
+        1. Incremental scrolling (not just to bottom)
+        2. Element interaction/visibility
+        3. Longer wait times
+        4. Multiple passes
+        """
+        # Strategy 1: Incremental scroll (load content in stages)
+        current_position = self.page.evaluate('window.pageYOffset')
+        scroll_height = self.page.evaluate('document.body.scrollHeight')
+
+        # Scroll 80% of remaining distance (not 100%)
+        target_position = current_position + (scroll_height - current_position) * 0.8
+        self.page.evaluate(f'window.scrollTo(0, {target_position})')
+        time.sleep(1.0)
+
+        # Strategy 2: Trigger lazy loading by hovering over grid
+        try:
+            # Find the posts grid and move mouse to trigger hover events
+            grid = self.page.locator('article').first
+            if grid:
+                box = grid.bounding_box()
+                if box:
+                    # Move mouse to center of grid to trigger lazy load
+                    self.page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+                    time.sleep(0.5)
+        except:
+            pass
+
+        # Strategy 3: Scroll to actual bottom
         self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+        time.sleep(2.0)  # Increased from 1.5s to 2.0s
 
-        # Wait for lazy loading (Instagram needs more time)
-        time.sleep(1.5)
+        # Strategy 4: Bounce scroll to trigger loading
+        self.page.evaluate('window.scrollBy(0, -300)')
+        time.sleep(0.5)
+        self.page.evaluate('window.scrollBy(0, 300)')
+        time.sleep(0.5)
 
-        # Small scroll up and down to trigger loading
-        self.page.evaluate('window.scrollBy(0, -200)')
-        time.sleep(0.3)
-        self.page.evaluate('window.scrollBy(0, 200)')
+        # Strategy 5: Try to scroll to last visible post (force load next batch)
+        try:
+            posts = self.page.locator('a[href*="/p/"]').all()
+            if len(posts) > 0:
+                last_post = posts[-1]
+                last_post.scroll_into_view_if_needed()
+                time.sleep(1.0)
+        except:
+            pass
 
-        # Additional wait with random delay
+        # Final wait with random delay
         delay = random.uniform(
             self.config.scroll_delay_min,
             self.config.scroll_delay_max
