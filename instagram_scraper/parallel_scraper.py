@@ -8,8 +8,9 @@ import random
 import json
 import signal
 from typing import List, Optional, Dict, Any
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, Manager, Queue
 from bs4 import BeautifulSoup
+from datetime import datetime
 
 from playwright.sync_api import sync_playwright, Page
 
@@ -34,7 +35,7 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     Worker function for multiprocessing - MUST be at module level
 
     Args:
-        args: Dictionary with keys: urls_batch, worker_id, session_data, config_dict
+        args: Dictionary with keys: urls_batch, worker_id, session_data, config_dict, result_queue
 
     Returns:
         List of post data dictionaries
@@ -47,6 +48,7 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     worker_id = args['worker_id']
     session_data = args['session_data']
     config_dict = args['config_dict']
+    result_queue = args.get('result_queue')  # Optional queue for real-time results
 
     # Reconstruct config from dict
     config = ScraperConfig(
@@ -78,7 +80,8 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
         page = context.new_page()
         page.set_default_timeout(config.default_timeout)
 
-        for url in urls_batch:
+        total_in_batch = len(urls_batch)
+        for idx, url in enumerate(urls_batch, 1):
             # Check for shutdown request
             global _shutdown_requested
             if _shutdown_requested:
@@ -86,8 +89,12 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                 break
 
             try:
+                # LOG: Starting scrape
+                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] 🔍 Scraping: {url}")
+
                 # Navigate to post
                 page.goto(url, wait_until='domcontentloaded', timeout=60000)
+                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Page loaded")
 
                 # CRITICAL: Wait longer for tags to load
                 time.sleep(3)  # Increased from 2 to 3 seconds
@@ -95,8 +102,9 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                 # Try to wait for tag elements specifically
                 try:
                     page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
+                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Tag elements detected")
                 except:
-                    pass  # Tags might not exist, continue anyway
+                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
 
                 # Get HTML content
                 html_content = page.content()
@@ -107,24 +115,48 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                 likes = _extract_likes_bs4(soup, page)
                 timestamp = _extract_timestamp_bs4(soup)
 
-                batch_results.append({
+                result = {
                     'url': url,
                     'tagged_accounts': tagged_accounts,
                     'likes': likes,
                     'timestamp': timestamp
-                })
+                }
+
+                batch_results.append(result)
+
+                # LOG: Success
+                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✅ DONE: {len(tagged_accounts)} tags, {likes} likes")
+
+                # REAL-TIME: Send to queue immediately for Excel writing
+                if result_queue is not None:
+                    result_queue.put({
+                        'type': 'post_result',
+                        'worker_id': worker_id,
+                        'data': result,
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    })
 
                 # Small delay
                 time.sleep(random.uniform(1, 2))
 
             except Exception as e:
-                print(f"[Worker {worker_id}] Failed {url}: {e}")
-                batch_results.append({
+                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ❌ ERROR: {e}")
+                error_result = {
                     'url': url,
                     'tagged_accounts': [],
                     'likes': 'ERROR',
                     'timestamp': 'N/A'
-                })
+                }
+                batch_results.append(error_result)
+
+                # Send error to queue too
+                if result_queue is not None:
+                    result_queue.put({
+                        'type': 'post_error',
+                        'worker_id': worker_id,
+                        'url': url,
+                        'error': str(e)
+                    })
 
         context.close()
         browser.close()
@@ -323,15 +355,17 @@ class ParallelPostDataScraper:
         self,
         post_urls: List[str],
         parallel: int = 1,
-        session_file: str = None
+        session_file: str = None,
+        excel_exporter = None
     ) -> List[PostData]:
         """
-        Scrape multiple posts in parallel
+        Scrape multiple posts in parallel with real-time Excel export
 
         Args:
             post_urls: List of post URLs
             parallel: Number of parallel contexts (default 1 = sequential)
             session_file: Session file path
+            excel_exporter: Optional Excel exporter for real-time writing
 
         Returns:
             List of PostData objects
@@ -353,7 +387,7 @@ class ParallelPostDataScraper:
             return self._scrape_sequential(post_urls, session_data)
 
         # Parallel (parallel > 1)
-        return self._scrape_parallel(post_urls, session_data, parallel)
+        return self._scrape_parallel(post_urls, session_data, parallel, excel_exporter)
 
     def _scrape_sequential(
         self,
@@ -375,15 +409,17 @@ class ParallelPostDataScraper:
         self,
         post_urls: List[str],
         session_data: dict,
-        num_workers: int
+        num_workers: int,
+        excel_exporter=None
     ) -> List[PostData]:
         """
-        Parallel scraping with multiple browser processes
+        Parallel scraping with multiple browser processes + REAL-TIME Excel writing
 
         Args:
             post_urls: List of URLs
             session_data: Session data
             num_workers: Number of parallel workers
+            excel_exporter: Optional Excel exporter for real-time writing
 
         Returns:
             List of PostData objects
@@ -400,13 +436,18 @@ class ParallelPostDataScraper:
             'default_timeout': self.config.default_timeout
         }
 
+        # Create Manager Queue for real-time communication
+        manager = Manager()
+        result_queue = manager.Queue()
+
         # Prepare arguments for each worker
         worker_args = [
             {
                 'urls_batch': batch,
                 'worker_id': i,
                 'session_data': session_data,
-                'config_dict': config_dict
+                'config_dict': config_dict,
+                'result_queue': result_queue  # Pass queue to workers
             }
             for i, batch in enumerate(batches, 1)
         ]
@@ -414,11 +455,64 @@ class ParallelPostDataScraper:
         self.logger.info(
             f"Starting {num_workers} parallel processes for {len(post_urls)} posts"
         )
+        self.logger.info("Real-time monitoring enabled ✓")
 
-        # Use multiprocessing Pool
+        # Use multiprocessing Pool with async
         results = []
+        completed_count = 0
+        total_posts = len(post_urls)
+
         with Pool(processes=num_workers) as pool:
-            batch_results_list = pool.map(_worker_scrape_batch, worker_args)
+            # Start workers asynchronously
+            async_result = pool.map_async(_worker_scrape_batch, worker_args)
+
+            # REAL-TIME: Monitor queue while workers are running
+            while not async_result.ready() or not result_queue.empty():
+                try:
+                    # Non-blocking queue check
+                    message = result_queue.get(timeout=0.5)
+
+                    if message['type'] == 'post_result':
+                        # SUCCESS: Post scraped
+                        data = message['data']
+                        worker_id = message['worker_id']
+                        completed_count += 1
+
+                        self.logger.info(
+                            f"📦 [{completed_count}/{total_posts}] Worker {worker_id} completed: "
+                            f"{len(data['tagged_accounts'])} tags, {data['likes']} likes"
+                        )
+
+                        # REAL-TIME Excel write
+                        if excel_exporter:
+                            try:
+                                excel_exporter.add_row(
+                                    post_url=data['url'],
+                                    tagged_accounts=data['tagged_accounts'],
+                                    likes=data['likes'],
+                                    post_date=data['timestamp']
+                                )
+                                self.logger.info(f"  ✓ Saved to Excel: {data['url']}")
+                            except Exception as e:
+                                self.logger.error(f"  ✗ Excel write failed: {e}")
+
+                    elif message['type'] == 'post_error':
+                        # ERROR: Post failed
+                        worker_id = message['worker_id']
+                        url = message['url']
+                        error = message['error']
+                        completed_count += 1
+
+                        self.logger.error(
+                            f"❌ [{completed_count}/{total_posts}] Worker {worker_id} failed: {url} - {error}"
+                        )
+
+                except:
+                    # Queue empty or timeout - continue
+                    time.sleep(0.1)
+
+            # Get final results from workers
+            batch_results_list = async_result.get()
 
             # Flatten results
             for batch_results in batch_results_list:
@@ -438,7 +532,7 @@ class ParallelPostDataScraper:
         ]
 
         self.logger.info(
-            f"Parallel scraping complete: {len(sorted_results)} posts"
+            f"✅ Parallel scraping complete: {len(sorted_results)} posts"
         )
 
         return sorted_results

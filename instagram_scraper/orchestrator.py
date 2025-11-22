@@ -284,7 +284,7 @@ class InstagramOrchestrator:
         excel_exporter: Optional[ExcelExporter] = None
     ) -> List[PostData]:
         """
-        Scrape posts in parallel
+        Scrape posts in parallel with REAL-TIME Excel writing
 
         Args:
             post_links: List of post URLs
@@ -294,23 +294,20 @@ class InstagramOrchestrator:
         Returns:
             List of PostData objects
         """
+        self.logger.info(f"🚀 Starting parallel scraping with {parallel} workers...")
+        self.logger.info(f"📊 Real-time Excel writing: {'ENABLED' if excel_exporter else 'DISABLED'}")
+
         scraper = ParallelPostDataScraper(self.config)
         posts_data = scraper.scrape_multiple(
             post_links,
             parallel=parallel,
-            session_file=self.config.session_file
+            session_file=self.config.session_file,
+            excel_exporter=excel_exporter  # Pass to enable real-time writing!
         )
 
-        # Save to Excel if enabled
+        # NO need to save to Excel here - already done in real-time!
         if excel_exporter:
-            self.logger.info("Saving to Excel...")
-            for data in posts_data:
-                excel_exporter.add_row(
-                    post_url=data.url,
-                    tagged_accounts=data.tagged_accounts,
-                    likes=data.likes,
-                    post_date=data.timestamp
-                )
+            self.logger.info("✓ Excel writing completed in real-time")
 
         return posts_data
 
