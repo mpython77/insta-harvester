@@ -257,11 +257,11 @@ class PostLinksScraper(BaseScraper):
 
             # STAGE 2: Scroll to actual page bottom to trigger more loading
             self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-            time.sleep(1.5)  # Longer wait for lazy loading
+            time.sleep(self.config.scroll_lazy_load_delay) loading
 
             # STAGE 3: Small bounce to ensure detection
             self.page.evaluate('window.scrollBy(0, -100)')
-            time.sleep(0.3)
+            time.sleep(self.config.ui_micro_delay)
             self.page.evaluate('window.scrollBy(0, 150)')
             time.sleep(0.5)
 

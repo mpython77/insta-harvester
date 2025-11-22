@@ -44,8 +44,8 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
         tag_button = page.locator('button:has(svg[aria-label="Tags"])').first
         tag_button.click(timeout=3000)
         print(f"[Worker {worker_id}] ✓ Clicked tag button, waiting for popup...")
-        time.sleep(1.5)  # Wait for popup animation
-        time.sleep(0.5)  # Extra wait for popup content
+        time.sleep(self.config.popup_animation_delay)
+        time.sleep(self.config.popup_content_load_delay) content
 
         # CRITICAL FIX: Extract usernames ONLY from popup container (NOT comment section!)
         # Popup class: x1cy8zhl x9f619 x78zum5 xl56j7k x2lwn1j xeuugli x47corl
@@ -258,7 +258,7 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                         })
 
                     # Small delay
-                    time.sleep(random.uniform(1, 2))
+                    time.sleep(random.uniform(self.config.error_recovery_delay_min, self.config.error_recovery_delay_max))
 
                 except Exception as e:
                     print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ❌ ERROR: {e}")
@@ -326,8 +326,8 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
             if tag_button.count() > 0:
                 # Click the tag button
                 tag_button.click(timeout=3000)
-                time.sleep(1.5)  # Wait for popup animation
-                time.sleep(0.5)  # Extra wait for popup content
+                time.sleep(self.config.popup_animation_delay)
+                time.sleep(self.config.popup_content_load_delay) content
 
                 # CRITICAL: Extract from popup container ONLY
                 popup_container = page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
@@ -669,7 +669,7 @@ class ParallelPostDataScraper:
 
                 except:
                     # Queue empty or timeout - continue
-                    time.sleep(0.1)
+                    time.sleep(self.config.ui_element_load_delay)
 
             # Get final results from workers
             batch_results_list = async_result.get()

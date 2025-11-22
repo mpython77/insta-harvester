@@ -469,7 +469,7 @@ class InstagramOrchestrator:
                 # Delay
                 if i < len(post_links):
                     import random
-                    time.sleep(random.uniform(2, 4))
+                    time.sleep(random.uniform(self.config.batch_operation_delay_min, self.config.batch_operation_delay_max))
 
         finally:
             scraper.close()
@@ -537,7 +537,7 @@ class InstagramOrchestrator:
                 # Delay
                 if i < len(reel_links):
                     import random
-                    time.sleep(random.uniform(2, 4))
+                    time.sleep(random.uniform(self.config.batch_operation_delay_min, self.config.batch_operation_delay_max))
 
         finally:
             scraper.close()

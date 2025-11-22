@@ -81,9 +81,9 @@ class MessageManager(BaseScraper):
                     'username': username
                 }
 
-            # Wait for message box to open (using configurable sleep_time)
-            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for message box to open...")
-            time.sleep(self.config.sleep_time)
+            # Wait for message box to open
+            self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for message box to open...")
+            time.sleep(self.config.popup_open_delay)
 
             # Step 2: Type message in input field
             if not self._type_message(message):
@@ -107,7 +107,7 @@ class MessageManager(BaseScraper):
 
             # Add delay for rate limiting
             if add_delay:
-                delay = random.uniform(3, 5)
+                delay = random.uniform(self.config.message_delay_min, self.config.message_delay_max)
                 self.logger.debug(f"⏱️ Rate limit delay: {delay:.1f}s")
                 time.sleep(delay)
 
@@ -179,7 +179,7 @@ class MessageManager(BaseScraper):
 
             # Add delay between sends (except for last one)
             if i < len(usernames):
-                delay = random.uniform(*delay_between)
+                delay = random.uniform(self.config.batch_operation_delay_min, self.config.batch_operation_delay_max)
                 self.logger.debug(f"⏱️ Waiting {delay:.1f}s before next send...")
                 time.sleep(delay)
 
@@ -225,9 +225,9 @@ class MessageManager(BaseScraper):
             # Click button
             message_button.click(timeout=3000)
 
-            # Wait for message box to open (using configurable sleep_time)
-            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for message box to open...")
-            time.sleep(self.config.sleep_time)
+            # Wait for message box to open
+            self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for message box to open...")
+            time.sleep(self.config.popup_open_delay)
 
             self.logger.debug("✓ Message button clicked")
             return True
@@ -260,19 +260,19 @@ class MessageManager(BaseScraper):
                 return False
 
             # Add small delay before clicking input (allows UI to stabilize)
-            delay_before_input = random.uniform(1.0, 1.5)
+            delay_before_input = random.uniform(self.config.input_before_type_delay_min, self.config.input_before_type_delay_max)
             self.logger.debug(f"⏱️ Waiting {delay_before_input:.1f}s before clicking input field...")
             time.sleep(delay_before_input)
 
             # Click to focus
             message_input.click(timeout=3000)
-            time.sleep(0.5)
+            time.sleep(self.config.input_focus_delay)
 
             # Type message
             message_input.type(message, delay=50)  # 50ms delay between characters (natural typing)
 
             # Wait after typing (allows message to be processed)
-            delay_after_type = random.uniform(0.5, 1.0)
+            delay_after_type = random.uniform(self.config.input_after_type_delay_min, self.config.input_after_type_delay_max)
             self.logger.debug(f"⏱️ Waiting {delay_after_type:.1f}s after typing...")
             time.sleep(delay_after_type)
 
@@ -311,9 +311,9 @@ class MessageManager(BaseScraper):
             # Click button
             send_button.click(timeout=3000)
 
-            # Wait for message to send (using configurable sleep_time)
-            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for message to send...")
-            time.sleep(self.config.sleep_time)
+            # Wait for message to send
+            self.logger.debug(f"⏱️ Waiting {self.config.button_click_delay}s for message to send...")
+            time.sleep(self.config.button_click_delay)
 
             self.logger.debug("✓ Send button clicked")
             return True

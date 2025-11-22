@@ -132,7 +132,7 @@ class SharedBrowser:
         # Visit Instagram to activate session
         self.logger.info("🔄 Activating session...")
         self.page.goto('https://www.instagram.com/', wait_until='domcontentloaded', timeout=30000)
-        time.sleep(2)
+        time.sleep(self.config.page_stability_delay)
 
         # Update session
         self._update_session()

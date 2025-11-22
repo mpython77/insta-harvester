@@ -348,8 +348,8 @@ class PostDataScraper(BaseScraper):
                 # Click the tag button
                 self.logger.debug("Clicking tag button...")
                 tag_button.click(timeout=3000)
-                time.sleep(1.5)  # Wait for popup animation
-                time.sleep(0.5)  # Extra wait for popup content
+                time.sleep(self.config.popup_animation_delay)
+                time.sleep(self.config.popup_content_load_delay) content
 
                 # CRITICAL: Extract from popup container ONLY
                 self.logger.debug("Extracting tags from popup...")
@@ -685,7 +685,7 @@ class PostDataScraper(BaseScraper):
             tag_button.click(timeout=3000)
 
             # Step 2: Wait for popup to appear
-            time.sleep(1.5)  # Wait for animation
+            time.sleep(self.config.ui_animation_delay)
 
             # Step 3: Extract tagged accounts from popup
             self.logger.debug("Extracting tagged accounts from popup...")

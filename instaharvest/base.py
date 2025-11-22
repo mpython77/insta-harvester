@@ -159,7 +159,8 @@ class BaseScraper(ABC):
                 try:
                     # Visit Instagram to refresh session
                     self.page.goto('https://www.instagram.com/', wait_until='domcontentloaded', timeout=30000)
-                    time.sleep(2)  # Wait for page to fully load
+                    # Wait for page to fully load
+                    time.sleep(self.config.page_stability_delay)
 
                     # Update and save session
                     self.update_session()
@@ -220,7 +221,7 @@ class BaseScraper(ABC):
 
                 # Delay after page load
                 sleep_time = delay if delay is not None else self.config.page_load_delay
-                self.logger.debug(f"Page loaded, waiting {sleep_time}s...")
+                self.logger.debug(f"⏱️ Page loaded, waiting {sleep_time}s...")
                 time.sleep(sleep_time)
 
                 # Check if login required

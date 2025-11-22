@@ -223,15 +223,15 @@ class ReelLinksScraper(BaseScraper):
                 # Scroll last container into view to trigger lazy loading
                 last_container = containers[-1]
                 last_container.scroll_into_view_if_needed()
-                time.sleep(0.8)  # Wait for new containers to load
+                time.sleep(self.config.scroll_content_load_delay) containers to load
             else:
                 # Fallback: scroll to bottom
                 self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                time.sleep(1.0)
+                time.sleep(self.config.ui_stability_delay)
         except:
             # Fallback: scroll to bottom
             self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-            time.sleep(1.0)
+            time.sleep(self.config.ui_stability_delay)
 
     def _save_links(self, reel_links: List[str], username: str) -> None:
         """

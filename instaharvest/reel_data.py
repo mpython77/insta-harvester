@@ -335,7 +335,7 @@ class ReelDataScraper(BaseScraper):
             tag_button.click(timeout=3000)
 
             # Step 2: Wait for popup to appear
-            time.sleep(1.5)  # Wait for animation
+            time.sleep(self.config.ui_animation_delay)
 
             # Step 3: Extract tagged accounts from popup (EXCLUDE comment section!)
             self.logger.debug("Extracting tagged accounts from popup...")
@@ -384,7 +384,7 @@ class ReelDataScraper(BaseScraper):
                     try:
                         close_button = self.page.locator('button:has(svg[aria-label="Close"])').first
                         close_button.click(timeout=2000)
-                        time.sleep(0.5)  # Wait for popup to close
+                        time.sleep(self.config.popup_close_delay)
                     except:
                         # Try pressing Escape
                         try:

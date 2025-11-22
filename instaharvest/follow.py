@@ -93,7 +93,7 @@ class FollowManager(BaseScraper):
 
                 # Add delay for rate limiting
                 if add_delay:
-                    delay = random.uniform(2, 4)
+                    delay = random.uniform(self.config.follow_delay_min, self.config.follow_delay_max)
                     self.logger.debug(f"⏱️ Rate limit delay: {delay:.1f}s")
                     time.sleep(delay)
 
@@ -178,7 +178,7 @@ class FollowManager(BaseScraper):
 
                 # Add delay for rate limiting
                 if add_delay:
-                    delay = random.uniform(2, 4)
+                    delay = random.uniform(self.config.follow_delay_min, self.config.follow_delay_max)
                     self.logger.debug(f"⏱️ Rate limit delay: {delay:.1f}s")
                     time.sleep(delay)
 
@@ -328,7 +328,7 @@ class FollowManager(BaseScraper):
 
             # Add delay between follows (except for last one)
             if i < len(usernames):
-                delay = random.uniform(*delay_between)
+                delay = random.uniform(self.config.batch_operation_delay_min, self.config.batch_operation_delay_max)
                 self.logger.debug(f"⏱️ Waiting {delay:.1f}s before next follow...")
                 time.sleep(delay)
 
@@ -416,9 +416,9 @@ class FollowManager(BaseScraper):
             # Click button
             follow_button.click(timeout=3000)
 
-            # Wait for action to complete (using configurable sleep_time)
-            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for action to complete...")
-            time.sleep(self.config.sleep_time)
+            # Wait for action to complete
+            self.logger.debug(f"⏱️ Waiting {self.config.button_click_delay}s for action to complete...")
+            time.sleep(self.config.button_click_delay)
 
             self.logger.debug("✓ Follow button clicked")
             return True
@@ -452,9 +452,9 @@ class FollowManager(BaseScraper):
 
             following_button.click(timeout=3000)
 
-            # Wait for popup dialog to appear (using configurable sleep_time)
-            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for popup dialog to appear...")
-            time.sleep(self.config.sleep_time)
+            # Wait for popup dialog to appear
+            self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for popup dialog to appear...")
+            time.sleep(self.config.popup_open_delay)
 
             self.logger.debug("✓ Following button clicked, dialog opened")
 
@@ -474,9 +474,9 @@ class FollowManager(BaseScraper):
 
                 unfollow_confirm_button.click(timeout=3000)
 
-                # Wait for action to complete (using configurable sleep_time)
-                self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for unfollow action to complete...")
-                time.sleep(self.config.sleep_time)
+                # Wait for action to complete
+                self.logger.debug(f"⏱️ Waiting {self.config.button_click_delay}s for unfollow action to complete...")
+                time.sleep(self.config.button_click_delay)
 
                 self.logger.debug("✓ Unfollow confirmed")
 
