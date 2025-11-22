@@ -454,7 +454,8 @@ class InstagramOrchestrator:
                         url=url,
                         tagged_accounts=[],
                         likes='ERROR',
-                        timestamp='N/A'
+                        timestamp='N/A',
+                        content_type=content_type  # Use detected type from link_data
                     ))
 
                 # Delay

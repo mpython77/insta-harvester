@@ -4,13 +4,14 @@ Professional version with complete automation
 
 Just enter username - everything else is automatic!
 Features:
-- Collects ALL post & reel links (Phase 1)
+- Collects ALL post links from main profile (Phase 1)
+- Collects ALL reel links from /reels/ page (SEPARATE - Phase 1.5)
 - Extracts data from each post/reel (Phase 2)
 - Advanced diagnostics
 - Error recovery
 - Performance monitoring
-- Real-time Excel export
-- Parallel processing
+- Real-time Excel export with Type column
+- Parallel processing (posts only, reels sequential)
 """
 
 import multiprocessing
@@ -22,11 +23,12 @@ def main():
     FULL AUTOMATIC SCRAPING
 
     Simply enter Instagram username and the scraper will:
-    1. Collect ALL post & reel links from profile
-    2. Extract tags, likes, dates from each post/reel
-    3. Save to Excel with Type column (Post/Reel)
-    4. Generate detailed statistics
-    5. Monitor performance & errors
+    1. Collect ALL post links from main profile
+    2. Collect ALL reel links from /reels/ page (SEPARATE!)
+    3. Extract tags, likes, dates from each post/reel
+    4. Save to Excel with Type column (Post/Reel)
+    5. Generate detailed statistics
+    6. Monitor performance & errors
     """
     # Required for Windows multiprocessing support
     multiprocessing.freeze_support()
@@ -90,7 +92,8 @@ def main():
         orchestrator = InstagramOrchestrator(config)
 
         # FULL AUTOMATIC SCRAPING
-        # Phase 1: Collect links (posts + reels)
+        # Phase 1: Collect post links from main profile
+        # Phase 1.5: Collect reel links from /reels/ page (SEPARATE!)
         # Phase 2: Extract data with diagnostics & error recovery
         # Phase 3: Save to Excel + JSON
         results = orchestrator.scrape_complete_profile_advanced(
@@ -116,23 +119,32 @@ def main():
         print(f"   Following: {results['profile']['following']}")
         print()
         print(f"🔗 Links Collected:")
-        print(f"   Total: {len(results['post_links'])} items")
-
-        # Count posts vs reels
-        if results['post_links']:
-            posts_count = sum(1 for link in results['post_links'] if link.get('type') == 'Post')
-            reels_count = sum(1 for link in results['post_links'] if link.get('type') == 'Reel')
-            print(f"   - Posts: {posts_count}")
-            print(f"   - Reels: {reels_count}")
+        total_links = len(results.get('post_links', [])) + len(results.get('reel_links', []))
+        print(f"   Total: {total_links} items")
+        print(f"   - Posts: {len(results.get('post_links', []))}")
+        print(f"   - Reels: {len(results.get('reel_links', []))}")
 
         print()
         print(f"📝 Data Extracted:")
-        print(f"   Total Scraped: {len(results['posts_data'])} items")
+        total_scraped = len(results.get('posts_data', [])) + len(results.get('reels_data', []))
+        print(f"   Total Scraped: {total_scraped} items")
 
-        # Count successful extractions
-        if results['posts_data']:
-            success = sum(1 for item in results['posts_data'] if item.get('likes') != 'ERROR')
-            print(f"   Successful: {success}/{len(results['posts_data'])} ({success/len(results['posts_data'])*100:.1f}%)")
+        # Count successful extractions for posts
+        posts_success = 0
+        if results.get('posts_data'):
+            posts_success = sum(1 for item in results['posts_data'] if item.get('likes') != 'ERROR')
+            print(f"   Posts Successful: {posts_success}/{len(results['posts_data'])} ({posts_success/len(results['posts_data'])*100:.1f}%)")
+
+        # Count successful extractions for reels
+        reels_success = 0
+        if results.get('reels_data'):
+            reels_success = sum(1 for item in results['reels_data'] if item.get('likes') != 'ERROR')
+            print(f"   Reels Successful: {reels_success}/{len(results['reels_data'])} ({reels_success/len(results['reels_data'])*100:.1f}%)")
+
+        # Overall success rate
+        if total_scraped > 0:
+            overall_success = posts_success + reels_success
+            print(f"   Overall: {overall_success}/{total_scraped} ({overall_success/total_scraped*100:.1f}%)")
 
         print()
         print("💾 Output Files:")
