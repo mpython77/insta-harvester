@@ -88,14 +88,22 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
             try:
                 # Navigate to post
                 page.goto(url, wait_until='domcontentloaded', timeout=60000)
-                time.sleep(2)
+
+                # CRITICAL: Wait longer for tags to load
+                time.sleep(3)  # Increased from 2 to 3 seconds
+
+                # Try to wait for tag elements specifically
+                try:
+                    page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
+                except:
+                    pass  # Tags might not exist, continue anyway
 
                 # Get HTML content
                 html_content = page.content()
                 soup = BeautifulSoup(html_content, 'lxml')
 
-                # Extract data
-                tagged_accounts = _extract_tags_bs4(soup)
+                # Extract data with robust multi-method approach
+                tagged_accounts = _extract_tags_robust(soup, page, url, worker_id)
                 likes = _extract_likes_bs4(soup, page)
                 timestamp = _extract_timestamp_bs4(soup)
 
@@ -124,23 +132,115 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     return batch_results
 
 
-def _extract_tags_bs4(soup: BeautifulSoup) -> List[str]:
-    """Extract tagged accounts using BeautifulSoup"""
+def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: int) -> List[str]:
+    """
+    ROBUST tag extraction with 5 fallback methods
+
+    CRITICAL: Tags are very important - we cannot miss them!
+    Always in: <div class="_aa1y"><a href="/username/"></a></div>
+    """
+    tagged = []
+
+    # METHOD 1: BeautifulSoup - div._aa1y > a[href]
     try:
         tag_containers = soup.find_all('div', class_='_aa1y')
-        tagged = []
-
         for container in tag_containers:
             link = container.find('a', href=True)
-            if link:
+            if link and link.get('href'):
                 href = link['href']
                 username = href.strip('/').split('/')[-1]
-                tagged.append(username)
+                if username and username not in tagged:
+                    tagged.append(username)
 
-        return tagged if tagged else ['No tags']
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (BS4 Method 1): {tagged}")
+            return tagged
+    except Exception as e:
+        print(f"[Worker {worker_id}] Method 1 failed: {e}")
 
-    except Exception:
-        return ['No tags']
+    # METHOD 2: BeautifulSoup - all <a> tags with href containing single /username/
+    try:
+        all_links = soup.find_all('a', href=True)
+        for link in all_links:
+            href = link.get('href', '')
+            # Pattern: /username/ (not /p/ or /reel/)
+            if href.startswith('/') and href.endswith('/') and href.count('/') == 2:
+                username = href.strip('/').split('/')[-1]
+                if username and username not in ['p', 'reel', 'explore', 'accounts'] and username not in tagged:
+                    # Check if parent has _aa1y class
+                    parent = link.find_parent('div', class_='_aa1y')
+                    if parent:
+                        tagged.append(username)
+
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (BS4 Method 2): {tagged}")
+            return tagged
+    except Exception as e:
+        print(f"[Worker {worker_id}] Method 2 failed: {e}")
+
+    # METHOD 3: Playwright - div._aa1y locator
+    try:
+        tag_divs = page.locator('div._aa1y').all()
+        for tag_div in tag_divs:
+            try:
+                link = tag_div.locator('a[href]').first
+                href = link.get_attribute('href', timeout=2000)
+                if href:
+                    username = href.strip('/').split('/')[-1]
+                    if username and username not in tagged:
+                        tagged.append(username)
+            except:
+                continue
+
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Playwright Method 3): {tagged}")
+            return tagged
+    except Exception as e:
+        print(f"[Worker {worker_id}] Method 3 failed: {e}")
+
+    # METHOD 4: Playwright - XPath for div with class _aa1y
+    try:
+        xpath = '//div[@class="_aa1y"]//a[@href]'
+        tag_links = page.locator(f'xpath={xpath}').all()
+        for link in tag_links:
+            try:
+                href = link.get_attribute('href', timeout=2000)
+                if href:
+                    username = href.strip('/').split('/')[-1]
+                    if username and username not in tagged:
+                        tagged.append(username)
+            except:
+                continue
+
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Playwright XPath Method 4): {tagged}")
+            return tagged
+    except Exception as e:
+        print(f"[Worker {worker_id}] Method 4 failed: {e}")
+
+    # METHOD 5: BeautifulSoup - Search in alt text and aria-label
+    try:
+        # Sometimes tagged usernames appear in alt text or aria-labels
+        imgs = soup.find_all('img', alt=True)
+        for img in imgs:
+            alt_text = img.get('alt', '')
+            if 'tagging' in alt_text.lower():
+                # Extract @username patterns
+                import re
+                usernames_in_alt = re.findall(r'@(\w+\.?\w*)', alt_text)
+                for username in usernames_in_alt:
+                    if username and username not in tagged:
+                        tagged.append(username)
+
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Alt text Method 5): {tagged}")
+            return tagged
+    except Exception as e:
+        print(f"[Worker {worker_id}] Method 5 failed: {e}")
+
+    # ALL METHODS FAILED - Log warning
+    print(f"[Worker {worker_id}] ⚠️ WARNING: No tags found in {url} after 5 methods!")
+    return ['No tags']
 
 
 def _extract_likes_bs4(soup: BeautifulSoup, page: Page) -> str:
