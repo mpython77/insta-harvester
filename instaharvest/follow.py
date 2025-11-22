@@ -443,14 +443,44 @@ class FollowManager(BaseScraper):
             self.logger.debug(f"⏱️ Waiting {delay_before:.1f}s before clicking Following button...")
             time.sleep(delay_before)
 
-            # Step 1: Click "Following" button
-            following_button = self.page.locator('button:has-text("Following")').first
+            # Step 1: Click "Following" button (can be <button> or <div role="button">)
+            following_button = None
 
-            if following_button.count() == 0:
-                self.logger.warning("Following button not found")
+            following_selectors = [
+                # Instagram's new structure: div with role="button"
+                'div[role="button"]:has-text("Following")',
+                '[role="button"]:has-text("Following")',
+                # Traditional button
+                'button:has-text("Following")',
+                # Text selector (most reliable)
+                'text="Following"',
+                # By Instagram's button class
+                'div.x1i10hfl[role="button"]:has-text("Following")',
+            ]
+
+            for selector in following_selectors:
+                try:
+                    btn = self.page.locator(selector).first
+                    if btn.count() > 0:
+                        if btn.is_visible(timeout=2000):
+                            following_button = btn
+                            self.logger.debug(f"✓ Found Following button using: {selector}")
+                            break
+                except Exception as e:
+                    self.logger.debug(f"Selector '{selector}' failed: {e}")
+                    continue
+
+            if following_button is None:
+                self.logger.warning("Following button not found - user might not be following this account")
                 return False
 
-            following_button.click(timeout=3000)
+            # Click the Following button
+            try:
+                following_button.click(timeout=5000)
+                self.logger.debug("✓ Following button clicked successfully")
+            except Exception as e:
+                self.logger.warning(f"Failed to click Following button: {e}")
+                return False
 
             # Wait for popup dialog to appear
             self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for popup dialog to appear...")
@@ -514,23 +544,32 @@ class FollowManager(BaseScraper):
                         self.logger.debug(f"Selector '{selector}' failed: {e}")
                         continue
 
-                if unfollow_confirm_button is None or unfollow_confirm_button.count() == 0:
-                    # Last resort: Get all buttons/divs in dialog and click the first one
+                if unfollow_confirm_button is None:
+                    # Last resort: Search ALL visible buttons for "Unfollow" text
                     try:
-                        # Try div[role="button"] first
-                        dialog_buttons = self.page.locator('div[role="dialog"] [role="button"]')
-                        if dialog_buttons.count() == 0:
-                            # Fallback to regular buttons
-                            dialog_buttons = self.page.locator('div[role="dialog"] button')
+                        self.logger.debug("⚠️ Using last resort: searching all visible buttons for 'Unfollow' text...")
+                        all_buttons = self.page.locator('[role="button"]')
+                        count = all_buttons.count()
+                        self.logger.debug(f"Found {count} elements with role=button on page")
 
-                        if dialog_buttons.count() > 0:
-                            unfollow_confirm_button = dialog_buttons.first
-                            self.logger.debug(f"✓ Using first clickable element in dialog (found {dialog_buttons.count()} elements)")
-                        else:
-                            self.logger.warning("Unfollow confirmation button not found - no clickable elements in dialog")
+                        for i in range(min(count, 20)):  # Check first 20 buttons max
+                            try:
+                                btn = all_buttons.nth(i)
+                                if btn.is_visible(timeout=1000):
+                                    text = btn.inner_text(timeout=1000)
+                                    self.logger.debug(f"  Button {i}: '{text.strip()}'")
+                                    if 'unfollow' in text.lower():
+                                        unfollow_confirm_button = btn
+                                        self.logger.debug(f"✓ Found Unfollow button at index {i} with text: '{text}'")
+                                        break
+                            except Exception:
+                                continue
+
+                        if unfollow_confirm_button is None:
+                            self.logger.warning("Unfollow confirmation button not found - checked all visible buttons")
                             return False
                     except Exception as e:
-                        self.logger.warning(f"Unfollow confirmation button not found: {e}")
+                        self.logger.warning(f"Last resort search failed: {e}")
                         return False
 
                 # Click the button
