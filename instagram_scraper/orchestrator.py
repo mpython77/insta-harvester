@@ -310,10 +310,9 @@ class InstagramOrchestrator:
         self.logger.info(f"📊 Real-time Excel writing: {'ENABLED' if excel_exporter else 'DISABLED'}")
 
         scraper = ParallelPostDataScraper(self.config)
-        # Extract URLs from dictionaries
-        urls = [link['url'] for link in post_links]
+        # Pass full link dictionaries (with content_type info)
         posts_data = scraper.scrape_multiple(
-            urls,
+            post_links,  # Changed: Now passing full dictionaries!
             parallel=parallel,
             session_file=self.config.session_file,
             excel_exporter=excel_exporter  # Pass to enable real-time writing!
