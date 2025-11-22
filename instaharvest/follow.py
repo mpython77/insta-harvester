@@ -466,20 +466,35 @@ class FollowManager(BaseScraper):
                 time.sleep(delay_confirm)
 
                 # Try to find unfollow button with multiple selectors (different languages/HTML structures)
+                # Instagram uses both <button> and <div role="button"> elements!
                 unfollow_confirm_button = None
 
-                # Method 1: Try common English text variations
                 selectors_to_try = [
+                    # Method 1: Playwright text selector (most reliable, works with any element!)
+                    'text="Unfollow"',
+
+                    # Method 2: Try div elements with role="button" (Instagram's NEW structure!)
+                    'div[role="dialog"] div[role="button"]:has-text("Unfollow")',
+                    'div[role="dialog"] [role="button"]:has-text("Unfollow")',
+                    'div[role="button"]:has-text("Unfollow")',
+
+                    # Method 3: Any element with "Unfollow" text
+                    '*:has-text("Unfollow")',
+
+                    # Method 4: Traditional button elements
                     'button:has-text("Unfollow")',
-                    'button:has-text("unfollow")',
-                    # Method 2: Try dialog/modal buttons (works for any language)
-                    'div[role="dialog"] button:nth-child(1)',  # First button in dialog
-                    'div[role="dialog"] button._acan._acap._acas._aj1-',  # Instagram's button classes
-                    'div[role="dialog"] button',  # Any button in dialog
-                    # Method 3: Try by button color/style (red buttons are usually confirm)
-                    'button[style*="background"]',
-                    # Method 4: Generic button in popup
-                    'div._aano button',
+                    'div[role="dialog"] button',
+
+                    # Method 5: By position - first clickable element in dialog
+                    'div[role="dialog"] [role="button"]:first-child',
+                    'div[role="dialog"] div[role="button"]',
+
+                    # Method 6: Instagram's CSS class for buttons
+                    'div[role="dialog"] .x1i10hfl[role="button"]',
+                    'div.x1i10hfl[role="button"]',
+
+                    # Method 7: Any element with role=button in dialog
+                    'div[role="dialog"] [role="button"]',
                 ]
 
                 for selector in selectors_to_try:
@@ -487,23 +502,32 @@ class FollowManager(BaseScraper):
                         button = self.page.locator(selector).first
                         if button.count() > 0:
                             # Found a button, check if it's visible
-                            if button.is_visible(timeout=1000):
-                                unfollow_confirm_button = button
-                                self.logger.debug(f"✓ Found unfollow button using selector: {selector}")
-                                break
+                            try:
+                                if button.is_visible(timeout=1000):
+                                    unfollow_confirm_button = button
+                                    self.logger.debug(f"✓ Found unfollow button using selector: {selector}")
+                                    break
+                            except Exception:
+                                # is_visible failed, try next selector
+                                continue
                     except Exception as e:
-                        self.logger.debug(f"Selector {selector} failed: {e}")
+                        self.logger.debug(f"Selector '{selector}' failed: {e}")
                         continue
 
                 if unfollow_confirm_button is None or unfollow_confirm_button.count() == 0:
-                    # Last resort: Get all buttons in dialog and click the first one
+                    # Last resort: Get all buttons/divs in dialog and click the first one
                     try:
-                        dialog_buttons = self.page.locator('div[role="dialog"] button')
+                        # Try div[role="button"] first
+                        dialog_buttons = self.page.locator('div[role="dialog"] [role="button"]')
+                        if dialog_buttons.count() == 0:
+                            # Fallback to regular buttons
+                            dialog_buttons = self.page.locator('div[role="dialog"] button')
+
                         if dialog_buttons.count() > 0:
                             unfollow_confirm_button = dialog_buttons.first
-                            self.logger.debug(f"✓ Using first button in dialog (found {dialog_buttons.count()} buttons)")
+                            self.logger.debug(f"✓ Using first clickable element in dialog (found {dialog_buttons.count()} elements)")
                         else:
-                            self.logger.warning("Unfollow confirmation button not found - no buttons in dialog")
+                            self.logger.warning("Unfollow confirmation button not found - no clickable elements in dialog")
                             return False
                     except Exception as e:
                         self.logger.warning(f"Unfollow confirmation button not found: {e}")
