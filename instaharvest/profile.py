@@ -122,10 +122,12 @@ class ProfileScraper(BaseScraper):
                 'span:has-text("posts")',
                 timeout=self.config.element_timeout
             )
-            time.sleep(1)  # Additional delay for stability
+            # Additional delay for stability
+            time.sleep(self.config.ui_stability_delay)
         except Exception as e:
             self.logger.warning(f"Profile stats selector timeout: {e}")
-            time.sleep(2)  # Fallback delay
+            # Fallback delay
+            time.sleep(self.config.page_stability_delay)
 
     def get_posts_count(self) -> str:
         """

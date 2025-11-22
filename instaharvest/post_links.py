@@ -253,23 +253,23 @@ class PostLinksScraper(BaseScraper):
             if len(containers) > 0:
                 last_container = containers[-1]
                 last_container.scroll_into_view_if_needed()
-                time.sleep(0.5)
+                time.sleep(self.config.scroll_post_delay)
 
             # STAGE 2: Scroll to actual page bottom to trigger more loading
             self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-            time.sleep(1.5)  # Longer wait for lazy loading
+            time.sleep(self.config.scroll_lazy_load_delay)
 
             # STAGE 3: Small bounce to ensure detection
             self.page.evaluate('window.scrollBy(0, -100)')
-            time.sleep(0.3)
+            time.sleep(self.config.ui_micro_delay)
             self.page.evaluate('window.scrollBy(0, 150)')
-            time.sleep(0.5)
+            time.sleep(self.config.scroll_post_delay)
 
         except Exception as e:
             self.logger.debug(f"Scroll error: {e}")
             # Fallback: just scroll to bottom
             self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-            time.sleep(1.5)
+            time.sleep(self.config.scroll_lazy_load_delay)
 
     def _save_links(self, links: List[Dict[str, str]]) -> None:
         """

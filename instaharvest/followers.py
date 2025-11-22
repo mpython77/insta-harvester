@@ -69,9 +69,9 @@ class FollowersCollector(BaseScraper):
                 self.logger.error("Failed to open followers popup")
                 return []
 
-            # Wait for popup to load (using configurable sleep_time)
-            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for popup to load...")
-            time.sleep(self.config.sleep_time)
+            # Wait for popup to load
+            self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for popup to load...")
+            time.sleep(self.config.popup_open_delay)
 
             # Collect followers with scrolling
             followers = self._collect_from_popup(
@@ -122,9 +122,9 @@ class FollowersCollector(BaseScraper):
                 self.logger.error("Failed to open following popup")
                 return []
 
-            # Wait for popup to load (using configurable sleep_time)
-            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for popup to load...")
-            time.sleep(self.config.sleep_time)
+            # Wait for popup to load
+            self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for popup to load...")
+            time.sleep(self.config.popup_open_delay)
 
             # Collect following with scrolling
             following = self._collect_from_popup(
@@ -163,9 +163,9 @@ class FollowersCollector(BaseScraper):
             # Click button
             followers_link.click(timeout=3000)
 
-            # Wait for popup to open (using configurable sleep_time)
-            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for popup to open...")
-            time.sleep(self.config.sleep_time)
+            # Wait for popup to open
+            self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for popup to open...")
+            time.sleep(self.config.popup_open_delay)
 
             self.logger.debug("✓ Followers popup opened")
             return True
@@ -197,9 +197,9 @@ class FollowersCollector(BaseScraper):
             # Click button
             following_link.click(timeout=3000)
 
-            # Wait for popup to open (using configurable sleep_time)
-            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for popup to open...")
-            time.sleep(self.config.sleep_time)
+            # Wait for popup to open
+            self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for popup to open...")
+            time.sleep(self.config.popup_open_delay)
 
             self.logger.debug("✓ Following popup opened")
             return True
