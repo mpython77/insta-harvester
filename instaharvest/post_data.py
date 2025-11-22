@@ -106,7 +106,7 @@ class PostDataScraper(BaseScraper):
             self.goto_url(post_url)
 
             # CRITICAL: Wait for content to load
-            time.sleep(3)
+            time.sleep(self.config.post_open_delay)
 
             # Initialize diagnostics if page is ready
             if self.enable_diagnostics and self.diagnostics is None:
@@ -349,7 +349,7 @@ class PostDataScraper(BaseScraper):
                 self.logger.debug("Clicking tag button...")
                 tag_button.click(timeout=3000)
                 time.sleep(self.config.popup_animation_delay)
-                time.sleep(self.config.popup_content_load_delay) content
+                time.sleep(self.config.popup_content_load_delay)
 
                 # CRITICAL: Extract from popup container ONLY
                 self.logger.debug("Extracting tags from popup...")

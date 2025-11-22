@@ -76,7 +76,7 @@ class ReelDataScraper(BaseScraper):
         self.goto_url(reel_url)
 
         # CRITICAL: Wait for content to load
-        time.sleep(3)
+        time.sleep(self.config.reel_open_delay)
 
         # Extract data
         tagged_accounts = self.get_tagged_accounts() if get_tags else []
@@ -343,7 +343,7 @@ class ReelDataScraper(BaseScraper):
             # Method 1: Links ONLY from popup container (NOT from comment section!)
             try:
                 # Wait for popup content to load
-                time.sleep(0.5)
+                time.sleep(self.config.popup_content_load_delay)
 
                 # CRITICAL FIX: Extract links ONLY from within popup container
                 # Popup class: x1cy8zhl x9f619 x78zum5 xl56j7k x2lwn1j xeuugli x47corl
@@ -389,7 +389,7 @@ class ReelDataScraper(BaseScraper):
                         # Try pressing Escape
                         try:
                             self.page.keyboard.press('Escape')
-                            time.sleep(0.5)
+                            time.sleep(self.config.popup_close_delay)
                         except:
                             pass
 

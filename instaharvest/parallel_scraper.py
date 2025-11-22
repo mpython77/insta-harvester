@@ -45,7 +45,7 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
         tag_button.click(timeout=3000)
         print(f"[Worker {worker_id}] ✓ Clicked tag button, waiting for popup...")
         time.sleep(self.config.popup_animation_delay)
-        time.sleep(self.config.popup_content_load_delay) content
+        time.sleep(self.config.popup_content_load_delay)
 
         # CRITICAL FIX: Extract usernames ONLY from popup container (NOT comment section!)
         # Popup class: x1cy8zhl x9f619 x78zum5 xl56j7k x2lwn1j xeuugli x47corl
@@ -210,7 +210,7 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                     print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Page loaded")
 
                     # CRITICAL: Wait longer for content to load
-                    time.sleep(3)  # Increased from 2 to 3 seconds
+                    time.sleep(config.post_open_delay)
 
                     # Get HTML content
                     html_content = page.content()
@@ -327,7 +327,7 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
                 # Click the tag button
                 tag_button.click(timeout=3000)
                 time.sleep(self.config.popup_animation_delay)
-                time.sleep(self.config.popup_content_load_delay) content
+                time.sleep(self.config.popup_content_load_delay)
 
                 # CRITICAL: Extract from popup container ONLY
                 popup_container = page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
