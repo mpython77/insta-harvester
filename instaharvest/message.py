@@ -81,8 +81,9 @@ class MessageManager(BaseScraper):
                     'username': username
                 }
 
-            # Wait for message box to open
-            time.sleep(2)
+            # Wait for message box to open (using configurable sleep_time)
+            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for message box to open...")
+            time.sleep(self.config.sleep_time)
 
             # Step 2: Type message in input field
             if not self._type_message(message):
@@ -204,6 +205,11 @@ class MessageManager(BaseScraper):
             True if clicked successfully, False otherwise
         """
         try:
+            # Add random delay before clicking (allows page to fully load)
+            delay_before = random.uniform(self.config.action_delay_min, self.config.action_delay_max)
+            self.logger.debug(f"⏱️ Waiting {delay_before:.1f}s before clicking Message button...")
+            time.sleep(delay_before)
+
             # Find Message button
             # Method 1: Look for button with text "Message"
             message_button = self.page.locator('div[role="button"]:has-text("Message")').first
@@ -218,7 +224,10 @@ class MessageManager(BaseScraper):
 
             # Click button
             message_button.click(timeout=3000)
-            time.sleep(1.5)  # Wait for message box to open
+
+            # Wait for message box to open (using configurable sleep_time)
+            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for message box to open...")
+            time.sleep(self.config.sleep_time)
 
             self.logger.debug("✓ Message button clicked")
             return True
@@ -250,13 +259,22 @@ class MessageManager(BaseScraper):
                 self.logger.warning("Message input field not found")
                 return False
 
+            # Add small delay before clicking input (allows UI to stabilize)
+            delay_before_input = random.uniform(1.0, 1.5)
+            self.logger.debug(f"⏱️ Waiting {delay_before_input:.1f}s before clicking input field...")
+            time.sleep(delay_before_input)
+
             # Click to focus
             message_input.click(timeout=3000)
             time.sleep(0.5)
 
             # Type message
             message_input.type(message, delay=50)  # 50ms delay between characters (natural typing)
-            time.sleep(0.5)
+
+            # Wait after typing (allows message to be processed)
+            delay_after_type = random.uniform(0.5, 1.0)
+            self.logger.debug(f"⏱️ Waiting {delay_after_type:.1f}s after typing...")
+            time.sleep(delay_after_type)
 
             self.logger.debug(f"✓ Typed message: {message[:50]}...")
             return True
@@ -273,6 +291,11 @@ class MessageManager(BaseScraper):
             True if clicked successfully, False otherwise
         """
         try:
+            # Add random delay before clicking send (allows message to be ready)
+            delay_before = random.uniform(self.config.action_delay_min, self.config.action_delay_max)
+            self.logger.debug(f"⏱️ Waiting {delay_before:.1f}s before clicking Send button...")
+            time.sleep(delay_before)
+
             # Find Send button
             # Method 1: div with aria-label="Send"
             send_button = self.page.locator('div[aria-label="Send"][role="button"]').first
@@ -287,7 +310,10 @@ class MessageManager(BaseScraper):
 
             # Click button
             send_button.click(timeout=3000)
-            time.sleep(1)  # Wait for message to send
+
+            # Wait for message to send (using configurable sleep_time)
+            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for message to send...")
+            time.sleep(self.config.sleep_time)
 
             self.logger.debug("✓ Send button clicked")
             return True

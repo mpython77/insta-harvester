@@ -408,9 +408,17 @@ class FollowManager(BaseScraper):
                 self.logger.warning(f"Unexpected button text: {button_text}")
                 return False
 
+            # Add random delay before clicking (allows page to fully load)
+            delay_before = random.uniform(self.config.action_delay_min, self.config.action_delay_max)
+            self.logger.debug(f"⏱️ Waiting {delay_before:.1f}s before clicking Follow button...")
+            time.sleep(delay_before)
+
             # Click button
             follow_button.click(timeout=3000)
-            time.sleep(1)  # Wait for action to complete
+
+            # Wait for action to complete (using configurable sleep_time)
+            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for action to complete...")
+            time.sleep(self.config.sleep_time)
 
             self.logger.debug("✓ Follow button clicked")
             return True
@@ -430,6 +438,11 @@ class FollowManager(BaseScraper):
             True if unfollowed successfully, False otherwise
         """
         try:
+            # Add random delay before clicking (allows page to fully load)
+            delay_before = random.uniform(self.config.action_delay_min, self.config.action_delay_max)
+            self.logger.debug(f"⏱️ Waiting {delay_before:.1f}s before clicking Following button...")
+            time.sleep(delay_before)
+
             # Step 1: Click "Following" button
             following_button = self.page.locator('button:has-text("Following")').first
 
@@ -438,12 +451,20 @@ class FollowManager(BaseScraper):
                 return False
 
             following_button.click(timeout=3000)
-            time.sleep(1)  # Wait for dialog to appear
+
+            # Wait for popup dialog to appear (using configurable sleep_time)
+            self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for popup dialog to appear...")
+            time.sleep(self.config.sleep_time)
 
             self.logger.debug("✓ Following button clicked, dialog opened")
 
             # Step 2: Confirm unfollow in dialog (if requested)
             if confirm:
+                # Add another delay before clicking confirmation button
+                delay_confirm = random.uniform(self.config.action_delay_min, self.config.action_delay_max)
+                self.logger.debug(f"⏱️ Waiting {delay_confirm:.1f}s before clicking Unfollow confirmation...")
+                time.sleep(delay_confirm)
+
                 # Look for "Unfollow" button in dialog
                 unfollow_confirm_button = self.page.locator('button:has-text("Unfollow")').first
 
@@ -452,7 +473,10 @@ class FollowManager(BaseScraper):
                     return False
 
                 unfollow_confirm_button.click(timeout=3000)
-                time.sleep(1)  # Wait for action to complete
+
+                # Wait for action to complete (using configurable sleep_time)
+                self.logger.debug(f"⏱️ Waiting {self.config.sleep_time}s for unfollow action to complete...")
+                time.sleep(self.config.sleep_time)
 
                 self.logger.debug("✓ Unfollow confirmed")
 
