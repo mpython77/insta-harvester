@@ -4,6 +4,9 @@ Coordinates all scraping operations in a single workflow
 """
 
 import time
+import signal
+import sys
+import atexit
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
@@ -46,6 +49,19 @@ class InstagramOrchestrator:
             level=self.config.log_level,
             log_to_console=self.config.log_to_console
         )
+
+        # Graceful shutdown tracking
+        self.shutdown_requested = False
+        self.excel_exporter = None
+        self.current_results = None
+        self.current_username = None
+
+        # Register signal handlers for Ctrl+C and SIGTERM
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+
+        # Register cleanup on exit
+        atexit.register(self._cleanup)
 
         self.logger.info("=" * 60)
         self.logger.info("Instagram Scraper Orchestrator Initialized")
@@ -177,28 +193,45 @@ class InstagramOrchestrator:
             'posts_data': []
         }
 
+        # Track current state for graceful shutdown
+        self.current_username = username
+        self.current_results = results
+
         # Initialize Excel exporter if needed
         excel_exporter = None
         if save_excel:
             excel_filename = f"instagram_data_{username}.xlsx"
             excel_exporter = ExcelExporter(excel_filename, self.logger)
+            self.excel_exporter = excel_exporter
             self.logger.info(f"Excel exporter initialized: {excel_filename}")
 
         # STEP 1: Scrape profile stats
         self.logger.info("STEP 1: Scraping profile stats...")
         profile_data = self._scrape_profile_stats(username)
         results['profile'] = profile_data.to_dict()
+        self.current_results = results  # Update for graceful shutdown
         self.logger.info(
             f"✓ Profile: {profile_data.posts} posts, "
             f"{profile_data.followers} followers, "
             f"{profile_data.following} following"
         )
 
+        # Check for shutdown request
+        if self.shutdown_requested:
+            self.logger.warning("Shutdown requested after STEP 1")
+            return results
+
         # STEP 2: Collect post links
         self.logger.info("\nSTEP 2: Collecting post links...")
         post_links = self._collect_post_links(username)
         results['post_links'] = post_links
+        self.current_results = results  # Update for graceful shutdown
         self.logger.info(f"✓ Collected {len(post_links)} post links")
+
+        # Check for shutdown request
+        if self.shutdown_requested:
+            self.logger.warning("Shutdown requested after STEP 2")
+            return results
 
         # STEP 3: Scrape post data (parallel or sequential)
         if post_links:
@@ -251,7 +284,7 @@ class InstagramOrchestrator:
         excel_exporter: Optional[ExcelExporter] = None
     ) -> List[PostData]:
         """
-        Scrape posts in parallel
+        Scrape posts in parallel with REAL-TIME Excel writing
 
         Args:
             post_links: List of post URLs
@@ -261,23 +294,20 @@ class InstagramOrchestrator:
         Returns:
             List of PostData objects
         """
+        self.logger.info(f"🚀 Starting parallel scraping with {parallel} workers...")
+        self.logger.info(f"📊 Real-time Excel writing: {'ENABLED' if excel_exporter else 'DISABLED'}")
+
         scraper = ParallelPostDataScraper(self.config)
         posts_data = scraper.scrape_multiple(
             post_links,
             parallel=parallel,
-            session_file=self.config.session_file
+            session_file=self.config.session_file,
+            excel_exporter=excel_exporter  # Pass to enable real-time writing!
         )
 
-        # Save to Excel if enabled
+        # NO need to save to Excel here - already done in real-time!
         if excel_exporter:
-            self.logger.info("Saving to Excel...")
-            for data in posts_data:
-                excel_exporter.add_row(
-                    post_url=data.url,
-                    tagged_accounts=data.tagged_accounts,
-                    likes=data.likes,
-                    post_date=data.timestamp
-                )
+            self.logger.info("✓ Excel writing completed in real-time")
 
         return posts_data
 
@@ -304,13 +334,22 @@ class InstagramOrchestrator:
 
         try:
             for i, url in enumerate(post_links, 1):
+                # Check for shutdown request before each post
+                if self.shutdown_requested:
+                    self.logger.warning(f"Shutdown requested at post {i}/{len(post_links)}")
+                    break
+
                 self.logger.info(f"[{i}/{len(post_links)}] Scraping: {url}")
 
                 try:
                     data = scraper.scrape(url)
                     posts_data.append(data)
 
-                    # Save to Excel immediately
+                    # Update current results immediately (for graceful shutdown)
+                    if self.current_results is not None:
+                        self.current_results['posts_data'] = [p.to_dict() for p in posts_data]
+
+                    # Save to Excel immediately (real-time saving)
                     if excel_exporter:
                         excel_exporter.add_row(
                             post_url=data.url,
@@ -352,6 +391,53 @@ class InstagramOrchestrator:
 
         except Exception as e:
             self.logger.error(f"Failed to export results: {e}")
+
+    def _signal_handler(self, signum, frame):
+        """
+        Handle Ctrl+C (SIGINT) and SIGTERM gracefully
+
+        This ensures data is saved and browsers are closed properly
+        """
+        signal_name = 'SIGINT (Ctrl+C)' if signum == signal.SIGINT else 'SIGTERM'
+
+        print("\n")
+        self.logger.warning(f"{'='*60}")
+        self.logger.warning(f"{signal_name} received - Graceful shutdown initiated")
+        self.logger.warning(f"{'='*60}")
+
+        self.shutdown_requested = True
+
+        # Save current progress immediately
+        if self.current_results:
+            self.logger.info("Saving current progress...")
+            try:
+                self._export_results(self.current_results)
+                self.logger.info("✓ Progress saved successfully")
+            except Exception as e:
+                self.logger.error(f"Failed to save progress: {e}")
+
+        # Finalize Excel if exists
+        if self.excel_exporter:
+            try:
+                self.excel_exporter.finalize()
+                self.logger.info(f"✓ Excel finalized: {self.excel_exporter.filename}")
+            except Exception as e:
+                self.logger.error(f"Failed to finalize Excel: {e}")
+
+        self.logger.warning("Shutdown complete. Exiting...")
+        sys.exit(0)
+
+    def _cleanup(self):
+        """
+        Cleanup function called on program exit (atexit)
+
+        Ensures all resources are properly released
+        """
+        if self.excel_exporter:
+            try:
+                self.excel_exporter.finalize()
+            except Exception:
+                pass
 
 
 def quick_scrape(username: str, config: Optional[ScraperConfig] = None) -> Dict[str, Any]:

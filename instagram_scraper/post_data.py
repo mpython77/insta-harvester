@@ -70,8 +70,8 @@ class PostDataScraper(BaseScraper):
         # Navigate to post
         self.goto_url(post_url)
 
-        # Wait for post to load
-        time.sleep(2)
+        # CRITICAL: Wait longer for tags to load (increased from 2 to 3 seconds)
+        time.sleep(3)
 
         # Extract data
         data = PostData(
@@ -157,37 +157,127 @@ class PostDataScraper(BaseScraper):
 
     def get_tagged_accounts(self) -> List[str]:
         """
-        Extract tagged accounts from post
+        ROBUST tag extraction with 5 fallback methods
+
+        CRITICAL: Tags are very important - we cannot miss them!
+        Always in: <div class="_aa1y"><a href="/username/"></a></div>
 
         Returns:
             List of usernames (without @)
         """
-        selector = '._aa1y'
+        tagged = []
 
-        def extract():
-            tag_containers = self.page.locator(selector).all()
-            tagged = []
+        # CRITICAL: Wait for tags to load
+        try:
+            self.page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
+        except:
+            pass  # Tags might not exist, continue
 
+        # METHOD 1: Playwright - div._aa1y > a[href]
+        try:
+            tag_containers = self.page.locator('div._aa1y').all()
             for container in tag_containers:
                 try:
                     link = container.locator('a[href]').first
-                    href = link.get_attribute('href')
+                    href = link.get_attribute('href', timeout=2000)
                     if href:
                         username = href.strip('/').split('/')[-1]
-                        tagged.append(username)
-                except Exception:
+                        if username and username not in tagged:
+                            tagged.append(username)
+                except:
                     continue
 
-            return tagged if tagged else ['No tags']
+            if tagged:
+                self.logger.info(f"✓ Found {len(tagged)} tags (Playwright Method 1): {tagged}")
+                return tagged
+        except Exception as e:
+            self.logger.warning(f"Tag extraction method 1 failed: {e}")
 
-        result = self.safe_extract(
-            extract,
-            element_name='tagged_accounts',
-            selector=selector,
-            default=['No tags']
-        )
+        # METHOD 2: Playwright XPath
+        try:
+            xpath = '//div[@class="_aa1y"]//a[@href]'
+            tag_links = self.page.locator(f'xpath={xpath}').all()
+            for link in tag_links:
+                try:
+                    href = link.get_attribute('href', timeout=2000)
+                    if href:
+                        username = href.strip('/').split('/')[-1]
+                        if username and username not in tagged:
+                            tagged.append(username)
+                except:
+                    continue
 
-        return result
+            if tagged:
+                self.logger.info(f"✓ Found {len(tagged)} tags (XPath Method 2): {tagged}")
+                return tagged
+        except Exception as e:
+            self.logger.warning(f"Tag extraction method 2 failed: {e}")
+
+        # METHOD 3: BeautifulSoup from page HTML
+        try:
+            from bs4 import BeautifulSoup
+            html = self.page.content()
+            soup = BeautifulSoup(html, 'lxml')
+
+            tag_containers = soup.find_all('div', class_='_aa1y')
+            for container in tag_containers:
+                link = container.find('a', href=True)
+                if link and link.get('href'):
+                    href = link['href']
+                    username = href.strip('/').split('/')[-1]
+                    if username and username not in tagged:
+                        tagged.append(username)
+
+            if tagged:
+                self.logger.info(f"✓ Found {len(tagged)} tags (BS4 Method 3): {tagged}")
+                return tagged
+        except Exception as e:
+            self.logger.warning(f"Tag extraction method 3 failed: {e}")
+
+        # METHOD 4: All links with /username/ pattern
+        try:
+            all_links = self.page.locator('a[href]').all()
+            for link in all_links:
+                try:
+                    href = link.get_attribute('href', timeout=1000)
+                    if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
+                        username = href.strip('/').split('/')[-1]
+                        if username and username not in ['p', 'reel', 'explore', 'accounts'] and username not in tagged:
+                            tagged.append(username)
+                except:
+                    continue
+
+            if tagged:
+                self.logger.info(f"✓ Found {len(tagged)} tags (Pattern Method 4): {tagged}")
+                return tagged
+        except Exception as e:
+            self.logger.warning(f"Tag extraction method 4 failed: {e}")
+
+        # METHOD 5: Extract from alt text
+        try:
+            from bs4 import BeautifulSoup
+            import re
+            html = self.page.content()
+            soup = BeautifulSoup(html, 'lxml')
+
+            imgs = soup.find_all('img', alt=True)
+            for img in imgs:
+                alt_text = img.get('alt', '')
+                if 'tagging' in alt_text.lower():
+                    usernames_in_alt = re.findall(r'@(\w+\.?\w*)', alt_text)
+                    for username in usernames_in_alt:
+                        if username and username not in tagged:
+                            tagged.append(username)
+
+            if tagged:
+                self.logger.info(f"✓ Found {len(tagged)} tags (Alt text Method 5): {tagged}")
+                return tagged
+        except Exception as e:
+            self.logger.warning(f"Tag extraction method 5 failed: {e}")
+
+        # ALL METHODS FAILED
+        self.logger.warning("⚠️ WARNING: No tags found after trying 5 methods!")
+        return ['No tags']
 
     def get_likes_count(self) -> str:
         """

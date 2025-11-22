@@ -6,9 +6,11 @@ Scrape multiple posts simultaneously with multiple browser contexts
 import time
 import random
 import json
+import signal
 from typing import List, Optional, Dict, Any
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, Manager, Queue
 from bs4 import BeautifulSoup
+from datetime import datetime
 
 from playwright.sync_api import sync_playwright, Page
 
@@ -16,21 +18,37 @@ from .config import ScraperConfig
 from .post_data import PostData
 from .logger import setup_logger
 
+# Global flag for graceful shutdown in worker processes
+_shutdown_requested = False
+
+
+def _worker_signal_handler(signum, frame):
+    """Signal handler for worker processes"""
+    global _shutdown_requested
+    _shutdown_requested = True
+    print(f"\n[Worker] Shutdown signal received, finishing current post...")
+
+
 
 def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Worker function for multiprocessing - MUST be at module level
 
     Args:
-        args: Dictionary with keys: urls_batch, worker_id, session_data, config_dict
+        args: Dictionary with keys: urls_batch, worker_id, session_data, config_dict, result_queue
 
     Returns:
         List of post data dictionaries
     """
+    # Register signal handler for this worker process
+    signal.signal(signal.SIGINT, _worker_signal_handler)
+    signal.signal(signal.SIGTERM, _worker_signal_handler)
+
     urls_batch = args['urls_batch']
     worker_id = args['worker_id']
     session_data = args['session_data']
     config_dict = args['config_dict']
+    result_queue = args.get('result_queue')  # Optional queue for real-time results
 
     # Reconstruct config from dict
     config = ScraperConfig(
@@ -62,39 +80,83 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
         page = context.new_page()
         page.set_default_timeout(config.default_timeout)
 
-        for url in urls_batch:
+        total_in_batch = len(urls_batch)
+        for idx, url in enumerate(urls_batch, 1):
+            # Check for shutdown request
+            global _shutdown_requested
+            if _shutdown_requested:
+                print(f"[Worker {worker_id}] Shutdown requested, stopping...")
+                break
+
             try:
+                # LOG: Starting scrape
+                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] 🔍 Scraping: {url}")
+
                 # Navigate to post
                 page.goto(url, wait_until='domcontentloaded', timeout=60000)
-                time.sleep(2)
+                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Page loaded")
+
+                # CRITICAL: Wait longer for tags to load
+                time.sleep(3)  # Increased from 2 to 3 seconds
+
+                # Try to wait for tag elements specifically
+                try:
+                    page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
+                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Tag elements detected")
+                except:
+                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
 
                 # Get HTML content
                 html_content = page.content()
                 soup = BeautifulSoup(html_content, 'lxml')
 
-                # Extract data
-                tagged_accounts = _extract_tags_bs4(soup)
+                # Extract data with robust multi-method approach
+                tagged_accounts = _extract_tags_robust(soup, page, url, worker_id)
                 likes = _extract_likes_bs4(soup, page)
                 timestamp = _extract_timestamp_bs4(soup)
 
-                batch_results.append({
+                result = {
                     'url': url,
                     'tagged_accounts': tagged_accounts,
                     'likes': likes,
                     'timestamp': timestamp
-                })
+                }
+
+                batch_results.append(result)
+
+                # LOG: Success
+                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✅ DONE: {len(tagged_accounts)} tags, {likes} likes")
+
+                # REAL-TIME: Send to queue immediately for Excel writing
+                if result_queue is not None:
+                    result_queue.put({
+                        'type': 'post_result',
+                        'worker_id': worker_id,
+                        'data': result,
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    })
 
                 # Small delay
                 time.sleep(random.uniform(1, 2))
 
             except Exception as e:
-                print(f"[Worker {worker_id}] Failed {url}: {e}")
-                batch_results.append({
+                print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ❌ ERROR: {e}")
+                error_result = {
                     'url': url,
                     'tagged_accounts': [],
                     'likes': 'ERROR',
                     'timestamp': 'N/A'
-                })
+                }
+                batch_results.append(error_result)
+
+                # Send error to queue too
+                if result_queue is not None:
+                    result_queue.put({
+                        'type': 'post_error',
+                        'worker_id': worker_id,
+                        'url': url,
+                        'error': str(e)
+                    })
 
         context.close()
         browser.close()
@@ -102,23 +164,115 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     return batch_results
 
 
-def _extract_tags_bs4(soup: BeautifulSoup) -> List[str]:
-    """Extract tagged accounts using BeautifulSoup"""
+def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: int) -> List[str]:
+    """
+    ROBUST tag extraction with 5 fallback methods
+
+    CRITICAL: Tags are very important - we cannot miss them!
+    Always in: <div class="_aa1y"><a href="/username/"></a></div>
+    """
+    tagged = []
+
+    # METHOD 1: BeautifulSoup - div._aa1y > a[href]
     try:
         tag_containers = soup.find_all('div', class_='_aa1y')
-        tagged = []
-
         for container in tag_containers:
             link = container.find('a', href=True)
-            if link:
+            if link and link.get('href'):
                 href = link['href']
                 username = href.strip('/').split('/')[-1]
-                tagged.append(username)
+                if username and username not in tagged:
+                    tagged.append(username)
 
-        return tagged if tagged else ['No tags']
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (BS4 Method 1): {tagged}")
+            return tagged
+    except Exception as e:
+        print(f"[Worker {worker_id}] Method 1 failed: {e}")
 
-    except Exception:
-        return ['No tags']
+    # METHOD 2: BeautifulSoup - all <a> tags with href containing single /username/
+    try:
+        all_links = soup.find_all('a', href=True)
+        for link in all_links:
+            href = link.get('href', '')
+            # Pattern: /username/ (not /p/ or /reel/)
+            if href.startswith('/') and href.endswith('/') and href.count('/') == 2:
+                username = href.strip('/').split('/')[-1]
+                if username and username not in ['p', 'reel', 'explore', 'accounts'] and username not in tagged:
+                    # Check if parent has _aa1y class
+                    parent = link.find_parent('div', class_='_aa1y')
+                    if parent:
+                        tagged.append(username)
+
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (BS4 Method 2): {tagged}")
+            return tagged
+    except Exception as e:
+        print(f"[Worker {worker_id}] Method 2 failed: {e}")
+
+    # METHOD 3: Playwright - div._aa1y locator
+    try:
+        tag_divs = page.locator('div._aa1y').all()
+        for tag_div in tag_divs:
+            try:
+                link = tag_div.locator('a[href]').first
+                href = link.get_attribute('href', timeout=2000)
+                if href:
+                    username = href.strip('/').split('/')[-1]
+                    if username and username not in tagged:
+                        tagged.append(username)
+            except:
+                continue
+
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Playwright Method 3): {tagged}")
+            return tagged
+    except Exception as e:
+        print(f"[Worker {worker_id}] Method 3 failed: {e}")
+
+    # METHOD 4: Playwright - XPath for div with class _aa1y
+    try:
+        xpath = '//div[@class="_aa1y"]//a[@href]'
+        tag_links = page.locator(f'xpath={xpath}').all()
+        for link in tag_links:
+            try:
+                href = link.get_attribute('href', timeout=2000)
+                if href:
+                    username = href.strip('/').split('/')[-1]
+                    if username and username not in tagged:
+                        tagged.append(username)
+            except:
+                continue
+
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Playwright XPath Method 4): {tagged}")
+            return tagged
+    except Exception as e:
+        print(f"[Worker {worker_id}] Method 4 failed: {e}")
+
+    # METHOD 5: BeautifulSoup - Search in alt text and aria-label
+    try:
+        # Sometimes tagged usernames appear in alt text or aria-labels
+        imgs = soup.find_all('img', alt=True)
+        for img in imgs:
+            alt_text = img.get('alt', '')
+            if 'tagging' in alt_text.lower():
+                # Extract @username patterns
+                import re
+                usernames_in_alt = re.findall(r'@(\w+\.?\w*)', alt_text)
+                for username in usernames_in_alt:
+                    if username and username not in tagged:
+                        tagged.append(username)
+
+        if tagged:
+            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Alt text Method 5): {tagged}")
+            return tagged
+    except Exception as e:
+        print(f"[Worker {worker_id}] Method 5 failed: {e}")
+
+    # ALL METHODS FAILED - Log warning
+    print(f"[Worker {worker_id}] ⚠️ WARNING: No tags found in {url} after 5 methods!")
+    return ['No tags']
 
 
 def _extract_likes_bs4(soup: BeautifulSoup, page: Page) -> str:
@@ -201,15 +355,17 @@ class ParallelPostDataScraper:
         self,
         post_urls: List[str],
         parallel: int = 1,
-        session_file: str = None
+        session_file: str = None,
+        excel_exporter = None
     ) -> List[PostData]:
         """
-        Scrape multiple posts in parallel
+        Scrape multiple posts in parallel with real-time Excel export
 
         Args:
             post_urls: List of post URLs
             parallel: Number of parallel contexts (default 1 = sequential)
             session_file: Session file path
+            excel_exporter: Optional Excel exporter for real-time writing
 
         Returns:
             List of PostData objects
@@ -231,7 +387,7 @@ class ParallelPostDataScraper:
             return self._scrape_sequential(post_urls, session_data)
 
         # Parallel (parallel > 1)
-        return self._scrape_parallel(post_urls, session_data, parallel)
+        return self._scrape_parallel(post_urls, session_data, parallel, excel_exporter)
 
     def _scrape_sequential(
         self,
@@ -253,15 +409,17 @@ class ParallelPostDataScraper:
         self,
         post_urls: List[str],
         session_data: dict,
-        num_workers: int
+        num_workers: int,
+        excel_exporter=None
     ) -> List[PostData]:
         """
-        Parallel scraping with multiple browser processes
+        Parallel scraping with multiple browser processes + REAL-TIME Excel writing
 
         Args:
             post_urls: List of URLs
             session_data: Session data
             num_workers: Number of parallel workers
+            excel_exporter: Optional Excel exporter for real-time writing
 
         Returns:
             List of PostData objects
@@ -278,13 +436,18 @@ class ParallelPostDataScraper:
             'default_timeout': self.config.default_timeout
         }
 
+        # Create Manager Queue for real-time communication
+        manager = Manager()
+        result_queue = manager.Queue()
+
         # Prepare arguments for each worker
         worker_args = [
             {
                 'urls_batch': batch,
                 'worker_id': i,
                 'session_data': session_data,
-                'config_dict': config_dict
+                'config_dict': config_dict,
+                'result_queue': result_queue  # Pass queue to workers
             }
             for i, batch in enumerate(batches, 1)
         ]
@@ -292,11 +455,64 @@ class ParallelPostDataScraper:
         self.logger.info(
             f"Starting {num_workers} parallel processes for {len(post_urls)} posts"
         )
+        self.logger.info("Real-time monitoring enabled ✓")
 
-        # Use multiprocessing Pool
+        # Use multiprocessing Pool with async
         results = []
+        completed_count = 0
+        total_posts = len(post_urls)
+
         with Pool(processes=num_workers) as pool:
-            batch_results_list = pool.map(_worker_scrape_batch, worker_args)
+            # Start workers asynchronously
+            async_result = pool.map_async(_worker_scrape_batch, worker_args)
+
+            # REAL-TIME: Monitor queue while workers are running
+            while not async_result.ready() or not result_queue.empty():
+                try:
+                    # Non-blocking queue check
+                    message = result_queue.get(timeout=0.5)
+
+                    if message['type'] == 'post_result':
+                        # SUCCESS: Post scraped
+                        data = message['data']
+                        worker_id = message['worker_id']
+                        completed_count += 1
+
+                        self.logger.info(
+                            f"📦 [{completed_count}/{total_posts}] Worker {worker_id} completed: "
+                            f"{len(data['tagged_accounts'])} tags, {data['likes']} likes"
+                        )
+
+                        # REAL-TIME Excel write
+                        if excel_exporter:
+                            try:
+                                excel_exporter.add_row(
+                                    post_url=data['url'],
+                                    tagged_accounts=data['tagged_accounts'],
+                                    likes=data['likes'],
+                                    post_date=data['timestamp']
+                                )
+                                self.logger.info(f"  ✓ Saved to Excel: {data['url']}")
+                            except Exception as e:
+                                self.logger.error(f"  ✗ Excel write failed: {e}")
+
+                    elif message['type'] == 'post_error':
+                        # ERROR: Post failed
+                        worker_id = message['worker_id']
+                        url = message['url']
+                        error = message['error']
+                        completed_count += 1
+
+                        self.logger.error(
+                            f"❌ [{completed_count}/{total_posts}] Worker {worker_id} failed: {url} - {error}"
+                        )
+
+                except:
+                    # Queue empty or timeout - continue
+                    time.sleep(0.1)
+
+            # Get final results from workers
+            batch_results_list = async_result.get()
 
             # Flatten results
             for batch_results in batch_results_list:
@@ -316,7 +532,7 @@ class ParallelPostDataScraper:
         ]
 
         self.logger.info(
-            f"Parallel scraping complete: {len(sorted_results)} posts"
+            f"✅ Parallel scraping complete: {len(sorted_results)} posts"
         )
 
         return sorted_results
