@@ -118,14 +118,14 @@ This will:
 ### Step 4: Test Your Setup
 
 ```bash
-# Try following a user
-python examples/follow_user.py
+# First, create your Instagram session (required!)
+python examples/save_session.py
 
-# Try collecting followers
-python examples/get_followers.py
-
-# Try the all-in-one demo
+# Try the all-in-one interactive demo (recommended for learning)
 python examples/all_in_one.py
+
+# Or try production scraping
+python examples/main_advanced.py
 ```
 
 ---
@@ -555,7 +555,7 @@ cd examples
 python save_session.py
 
 # Then run your script
-python follow_user.py
+python all_in_one.py  # or any other script
 ```
 
 #### Error: "Login required" or "Session expired"
