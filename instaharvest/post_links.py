@@ -242,12 +242,16 @@ class PostLinksScraper(BaseScraper):
 
     def _aggressive_scroll(self) -> None:
         """
-        Fast scroll optimized for Instagram's div._ac7v container loading
-        SIMPLIFIED: Same approach as ReelLinksScraper for better performance
+        Smart scroll with intelligent waiting for Instagram's lazy loading
+        OPTIMIZED: Waits for new containers to actually load before returning
 
         As we scroll, Instagram loads new div._ac7v containers (each with 3-4 posts)
+        We wait until new containers appear or timeout (max 5 seconds)
         """
         try:
+            # Get current container count BEFORE scroll
+            containers_before = len(self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all())
+
             # Scroll to last container to trigger loading of next batch
             containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
 
@@ -255,15 +259,34 @@ class PostLinksScraper(BaseScraper):
                 # Scroll last container into view to trigger lazy loading
                 last_container = containers[-1]
                 last_container.scroll_into_view_if_needed()
-                time.sleep(self.config.scroll_content_load_delay)
+
+                # INTELLIGENT WAIT: Keep checking until new containers load (max 5 seconds)
+                wait_time = 0
+                max_wait = 5.0  # Maximum 5 seconds to wait for new containers
+                check_interval = 0.5  # Check every 0.5 seconds
+
+                while wait_time < max_wait:
+                    time.sleep(check_interval)
+                    wait_time += check_interval
+
+                    # Check if new containers appeared
+                    containers_after = len(self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all())
+                    if containers_after > containers_before:
+                        # New containers loaded! Wait a bit more for stability
+                        time.sleep(0.5)
+                        self.logger.debug(f"✓ New containers loaded: {containers_before} → {containers_after}")
+                        return
+
+                # If no new containers after max_wait, that's okay - might be at the end
+                self.logger.debug(f"No new containers after {max_wait}s (might be at end)")
             else:
                 # Fallback: scroll to bottom
                 self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                time.sleep(self.config.ui_stability_delay)
+                time.sleep(2.0)  # Wait 2 seconds for content to load
         except:
             # Fallback: scroll to bottom
             self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-            time.sleep(self.config.ui_stability_delay)
+            time.sleep(2.0)  # Wait 2 seconds for content to load
 
     def _save_links(self, links: List[Dict[str, str]]) -> None:
         """
