@@ -313,8 +313,10 @@ collector.close()
 
 ```python
 from instaharvest import FollowManager
+from instaharvest.config import ScraperConfig
 
-manager = FollowManager()
+config = ScraperConfig()
+manager = FollowManager(config=config)
 session_data = manager.load_session()
 manager.setup_browser(session_data)
 
@@ -336,8 +338,10 @@ manager.close()
 
 ```python
 from instaharvest import MessageManager
+from instaharvest.config import ScraperConfig
 
-messenger = MessageManager()
+config = ScraperConfig()
+messenger = MessageManager(config=config)
 session_data = messenger.load_session()
 messenger.setup_browser(session_data)
 
@@ -357,8 +361,12 @@ messenger.close()
 
 ```python
 from instaharvest import SharedBrowser
+from instaharvest.config import ScraperConfig
 
-with SharedBrowser() as browser:
+# Create config
+config = ScraperConfig()
+
+with SharedBrowser(config=config) as browser:
     # All operations use the same browser instance
     browser.follow('user1')
     browser.send_message('user1', 'Hello!')
@@ -413,8 +421,12 @@ scraper.close()
 
 ```python
 from instaharvest import SharedBrowser
+from instaharvest.config import ScraperConfig
 
-with SharedBrowser() as browser:
+# Create config
+config = ScraperConfig()
+
+with SharedBrowser(config=config) as browser:
     # 1. Get profile stats
     profile = browser.scrape_profile('target_user')
     print(f"Target has {profile['followers']} followers")
