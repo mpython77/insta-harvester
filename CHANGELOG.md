@@ -107,66 +107,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.0] - 2024-11-22
 
 ### Added
-- Initial stable release
-- Complete Instagram automation toolkit
-- SharedBrowser for efficient multi-operation workflows
-- Follow/Unfollow functionality with popup handling
-- Direct messaging capabilities
-- Followers/Following collection with rate limiting
-- Profile scraping with comprehensive data extraction
-- Post and Reel data scraping
-- Excel export functionality
-- Parallel processing support
-- Session management with persistent authentication
-- Comprehensive configuration system via ScraperConfig
+- Session management utilities
+- Comprehensive configuration system with ScraperConfig
+- Excel export functionality with real-time writing
+- Parallel post scraping with multiprocessing
+- Shared browser context for efficient operation reuse
+- Follow/unfollow management with rate limiting
+- Direct messaging functionality
+- Followers/following collection
+- Professional logging system
+- HTML structure change detection
 
-### Features
-- **FollowManager**: Follow and unfollow Instagram users
-- **MessageManager**: Send direct messages programmatically
-- **FollowersCollector**: Collect followers and following lists
-- **ProfileScraper**: Extract detailed profile information
-- **PostDataScraper**: Scrape post metadata and content
-- **ReelDataScraper**: Extract Reel information
-- **SharedBrowser**: Single browser instance for multiple operations
-- **ExcelExporter**: Export data to formatted Excel files
-- **ParallelPostDataScraper**: Multi-threaded scraping support
+### Changed
+- Refactored entire codebase for better modularity
+- Improved error handling and recovery
+- Enhanced rate limiting to prevent Instagram blocks
+- Better session management and auto-refresh
 
-### Configuration
-- 40+ configurable parameters via ScraperConfig dataclass
-- Customizable delays and timeouts
-- Browser viewport settings
-- Headless/headed mode support
-- User agent customization
-- Rate limiting controls
-
-### Documentation
-- Comprehensive README.md with usage examples
-- CONFIGURATION_GUIDE.md with all parameters explained
-- CONFIGURATION_EXPLAINED.md with beginner-friendly explanations
-- Example scripts in examples/ directory
-- MIT License
-
-### Technical
-- Built on Playwright for reliable browser automation
-- Synchronous API for simplicity
-- Python 3.8+ support
-- Modern Instagram div[role="button"] selector support
-- Robust error handling with custom exceptions
-- Logging support with configurable levels
-
----
-
-## Version History Summary
-
-- **2.5.1** - Bug fixes, documentation improvements, repository cleanup
-- **2.5.0** - Initial stable release with full feature set
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Fixed
+- Multiple timing and synchronization issues
+- Instagram popup handling
+- Rate limiting edge cases
