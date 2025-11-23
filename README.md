@@ -205,6 +205,46 @@ with SharedBrowser() as browser:
 
 ---
 
+
+---
+
+## 📁 Example Scripts
+
+The `examples/` directory contains ready-to-use scripts:
+
+### 🔑 Session Setup (Required First)
+```bash
+python examples/save_session.py
+```
+Creates Instagram session (one-time setup, then reused automatically).
+
+### 🎮 Interactive Demo
+```bash
+python examples/all_in_one.py
+```
+Interactive menu with ALL features:
+- Follow/Unfollow users
+- Send messages
+- Collect followers/following
+- Batch operations
+- Profile scraping
+
+### 🚀 Production Scraping
+```bash
+python examples/main_advanced.py
+```
+Full automatic profile scraping:
+- Collects all post/reel links
+- Extracts data with parallel processing
+- Exports to Excel + JSON
+- Advanced diagnostics & error recovery
+
+### ⚙️ Configuration Examples
+```bash
+python examples/example_custom_config.py
+```
+Shows how to customize configuration (delays, viewport, etc.).
+
 ## 📖 Documentation
 
 ### 1. Profile Scraping
