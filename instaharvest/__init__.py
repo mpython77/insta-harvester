@@ -73,8 +73,17 @@ Quick Start:
     collector.setup_browser(session_data)
     followers = collector.get_followers('username', limit=100)
 
+    # Save session (first-time setup)
+    from instaharvest import save_session
+    save_session()  # Opens browser for manual login
+
+    # Check if session exists
+    from instaharvest import check_session_exists
+    if not check_session_exists():
+        save_session()
+
 Author: Doston
-Version: 2.5.2
+Version: 2.5.3
 License: MIT
 """
 
@@ -101,8 +110,9 @@ from .message import MessageManager
 from .followers import FollowersCollector
 from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
+from .session_utils import save_session, check_session_exists, load_session_data, get_default_session_path
 
-__version__ = '2.5.2'
+__version__ = '2.5.3'
 __author__ = 'Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
@@ -146,4 +156,10 @@ __all__ = [
     # Orchestrator
     'InstagramOrchestrator',
     'quick_scrape',
+
+    # Session utilities
+    'save_session',
+    'check_session_exists',
+    'load_session_data',
+    'get_default_session_path',
 ]
