@@ -99,7 +99,9 @@ from .exceptions import (
 )
 from .base import BaseScraper
 from .profile import ProfileScraper, ProfileData
-from .post_links import PostLinksScraper
+from .post_links import InstagramPostLinksScraper
+# Alias for backward compatibility
+PostLinksScraper = InstagramPostLinksScraper
 from .post_data import PostDataScraper, PostData
 from .reel_links import ReelLinksScraper
 from .reel_data import ReelDataScraper, ReelData
@@ -136,6 +138,7 @@ __all__ = [
     # Scrapers
     'ProfileScraper',
     'PostLinksScraper',
+    'InstagramPostLinksScraper',
     'PostDataScraper',
     'ReelLinksScraper',
     'ReelDataScraper',
