@@ -9,17 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **CRITICAL**: Fixed post link extraction stopping at ~46 posts (was collecting only 46/90 posts)
-- Optimized `_aggressive_scroll()` in PostLinksScraper to match ReelLinksScraper's proven approach
+- **CRITICAL**: Added intelligent waiting for Instagram's lazy-loaded containers
+- Optimized `_aggressive_scroll()` in PostLinksScraper with smart container detection
 - Simplified 3-stage scroll to single-stage fast scroll for better Instagram container loading
 - Increased `MAX_NO_NEW` from 5 to 7 attempts for better coverage of slow-loading content
 - Increased max scroll attempts from config limit to 150 (matching ReelLinksScraper)
-- Improved scroll timing: replaced multi-stage delays with optimized `scroll_content_load_delay`
+
+### Changed
+- `_aggressive_scroll()` now monitors container count and waits up to 5 seconds for new containers to load
+- Scroll waits intelligently: checks every 0.5s if new containers appeared (instead of fixed 0.8s delay)
+- Better handling of slow internet: won't move to next scroll until containers load or 5s timeout
 
 ### Technical Details
 - PostLinksScraper now uses same scrolling strategy as ReelLinksScraper (which collects all reels successfully)
 - Removed over-engineered 3-stage scroll that caused Instagram to miss containers
-- Better handling of Instagram's `div._ac7v.x1ty9z65.xzboxd6` virtual scrolling containers
+- **NEW**: Intelligent waiting loop - checks `div._ac7v.x1ty9z65.xzboxd6` count before/after scroll
+- **NEW**: Adaptive timing - fast networks load in 0.5-1s, slow networks get full 5s to load
 - More patient waiting for slow network/lazy loading (7 attempts vs 5)
+- Debug logging added to track container loading progress
 
 ## [2.5.4] - 2025-11-23
 
