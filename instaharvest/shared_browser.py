@@ -45,7 +45,7 @@ class SharedBrowser:
         >>> browser.close()
     """
 
-    def __init__(self, config: Optional[ScraperConfig] = None, session_file: str = 'instagram_session.json'):
+    def __init__(self, config: Optional[ScraperConfig] = None, session_file: Optional[str] = None):
         """
         Initialize Shared Browser
 
@@ -54,7 +54,7 @@ class SharedBrowser:
             session_file: Path to session file
         """
         self.config = config or ScraperConfig()
-        self.session_file = session_file
+        self.session_file = session_file if session_file is not None else self.config.session_file
         self.logger = setup_logger(
             name='SharedBrowser',
             log_file=self.config.log_file,
@@ -112,7 +112,7 @@ class SharedBrowser:
 
         # Launch browser
         self.browser = self.playwright.chromium.launch(
-            channel='chrome',
+            channel=self.config.browser_channel,
             headless=headless
         )
         self.logger.info(f"🌐 Browser launched (headless={headless})")
@@ -133,7 +133,7 @@ class SharedBrowser:
 
         # Visit Instagram to activate session
         self.logger.info("🔄 Activating session...")
-        self.page.goto('https://www.instagram.com/', wait_until='domcontentloaded', timeout=30000)
+        self.page.goto(self.config.instagram_base_url, wait_until='domcontentloaded', timeout=self.config.session_activation_timeout)
         time.sleep(self.config.page_stability_delay)
 
         # Update session

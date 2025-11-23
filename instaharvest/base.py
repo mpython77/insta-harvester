@@ -127,7 +127,7 @@ class BaseScraper(ABC):
 
             # Launch browser with real Chrome
             self.browser = self.playwright.chromium.launch(
-                channel='chrome',  # Use real Chrome instead of Chromium
+                channel=self.config.browser_channel,  # Use real Chrome instead of Chromium
                 headless=self.config.headless
             )
             self.logger.debug(f"Browser launched (Chrome, headless={self.config.headless})")
@@ -157,7 +157,11 @@ class BaseScraper(ABC):
                 self.logger.debug("Auto-updating session to keep it fresh...")
                 try:
                     # Visit Instagram to refresh session
-                    self.page.goto('https://www.instagram.com/', wait_until='domcontentloaded', timeout=30000)
+                    self.page.goto(
+                        self.config.instagram_base_url,
+                        wait_until=self.config.page_load_wait_until,
+                        timeout=self.config.session_activation_timeout
+                    )
                     # Wait for page to fully load
                     time.sleep(self.config.page_stability_delay)
 
@@ -247,7 +251,7 @@ class BaseScraper(ABC):
         """Check if current page is login page"""
         try:
             content = self.page.content()
-            return 'loginForm' in content or 'login' in self.page.url
+            return any(s in content for s in self.config.login_detection_strings) or 'login' in self.page.url
         except Exception:
             return False
 

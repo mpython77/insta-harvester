@@ -105,7 +105,7 @@ class ReelLinksScraper(BaseScraper):
             seen_urls = set()
 
             # Find all post/reel grid containers
-            containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
+            containers = self.page.locator(self.config.selector_reel_container).all()
 
             for container in containers:
                 try:
@@ -217,7 +217,7 @@ class ReelLinksScraper(BaseScraper):
         """
         try:
             # Scroll to last container to trigger loading of next batch
-            containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
+            containers = self.page.locator(self.config.selector_reel_container).all()
 
             if len(containers) > 0:
                 # Scroll last container into view to trigger lazy loading
@@ -242,7 +242,7 @@ class ReelLinksScraper(BaseScraper):
             username: Username for filename
         """
         # Use a separate file for reels
-        output_file = Path(f'reel_links_{username}.txt')
+        output_file = Path(self.config.reel_links_filename_pattern.format(username=username))
 
         try:
             with open(output_file, 'w', encoding='utf-8') as f:

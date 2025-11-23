@@ -75,7 +75,7 @@ class ProfileScraper(BaseScraper):
 
         try:
             # Navigate to profile
-            profile_url = f'https://www.instagram.com/{username}/'
+            profile_url = self.config.profile_url_pattern.format(username=username)
             self.goto_url(profile_url)
 
             # Check if profile exists
@@ -107,8 +107,9 @@ class ProfileScraper(BaseScraper):
         """Check if profile exists"""
         try:
             content = self.page.content()
-            if 'Page Not Found' in content or 'Sorry, this page' in content:
-                return False
+            for not_found_string in self.config.profile_not_found_strings:
+                if not_found_string in content:
+                    return False
             return True
         except Exception as e:
             self.logger.error(f"Error checking profile existence: {e}")
@@ -119,8 +120,8 @@ class ProfileScraper(BaseScraper):
         self.logger.debug("Waiting for profile stats...")
         try:
             self.page.wait_for_selector(
-                'span:has-text("posts")',
-                timeout=self.config.element_timeout
+                self.config.selector_posts_count,
+                timeout=self.config.posts_count_timeout
             )
             # Additional delay for stability
             time.sleep(self.config.ui_stability_delay)
@@ -136,11 +137,11 @@ class ProfileScraper(BaseScraper):
         Returns:
             Posts count as string (e.g., "1870")
         """
-        selector = 'span:has-text("posts")'
+        selector = self.config.selector_posts_count
 
         def extract():
             posts_element = self.page.locator(selector).first
-            posts_text = posts_element.locator('span.html-span').first.inner_text()
+            posts_text = posts_element.locator(self.config.selector_html_span).first.inner_text()
             return posts_text.strip().replace(',', '')
 
         result = self.safe_extract(
@@ -166,7 +167,7 @@ class ProfileScraper(BaseScraper):
         Returns:
             Followers count as string (e.g., "32757")
         """
-        selector = 'a[href*="/followers/"]'
+        selector = self.config.selector_followers_link
 
         def extract():
             followers_link = self.page.locator(selector).first
@@ -175,7 +176,7 @@ class ProfileScraper(BaseScraper):
             if title_span:
                 return title_span.get_attribute('title').replace(',', '')
             # Fallback to visible text
-            return followers_link.locator('span.html-span').first.inner_text().replace(',', '')
+            return followers_link.locator(self.config.selector_html_span).first.inner_text().replace(',', '')
 
         result = self.safe_extract(
             extract,
@@ -200,11 +201,11 @@ class ProfileScraper(BaseScraper):
         Returns:
             Following count as string (e.g., "5447")
         """
-        selector = 'a[href*="/following/"]'
+        selector = self.config.selector_following_link
 
         def extract():
             following_link = self.page.locator(selector).first
-            return following_link.locator('span.html-span').first.inner_text().replace(',', '')
+            return following_link.locator(self.config.selector_html_span).first.inner_text().replace(',', '')
 
         result = self.safe_extract(
             extract,

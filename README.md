@@ -500,21 +500,17 @@ from instaharvest.config import ScraperConfig
 config = ScraperConfig()
 
 with SharedBrowser(config=config) as browser:
-    # 1. Get profile stats
-    profile = browser.scrape_profile('target_user')
-    print(f"Target has {profile['followers']} followers")
-
-    # 2. Collect their followers
+    # 1. Collect followers from target user
     followers = browser.get_followers('target_user', limit=50)
     print(f"Collected {len(followers)} followers")
 
-    # 3. Follow them
+    # 2. Follow them
     for follower in followers[:10]:  # Follow first 10
         result = browser.follow(follower)
-        if result['status'] == 'success':
+        if result['success']:  # Check success key
             print(f"✓ Followed {follower}")
 
-    # 4. Send welcome message
+    # 3. Send welcome message
     for follower in followers[:5]:
         browser.send_message(follower, "Thanks for following!")
 ```

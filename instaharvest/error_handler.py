@@ -10,6 +10,8 @@ from typing import Callable, Any, Optional, List
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from .config import ScraperConfig
+
 
 @dataclass
 class ErrorContext:
@@ -33,6 +35,12 @@ class ErrorStats:
     failed_errors: int = 0
     error_types: dict = field(default_factory=dict)
     error_contexts: List[ErrorContext] = field(default_factory=list)
+    config: Optional[ScraperConfig] = None
+
+    def __post_init__(self):
+        """Initialize config if not provided"""
+        if self.config is None:
+            self.config = ScraperConfig()
 
     def add_error(self, context: ErrorContext, recovered: bool):
         """Add error to statistics"""
@@ -59,10 +67,13 @@ class ErrorStats:
 
     def get_report(self) -> str:
         """Generate error statistics report"""
+        sep_width = self.config.report_separator_width
+        recent_limit = self.config.error_recent_limit
+
         lines = [
-            "=" * 70,
+            "=" * sep_width,
             "ERROR STATISTICS REPORT",
-            "=" * 70,
+            "=" * sep_width,
             f"Total Errors: {self.total_errors}",
             f"Recovered: {self.recovered_errors}",
             f"Failed: {self.failed_errors}",
@@ -76,11 +87,11 @@ class ErrorStats:
 
         if self.error_contexts:
             lines.append("")
-            lines.append("Recent Errors (last 5):")
-            for ctx in self.error_contexts[-5:]:
+            lines.append(f"Recent Errors (last {recent_limit}):")
+            for ctx in self.error_contexts[-recent_limit:]:
                 lines.append(f"  [{ctx.timestamp}] {ctx.function_name}: {ctx.error_message[:60]}...")
 
-        lines.append("=" * 70)
+        lines.append("=" * sep_width)
         return "\n".join(lines)
 
 
@@ -96,17 +107,18 @@ class ErrorHandler:
     - Statistics tracking
     """
 
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: Optional[logging.Logger] = None, config: Optional[ScraperConfig] = None):
         """Initialize error handler"""
         self.logger = logger or logging.getLogger(__name__)
-        self.stats = ErrorStats()
+        self.config = config if config is not None else ScraperConfig()
+        self.stats = ErrorStats(config=self.config)
 
     def retry_with_backoff(
         self,
         func: Callable,
-        max_retries: int = 3,
-        initial_delay: float = 1.0,
-        backoff_factor: float = 2.0,
+        max_retries: Optional[int] = None,
+        initial_delay: Optional[float] = None,
+        backoff_factor: Optional[float] = None,
         exceptions: tuple = (Exception,)
     ) -> Any:
         """
@@ -125,6 +137,13 @@ class ErrorHandler:
         Raises:
             Last exception if all retries fail
         """
+        if max_retries is None:
+            max_retries = self.config.default_max_retries
+        if initial_delay is None:
+            initial_delay = self.config.default_retry_initial_delay
+        if backoff_factor is None:
+            backoff_factor = self.config.default_retry_backoff_factor
+
         delay = initial_delay
         last_exception = None
 
@@ -171,7 +190,7 @@ class ErrorHandler:
             Extracted value or default
         """
         context = ErrorContext(
-            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            timestamp=datetime.now().strftime(self.config.datetime_format),
             function_name=element_name,
             url=url,
             selector=selector
@@ -220,7 +239,7 @@ class ErrorHandler:
             Result from primary, fallback, or default
         """
         context = ErrorContext(
-            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            timestamp=datetime.now().strftime(self.config.datetime_format),
             function_name=element_name
         )
 

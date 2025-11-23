@@ -198,8 +198,8 @@ class ReelDataScraper(BaseScraper):
         """
         # Method 1: Reel-specific selector
         try:
-            likes_span = self.page.locator('span.x1ypdohk.x1s688f.x2fvf9.xe9ewy2[role="button"]').first
-            likes_text = likes_span.inner_text(timeout=3000).strip()
+            likes_span = self.page.locator(self.config.selector_reel_likes + '[role="button"]').first
+            likes_text = likes_span.inner_text(timeout=self.config.reel_likes_timeout).strip()
             if likes_text:
                 self.logger.debug(f"✓ Found reel likes: {likes_text}")
                 return likes_text.replace(',', '')
@@ -211,7 +211,7 @@ class ReelDataScraper(BaseScraper):
             spans = self.page.locator('span[role="button"]').all()
             for span in spans[:3]:  # Check first 3
                 try:
-                    text = span.inner_text(timeout=2000).strip()
+                    text = span.inner_text(timeout=self.config.visibility_timeout).strip()
                     # Check if it looks like a number
                     if text and (text.replace(',', '').replace('.', '').replace('K', '').replace('M', '').isdigit() or 'K' in text or 'M' in text):
                         self.logger.debug(f"✓ Found reel likes (method 2): {text}")
@@ -225,9 +225,9 @@ class ReelDataScraper(BaseScraper):
         try:
             section = self.page.locator('section').first
             spans = section.locator('span').all()
-            for span in spans[:10]:  # Check first 10 spans
+            for span in spans[:self.config.reel_max_span_check]:
                 try:
-                    text = span.inner_text(timeout=1000).strip()
+                    text = span.inner_text(timeout=self.config.attribute_timeout).strip()
                     # Check if it's purely numeric or has K/M notation
                     if text and len(text) < 20:  # Reasonable length for likes
                         clean_text = text.replace(',', '').replace('.', '')
@@ -254,22 +254,22 @@ class ReelDataScraper(BaseScraper):
         """
         # Method 1: time.x1p4m5qa selector (reel-specific)
         try:
-            time_element = self.page.locator('time.x1p4m5qa').first
+            time_element = self.page.locator(self.config.selector_reel_timestamp).first
 
             # Try title attribute first (most readable)
-            title = time_element.get_attribute('title', timeout=3000)
+            title = time_element.get_attribute('title', timeout=self.config.reel_element_timeout)
             if title:
                 self.logger.debug(f"✓ Found reel timestamp (title): {title}")
                 return title
 
             # Try datetime attribute
-            datetime_str = time_element.get_attribute('datetime', timeout=3000)
+            datetime_str = time_element.get_attribute('datetime', timeout=self.config.reel_element_timeout)
             if datetime_str:
                 self.logger.debug(f"✓ Found reel timestamp (datetime): {datetime_str}")
                 return datetime_str
 
             # Fallback to text
-            text = time_element.inner_text(timeout=3000)
+            text = time_element.inner_text(timeout=self.config.reel_element_timeout)
             if text:
                 self.logger.debug(f"✓ Found reel timestamp (text): {text}")
                 return text
@@ -323,16 +323,16 @@ class ReelDataScraper(BaseScraper):
             self.logger.debug("Looking for reel tag button...")
 
             # Look for button with Tags SVG
-            tag_button = self.page.locator('button:has(svg[aria-label="Tags"])').first
+            tag_button = self.page.locator(self.config.selector_tag_button).first
 
             # Check if button exists
             if tag_button.count() == 0:
                 self.logger.debug("No tag button found - reel has no tags")
-                return ['No tags']
+                return [self.config.default_no_tags_text]
 
             # Click the tag button
             self.logger.debug("Clicking tag button...")
-            tag_button.click(timeout=3000)
+            tag_button.click(timeout=self.config.tag_button_click_timeout)
 
             # Step 2: Wait for popup to appear
             time.sleep(self.config.ui_animation_delay)
@@ -350,12 +350,12 @@ class ReelDataScraper(BaseScraper):
                 self.logger.debug("Looking for popup container...")
 
                 # Find popup container - look for div with these specific classes
-                popup_container = self.page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+                popup_container = self.page.locator(self.config.selector_popup_containers[0]).first
 
                 if popup_container.count() == 0:
                     self.logger.debug("Popup container not found, trying alternative selectors...")
                     # Alternative: any div with role="dialog" or similar popup indicators
-                    popup_container = self.page.locator('div[role="dialog"]').first
+                    popup_container = self.page.locator(self.config.selector_popup_dialog).first
 
                 # Extract links ONLY from within the popup container
                 links = popup_container.locator('a[href^="/"]').all()
@@ -363,12 +363,12 @@ class ReelDataScraper(BaseScraper):
 
                 for link in links:
                     try:
-                        href = link.get_attribute('href', timeout=1000)
+                        href = link.get_attribute('href', timeout=self.config.attribute_timeout)
                         if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
                             username = href.strip('/').split('/')[-1]
 
                             # Filter out Instagram system paths
-                            if username in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories']:
+                            if username in self.config.instagram_system_paths:
                                 continue
 
                             if username not in tagged:
@@ -382,8 +382,8 @@ class ReelDataScraper(BaseScraper):
 
                     # Close popup by clicking close button
                     try:
-                        close_button = self.page.locator('button:has(svg[aria-label="Close"])').first
-                        close_button.click(timeout=2000)
+                        close_button = self.page.locator(self.config.selector_close_button).first
+                        close_button.click(timeout=self.config.popup_close_timeout)
                         time.sleep(self.config.popup_close_delay)
                     except:
                         # Try pressing Escape
@@ -409,11 +409,11 @@ class ReelDataScraper(BaseScraper):
         # Fallback: Try looking for div._aa1y (post-style tags)
         try:
             self.logger.debug("Fallback: Looking for post-style tags in reel...")
-            tag_containers = self.page.locator('div._aa1y').all()
+            tag_containers = self.page.locator(self.config.selector_post_tag_container).all()
             for container in tag_containers:
                 try:
                     link = container.locator('a[href]').first
-                    href = link.get_attribute('href', timeout=2000)
+                    href = link.get_attribute('href', timeout=self.config.visibility_timeout)
                     if href:
                         username = href.strip('/').split('/')[-1]
                         if username and username not in tagged:
@@ -428,4 +428,4 @@ class ReelDataScraper(BaseScraper):
             self.logger.debug(f"Fallback tag extraction failed: {e}")
 
         self.logger.warning("No tags found in reel")
-        return ['No tags']
+        return [self.config.default_no_tags_text]

@@ -63,8 +63,8 @@ class MessageManager(BaseScraper):
 
         try:
             # Navigate to profile
-            profile_url = f"https://www.instagram.com/{username}/"
-            if not self.goto_url(profile_url, delay=2):
+            profile_url = self.config.profile_url_pattern.format(username=username)
+            if not self.goto_url(profile_url, delay=self.config.message_profile_load_delay):
                 return {
                     'success': False,
                     'status': 'error',
@@ -131,7 +131,7 @@ class MessageManager(BaseScraper):
         self,
         usernames: list,
         message: str,
-        delay_between: tuple = (3, 5),
+        delay_between: Optional[tuple] = None,
         stop_on_error: bool = False
     ) -> dict:
         """
@@ -210,20 +210,24 @@ class MessageManager(BaseScraper):
             self.logger.debug(f"⏱️ Waiting {delay_before:.1f}s before clicking Message button...")
             time.sleep(delay_before)
 
-            # Find Message button
-            # Method 1: Look for button with text "Message"
-            message_button = self.page.locator('div[role="button"]:has-text("Message")').first
+            # Find Message button - try multiple selectors from config
+            message_button = None
+            for selector in self.config.selector_message_buttons:
+                try:
+                    button = self.page.locator(selector).first
+                    if button.count() > 0:
+                        message_button = button
+                        self.logger.debug(f"✓ Found Message button using: {selector}")
+                        break
+                except Exception:
+                    continue
 
-            if message_button.count() == 0:
-                # Method 2: Try with different selector
-                message_button = self.page.locator('button:has-text("Message")').first
-
-            if message_button.count() == 0:
+            if message_button is None:
                 self.logger.warning("Message button not found")
                 return False
 
             # Click button
-            message_button.click(timeout=3000)
+            message_button.click(timeout=self.config.message_button_timeout)
 
             # Wait for message box to open
             self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for message box to open...")
@@ -247,30 +251,15 @@ class MessageManager(BaseScraper):
             True if typed successfully, False otherwise
         """
         try:
-            # Try multiple selectors for message input
+            # Try multiple selectors for message input from config
             message_input = None
 
-            selectors_to_try = [
-                # Method 1: By role and contenteditable
-                'div[role="textbox"][contenteditable="true"]',
-                # Method 2: By aria-label
-                'div[aria-label="Message"][contenteditable="true"]',
-                # Method 3: By data attribute
-                'div[data-lexical-editor="true"][contenteditable="true"]',
-                # Method 4: By class and contenteditable
-                'div.notranslate[contenteditable="true"]',
-                # Method 5: Any contenteditable div with placeholder
-                'div[contenteditable="true"][aria-placeholder="Message..."]',
-                # Method 6: Generic contenteditable in message area
-                'div[contenteditable="true"]',
-            ]
-
-            for selector in selectors_to_try:
+            for selector in self.config.selector_message_inputs:
                 try:
                     input_field = self.page.locator(selector).first
                     if input_field.count() > 0:
                         # Check if visible
-                        if input_field.is_visible(timeout=2000):
+                        if input_field.is_visible(timeout=self.config.message_input_visibility_timeout):
                             message_input = input_field
                             self.logger.debug(f"✓ Found message input using: {selector}")
                             break
@@ -288,7 +277,7 @@ class MessageManager(BaseScraper):
 
             # Click to focus
             try:
-                message_input.click(timeout=3000)
+                message_input.click(timeout=self.config.click_timeout)
                 self.logger.debug("✓ Clicked message input field")
             except Exception as e:
                 self.logger.warning(f"Could not click input field: {e}")
@@ -300,7 +289,7 @@ class MessageManager(BaseScraper):
             try:
                 # Method 1: Use Playwright's type method
                 message_input.fill('')  # Clear any existing text
-                message_input.type(message, delay=50)  # 50ms delay between characters
+                message_input.type(message, delay=self.config.message_typing_delay_ms)
                 self.logger.debug("✓ Typed message using type() method")
             except Exception as e1:
                 self.logger.debug(f"type() failed: {e1}, trying fill()...")
@@ -338,44 +327,18 @@ class MessageManager(BaseScraper):
             self.logger.debug(f"⏱️ Waiting {delay_before:.1f}s before clicking Send button...")
             time.sleep(delay_before)
 
-            # Try multiple selectors for Send button
+            # Try multiple selectors for Send button from config
             send_button = None
 
-            selectors_to_try = [
-                # Method 1: div with aria-label="Send" and role="button"
-                'div[aria-label="Send"][role="button"]',
-                # Method 2: Any element with aria-label="Send"
-                '[aria-label="Send"][role="button"]',
-                # Method 3: div with role=button containing Send SVG
-                'div[role="button"]:has(svg[aria-label="Send"])',
-                # Method 4: Parent of SVG with aria-label="Send"
-                'svg[aria-label="Send"]',  # Will click parent
-                # Method 5: Button with Send text
-                'div[role="button"]:has-text("Send")',
-                # Method 6: By Instagram button classes with Send
-                'div.x1i10hfl[role="button"]:has(svg[aria-label="Send"])',
-            ]
-
-            for selector in selectors_to_try:
+            for selector in self.config.selector_send_buttons:
                 try:
-                    if selector == 'svg[aria-label="Send"]':
-                        # Special case: find SVG then get parent
-                        svg = self.page.locator(selector).first
-                        if svg.count() > 0:
-                            # Get parent div (the clickable button)
-                            button = svg.locator('..').first
-                            if button.count() > 0 and button.is_visible(timeout=2000):
-                                send_button = button
-                                self.logger.debug(f"✓ Found Send button using: {selector} (parent)")
-                                break
-                    else:
-                        button = self.page.locator(selector).first
-                        if button.count() > 0:
-                            # Check if visible (send button only appears after typing!)
-                            if button.is_visible(timeout=2000):
-                                send_button = button
-                                self.logger.debug(f"✓ Found Send button using: {selector}")
-                                break
+                    button = self.page.locator(selector).first
+                    if button.count() > 0:
+                        # Check if visible (send button only appears after typing!)
+                        if button.is_visible(timeout=self.config.visibility_timeout):
+                            send_button = button
+                            self.logger.debug(f"✓ Found Send button using: {selector}")
+                            break
                 except Exception as e:
                     self.logger.debug(f"Selector '{selector}' failed: {e}")
                     continue
@@ -386,7 +349,7 @@ class MessageManager(BaseScraper):
 
             # Click button
             try:
-                send_button.click(timeout=3000)
+                send_button.click(timeout=self.config.click_timeout)
                 self.logger.debug("✓ Send button clicked")
             except Exception as e:
                 self.logger.warning(f"Failed to click Send button: {e}")

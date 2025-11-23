@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 import logging
 
+from .config import ScraperConfig
+
 
 class ExcelExporter:
     """
@@ -23,29 +25,24 @@ class ExcelExporter:
     6. Scraping Date/Time
     """
 
-    def __init__(self, filename: str, logger: Optional[logging.Logger] = None):
+    def __init__(self, filename: str, logger: Optional[logging.Logger] = None, config: Optional[ScraperConfig] = None):
         """
         Initialize Excel exporter
 
         Args:
             filename: Output Excel filename
             logger: Logger instance
+            config: ScraperConfig instance
         """
         self.filename = Path(filename)
         self.logger = logger or logging.getLogger(__name__)
+        self.config = config if config is not None else ScraperConfig()
 
         # Use list for O(1) append performance, convert to DataFrame when writing
         self.rows: List[Dict[str, Any]] = []
 
-        # Column names
-        self.columns = [
-            'Post URL',
-            'Type',
-            'Tagged Accounts',
-            'Likes Count',
-            'Post Date',
-            'Scraping Date/Time'
-        ]
+        # Column names from config
+        self.columns = self.config.excel_columns
 
         # Create empty file
         self._create_file()
@@ -83,10 +80,10 @@ class ExcelExporter:
         """
         try:
             # Format tags
-            tags_str = ', '.join(tagged_accounts) if tagged_accounts else 'No tags'
+            tags_str = ', '.join(tagged_accounts) if tagged_accounts else self.config.default_no_tags_text
 
             # Current datetime
-            scraping_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            scraping_time = datetime.now().strftime(self.config.datetime_format)
 
             # Append to list (O(1) operation - fast!)
             row_dict = {
@@ -150,7 +147,7 @@ class ExcelExporter:
                     except:
                         pass
 
-                adjusted_width = min(max_length + 2, 50)  # Max 50
+                adjusted_width = min(max_length + 2, self.config.excel_max_column_width)
                 ws.column_dimensions[column_letter].width = adjusted_width
 
             wb.save(self.filename)

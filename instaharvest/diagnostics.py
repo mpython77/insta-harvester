@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import logging
 
+from .config import ScraperConfig
+
 
 @dataclass
 class SelectorTest:
@@ -58,42 +60,28 @@ class HTMLDiagnostics:
     - Generates detailed reports
     """
 
-    # Known selectors for Posts
-    POST_SELECTORS = {
-        'tags_primary': 'div._aa1y',
-        'tags_fallback': 'a[href^="/"]',
-        'likes_button': 'span[role="button"]',
-        'likes_link': 'a[href*="/liked_by/"]',
-        'timestamp': 'time',
-        'section': 'section',
-    }
-
-    # Known selectors for Reels
-    REEL_SELECTORS = {
-        'likes_primary': 'span.x1ypdohk.x1s688f.x2fvf9.xe9ewy2[role="button"]',
-        'likes_fallback': 'span[role="button"]',
-        'timestamp_primary': 'time.x1p4m5qa',
-        'timestamp_fallback': 'time',
-        'tag_button': 'button:has(svg[aria-label="Tags"])',
-        'close_button': 'button:has(svg[aria-label="Close"])',
-    }
-
-    def __init__(self, page, logger: Optional[logging.Logger] = None):
+    def __init__(self, page, logger: Optional[logging.Logger] = None, config: Optional[ScraperConfig] = None):
         """
         Initialize diagnostics
 
         Args:
             page: Playwright page object
             logger: Logger instance
+            config: ScraperConfig instance
         """
         self.page = page
         self.logger = logger or logging.getLogger(__name__)
+        self.config = config if config is not None else ScraperConfig()
+
+        # Load selectors from config
+        self.POST_SELECTORS = self.config.diagnostics_post_selectors
+        self.REEL_SELECTORS = self.config.diagnostics_reel_selectors
 
     def test_selector(
         self,
         selector: str,
         selector_type: str = 'css',
-        timeout: int = 2000
+        timeout: Optional[int] = None
     ) -> SelectorTest:
         """
         Test a single selector
@@ -106,6 +94,9 @@ class HTMLDiagnostics:
         Returns:
             SelectorTest result
         """
+        if timeout is None:
+            timeout = self.config.selector_test_timeout
+
         start_time = time.time()
         test = SelectorTest(
             selector=selector,
@@ -142,7 +133,7 @@ class HTMLDiagnostics:
             DiagnosticReport
         """
         report = DiagnosticReport(
-            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            timestamp=datetime.now().strftime(self.config.datetime_format),
             url=url,
             content_type='Post'
         )
@@ -162,9 +153,9 @@ class HTMLDiagnostics:
 
         # Determine overall status
         success_rate = report.get_success_rate()
-        if success_rate >= 80:
+        if success_rate >= self.config.diagnostics_success_threshold_ok:
             report.overall_status = 'OK'
-        elif success_rate >= 50:
+        elif success_rate >= self.config.diagnostics_success_threshold_partial:
             report.overall_status = 'PARTIAL'
             report.recommendations.append(
                 "⚠️ Some selectors failed. Instagram may have updated HTML structure."
@@ -196,7 +187,7 @@ class HTMLDiagnostics:
             DiagnosticReport
         """
         report = DiagnosticReport(
-            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            timestamp=datetime.now().strftime(self.config.datetime_format),
             url=url,
             content_type='Reel'
         )
@@ -216,9 +207,9 @@ class HTMLDiagnostics:
 
         # Determine overall status
         success_rate = report.get_success_rate()
-        if success_rate >= 70:  # Reels have more optional elements
+        if success_rate >= self.config.diagnostics_reel_success_threshold_ok:
             report.overall_status = 'OK'
-        elif success_rate >= 40:
+        elif success_rate >= self.config.diagnostics_reel_success_threshold_partial:
             report.overall_status = 'PARTIAL'
             report.recommendations.append(
                 "⚠️ Some reel selectors failed. Check if tag button exists or HTML changed."
@@ -270,10 +261,11 @@ class HTMLDiagnostics:
 
     def generate_report_text(self, report: DiagnosticReport) -> str:
         """Generate human-readable report"""
+        sep_width = self.config.report_separator_width
         lines = [
-            "=" * 70,
+            "=" * sep_width,
             f"DIAGNOSTIC REPORT - {report.content_type}",
-            "=" * 70,
+            "=" * sep_width,
             f"Timestamp: {report.timestamp}",
             f"URL: {report.url}",
             f"Overall Status: {report.overall_status}",
@@ -297,7 +289,7 @@ class HTMLDiagnostics:
             for rec in report.recommendations:
                 lines.append(f"  {rec}")
 
-        lines.append("=" * 70)
+        lines.append("=" * sep_width)
 
         return "\n".join(lines)
 

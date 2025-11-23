@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from contextlib import contextmanager
 
+from .config import ScraperConfig
+
 
 @dataclass
 class PerformanceMetrics:
@@ -44,6 +46,12 @@ class PerformanceStats:
     """Overall performance statistics"""
     metrics: List[PerformanceMetrics] = field(default_factory=list)
     start_time: float = field(default_factory=time.time)
+    config: Optional[ScraperConfig] = None
+
+    def __post_init__(self):
+        """Initialize config if not provided"""
+        if self.config is None:
+            self.config = ScraperConfig()
 
     def add_metric(self, metric: PerformanceMetrics):
         """Add performance metric"""
@@ -86,10 +94,11 @@ class PerformanceStats:
 
     def get_report(self) -> str:
         """Generate performance report"""
+        sep_width = self.config.report_separator_width
         lines = [
-            "=" * 70,
+            "=" * sep_width,
             "PERFORMANCE REPORT",
-            "=" * 70,
+            "=" * sep_width,
             f"Total Time: {self.get_total_time():.2f}s",
             f"Total Operations: {len(self.metrics)}",
             f"Operations/Second: {self.get_operations_per_second():.2f}",
@@ -130,7 +139,7 @@ class PerformanceStats:
                 f"(Memory: +{metric.memory_delta_mb:.2f} MB)"
             )
 
-        lines.append("=" * 70)
+        lines.append("=" * sep_width)
         return "\n".join(lines)
 
 
@@ -146,10 +155,11 @@ class PerformanceMonitor:
     - Optimize resource consumption
     """
 
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: Optional[logging.Logger] = None, config: Optional[ScraperConfig] = None):
         """Initialize performance monitor"""
         self.logger = logger or logging.getLogger(__name__)
-        self.stats = PerformanceStats()
+        self.config = config if config is not None else ScraperConfig()
+        self.stats = PerformanceStats(config=self.config)
         self.process = psutil.Process(os.getpid())
 
     def get_memory_usage(self) -> float:
@@ -233,7 +243,7 @@ class PerformanceMonitor:
         report = self.stats.get_report()
         self.logger.info("\n" + report)
 
-    def check_memory_threshold(self, threshold_mb: float = 500.0) -> bool:
+    def check_memory_threshold(self, threshold_mb: Optional[float] = None) -> bool:
         """
         Check if memory usage exceeds threshold
 
@@ -243,6 +253,9 @@ class PerformanceMonitor:
         Returns:
             True if memory usage is below threshold
         """
+        if threshold_mb is None:
+            threshold_mb = self.config.memory_threshold_mb
+
         current_memory = self.get_memory_usage()
         if current_memory > threshold_mb:
             self.logger.warning(
