@@ -131,10 +131,10 @@ python examples/main_advanced.py
 ---
 
 
-> **⚠️ IMPORTANT: Always Use ScraperConfig!**  
-> All examples below use `ScraperConfig()` for proper timing and reliability.  
-> Even when using default settings, explicitly creating config is **best practice**.  
-> This prevents timing issues with popups, buttons, and rate limits.  
+> **⚠️ IMPORTANT: Always Use ScraperConfig!**
+> All examples below use `ScraperConfig()` for proper timing and reliability.
+> Even when using default settings, explicitly creating config is **best practice**.
+> This prevents timing issues with popups, buttons, and rate limits.
 > See [Configuration Guide](CONFIGURATION_GUIDE.md) for customization options.
 
 ## 📖 Quick Start Examples
@@ -223,9 +223,6 @@ with SharedBrowser(config=config) as browser:
     followers = browser.get_followers("my_account", limit=50)
     print(f"Followers: {len(followers)}")
 ```
-
----
-
 
 ---
 
