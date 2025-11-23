@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "instaharvest"
-version = "2.5.0"
+version = "2.5.1"
 description = "Professional Instagram data collection toolkit with automation features"
 readme = "README.md"
 authors = [
-    {name = "Artem", email = "kelajak054@gmail.com"}
+    {name = "Doston", email = "kelajak054@gmail.com"}
 ]
 license = {text = "MIT"}
 classifiers = [
