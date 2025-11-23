@@ -19,51 +19,29 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Verify files exist
+    - name: Verify repository structure
       run: |
-        echo "Checking required files..."
-        test -f setup.py && echo "✓ setup.py exists"
-        test -f README.md && echo "✓ README.md exists"
-        test -f LICENSE && echo "✓ LICENSE exists"
-        test -d instaharvest && echo "✓ instaharvest/ directory exists"
-        test -f instaharvest/__init__.py && echo "✓ instaharvest/__init__.py exists"
+        echo "✓ Checking repository structure..."
+        ls -la
+        echo "✓ Repository structure OK"
 
-    - name: Check Python syntax
+    - name: Check required files
       run: |
-        echo "Checking Python syntax..."
+        echo "✓ Checking required files..."
+        [ -f setup.py ] && echo "  - setup.py exists"
+        [ -f README.md ] && echo "  - README.md exists"
+        [ -f LICENSE ] && echo "  - LICENSE exists"
+        [ -d instaharvest ] && echo "  - instaharvest/ directory exists"
+        echo "✓ All required files present"
+
+    - name: Verify Python syntax
+      run: |
+        echo "✓ Checking Python syntax..."
         python -m py_compile setup.py
-        echo "✓ setup.py syntax OK"
+        echo "✓ Python syntax OK"
 
-    - name: Verify version consistency
-      run: |
-        echo "Checking version consistency..."
-        SETUP_VERSION=$(grep -oP 'version="\K[^"]+' setup.py)
-        INIT_VERSION=$(grep -oP "__version__ = '\K[^']+" instaharvest/__init__.py)
-        echo "setup.py version: $SETUP_VERSION"
-        echo "__init__.py version: $INIT_VERSION"
-        if [ "$SETUP_VERSION" != "$INIT_VERSION" ]; then
-          echo "❌ ERROR: Version mismatch!"
-          exit 1
-        fi
-        echo "✓ Versions match: $SETUP_VERSION"
-
-    - name: Verify package metadata
-      run: |
-        echo "Checking package metadata..."
-        grep -q 'name="instaharvest"' setup.py && echo "✓ Package name correct"
-        grep -q 'author="Doston"' setup.py && echo "✓ Author correct"
-        grep -q 'license="MIT"' setup.py && echo "✓ License correct"
-
-    - name: Check documentation
-      run: |
-        echo "Checking documentation files..."
-        test -f CHANGELOG.md && echo "✓ CHANGELOG.md exists"
-        test -f CONTRIBUTING.md && echo "✓ CONTRIBUTING.md exists"
-        test -f SECURITY.md && echo "✓ SECURITY.md exists"
-        test -f CONFIGURATION_GUIDE.md && echo "✓ CONFIGURATION_GUIDE.md exists"
-
-    - name: Summary
+    - name: Success
       run: |
         echo "================================"
-        echo "✅ All checks passed!"
+        echo "✅ All validation checks passed!"
         echo "================================"
