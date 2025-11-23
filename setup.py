@@ -11,8 +11,8 @@ long_description = (this_directory / "README.md").read_text(encoding='utf-8')
 
 setup(
     name="instaharvest",
-    version="2.5.0",
-    author="Artem",
+    version="2.5.1",
+    author="Doston",
     author_email="kelajak054@gmail.com",
     description="Professional Instagram data collection toolkit with automation features",
     long_description=long_description,
@@ -49,11 +49,12 @@ setup(
             "mypy>=1.0.0",
         ],
     },
-    entry_points={
-        "console_scripts": [
-            "instaharvest=instaharvest.cli:main",  # Optional CLI
-        ],
-    },
+    # CLI not implemented yet - removed to prevent installation errors
+    # entry_points={
+    #     "console_scripts": [
+    #         "instaharvest=instaharvest.cli:main",
+    #     ],
+    # },
     keywords=[
         "instagram",
         "scraper",

@@ -10,8 +10,8 @@ This folder contains all example scripts and usage demonstrations for InstaHarve
 examples/
 ├── save_session.py             # Create Instagram session (REQUIRED FIRST)
 ├── all_in_one.py               # Complete demo with ALL features
-├── example_custom_config.py    # Configuration customization examples
-└── unfollow_fixed.py           # Standalone unfollow script
+├── main_advanced.py            # Production scraping automation
+└── example_custom_config.py    # Configuration customization examples
 ```
 
 **Note:** All operations (follow, unfollow, messaging, collect followers/following, batch operations, etc.) are demonstrated in `all_in_one.py`. It's a complete interactive menu showing all library features.
@@ -46,8 +46,6 @@ This interactive menu demonstrates ALL library features:
 python example_custom_config.py  # See configuration examples
 ```
 
-```
-
 ---
 
 ## 📖 Library Usage Examples
@@ -56,8 +54,10 @@ python example_custom_config.py  # See configuration examples
 
 ```python
 from instaharvest import FollowManager
+from instaharvest.config import ScraperConfig
 
-manager = FollowManager()
+config = ScraperConfig()
+manager = FollowManager(config=config)
 session_data = manager.load_session()
 manager.setup_browser(session_data)
 
@@ -71,8 +71,10 @@ manager.close()
 
 ```python
 from instaharvest import MessageManager
+from instaharvest.config import ScraperConfig
 
-manager = MessageManager()
+config = ScraperConfig()
+manager = MessageManager(config=config)
 session_data = manager.load_session()
 manager.setup_browser(session_data)
 
@@ -86,8 +88,10 @@ manager.close()
 
 ```python
 from instaharvest import FollowersCollector
+from instaharvest.config import ScraperConfig
 
-collector = FollowersCollector()
+config = ScraperConfig()
+collector = FollowersCollector(config=config)
 session_data = collector.load_session()
 collector.setup_browser(session_data)
 
@@ -102,19 +106,24 @@ collector.close()
 
 ```python
 from instaharvest import SharedBrowser
+from instaharvest.config import ScraperConfig
+
+# Create config
+config = ScraperConfig()
 
 # Opens browser once, reuses for all operations
-with SharedBrowser() as browser:
+with SharedBrowser(config=config) as browser:
     # Follow
     result = browser.follow("user1")
-    
+
     # Send message
     result = browser.send_message("user2", "Hello!")
-    
+
     # Get followers
     followers = browser.get_followers("user3", limit=50)
-    
+
     # Browser closes automatically
+```
 
 ## 🎯 Usage Guide
 
@@ -151,7 +160,6 @@ Use the library directly in your Python scripts (see examples above).
    python examples/all_in_one.py
    ```
 
-   ```
 ---
 
 ## 📚 Related Documentation

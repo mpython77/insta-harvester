@@ -14,6 +14,7 @@ Usage:
 """
 
 from instaharvest import SharedBrowser
+from instaharvest.config import ScraperConfig
 
 
 def main():
@@ -25,9 +26,19 @@ def main():
     print("This script uses a SINGLE browser for all operations!")
     print("No need to reopen browser for each action.\n")
 
-    # Use SharedBrowser context manager
+    # Create config for better reliability
+    config = ScraperConfig(
+        headless=False,
+        log_level='INFO',  # Use INFO for cleaner output (change to DEBUG for troubleshooting)
+        log_to_console=True,
+        # Slightly longer delays for reliability
+        popup_open_delay=3.0,  # Wait 3s for popup (default: 2.5s)
+        button_click_delay=3.0,  # Wait 3s after clicks (default: 2.5s)
+    )
+
+    # Use SharedBrowser context manager with config
     # Browser will open once and close automatically at the end
-    with SharedBrowser() as browser:
+    with SharedBrowser(config=config) as browser:
         print("✅ Browser opened and session loaded!\n")
 
         while True:

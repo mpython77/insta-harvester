@@ -18,10 +18,10 @@ def save_session():
     config = ScraperConfig(headless=False)
 
     with sync_playwright() as p:
-        # Launch browser (use real Chrome)
+        # Launch browser using config settings
         browser = p.chromium.launch(
             channel='chrome',  # Use real Chrome
-            headless=False
+            headless=config.headless  # Use config value
         )
 
         # Create context using config settings

@@ -118,17 +118,24 @@ This will:
 ### Step 4: Test Your Setup
 
 ```bash
-# Try following a user
-python examples/follow_user.py
+# First, create your Instagram session (required!)
+python examples/save_session.py
 
-# Try collecting followers
-python examples/get_followers.py
-
-# Try the all-in-one demo
+# Try the all-in-one interactive demo (recommended for learning)
 python examples/all_in_one.py
+
+# Or try production scraping
+python examples/main_advanced.py
 ```
 
 ---
+
+
+> **⚠️ IMPORTANT: Always Use ScraperConfig!**
+> All examples below use `ScraperConfig()` for proper timing and reliability.
+> Even when using default settings, explicitly creating config is **best practice**.
+> This prevents timing issues with popups, buttons, and rate limits.
+> See [Configuration Guide](CONFIGURATION_GUIDE.md) for customization options.
 
 ## 📖 Quick Start Examples
 
@@ -136,9 +143,13 @@ python examples/all_in_one.py
 
 ```python
 from instaharvest import FollowManager
+from instaharvest.config import ScraperConfig
 
-# Create manager
-manager = FollowManager()
+# Create config (customize if needed)
+config = ScraperConfig()
+
+# Create manager with config
+manager = FollowManager(config=config)
 
 # Load session
 session_data = manager.load_session()
@@ -156,8 +167,11 @@ manager.close()
 
 ```python
 from instaharvest import MessageManager
+from instaharvest.config import ScraperConfig
 
-manager = MessageManager()
+# Create config
+config = ScraperConfig()
+manager = MessageManager(config=config)
 session_data = manager.load_session()
 manager.setup_browser(session_data)
 
@@ -172,8 +186,11 @@ manager.close()
 
 ```python
 from instaharvest import FollowersCollector
+from instaharvest.config import ScraperConfig
 
-collector = FollowersCollector()
+# Create config
+config = ScraperConfig()
+collector = FollowersCollector(config=config)
 session_data = collector.load_session()
 collector.setup_browser(session_data)
 
@@ -188,9 +205,13 @@ collector.close()
 
 ```python
 from instaharvest import SharedBrowser
+from instaharvest.config import ScraperConfig
+
+# Create config for better reliability
+config = ScraperConfig()
 
 # One browser for everything!
-with SharedBrowser() as browser:
+with SharedBrowser(config=config) as browser:
     # Follow users
     browser.follow("user1")
     browser.follow("user2")
@@ -202,9 +223,6 @@ with SharedBrowser() as browser:
     followers = browser.get_followers("my_account", limit=50)
     print(f"Followers: {len(followers)}")
 ```
-
----
-
 
 ---
 
@@ -251,8 +269,10 @@ Shows how to customize configuration (delays, viewport, etc.).
 
 ```python
 from instaharvest import ProfileScraper
+from instaharvest.config import ScraperConfig
 
-scraper = ProfileScraper()
+config = ScraperConfig()
+scraper = ProfileScraper(config=config)
 session_data = scraper.load_session()
 scraper.setup_browser(session_data)
 
@@ -268,8 +288,11 @@ scraper.close()
 
 ```python
 from instaharvest import FollowersCollector
+from instaharvest.config import ScraperConfig
 
-collector = FollowersCollector()
+# Create config
+config = ScraperConfig()
+collector = FollowersCollector(config=config)
 session_data = collector.load_session()
 collector.setup_browser(session_data)
 
@@ -287,8 +310,10 @@ collector.close()
 
 ```python
 from instaharvest import FollowManager
+from instaharvest.config import ScraperConfig
 
-manager = FollowManager()
+config = ScraperConfig()
+manager = FollowManager(config=config)
 session_data = manager.load_session()
 manager.setup_browser(session_data)
 
@@ -310,8 +335,10 @@ manager.close()
 
 ```python
 from instaharvest import MessageManager
+from instaharvest.config import ScraperConfig
 
-messenger = MessageManager()
+config = ScraperConfig()
+messenger = MessageManager(config=config)
 session_data = messenger.load_session()
 messenger.setup_browser(session_data)
 
@@ -331,8 +358,12 @@ messenger.close()
 
 ```python
 from instaharvest import SharedBrowser
+from instaharvest.config import ScraperConfig
 
-with SharedBrowser() as browser:
+# Create config
+config = ScraperConfig()
+
+with SharedBrowser(config=config) as browser:
     # All operations use the same browser instance
     browser.follow('user1')
     browser.send_message('user1', 'Hello!')
@@ -365,8 +396,10 @@ print(f"Scraped {len(results['posts_data'])} posts")
 
 ```python
 from instaharvest import PostDataScraper
+from instaharvest.config import ScraperConfig
 
-scraper = PostDataScraper()
+config = ScraperConfig()
+scraper = PostDataScraper(config=config)
 session_data = scraper.load_session()
 scraper.setup_browser(session_data)
 
@@ -385,8 +418,12 @@ scraper.close()
 
 ```python
 from instaharvest import SharedBrowser
+from instaharvest.config import ScraperConfig
 
-with SharedBrowser() as browser:
+# Create config
+config = ScraperConfig()
+
+with SharedBrowser(config=config) as browser:
     # 1. Get profile stats
     profile = browser.scrape_profile('target_user')
     print(f"Target has {profile['followers']} followers")
@@ -527,7 +564,7 @@ cd examples
 python save_session.py
 
 # Then run your script
-python follow_user.py
+python all_in_one.py  # or any other script
 ```
 
 #### Error: "Login required" or "Session expired"
@@ -675,6 +712,6 @@ Built with:
 
 ---
 
-**Made with ❤️ by Artem**
+**Made with ❤️ by Doston**
 
 *Happy Harvesting! 🌾*
