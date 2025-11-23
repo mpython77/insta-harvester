@@ -5,6 +5,7 @@ Uses Playwright to manually login to Instagram and save the session.
 
 import json
 from playwright.sync_api import sync_playwright
+from instaharvest.config import ScraperConfig
 
 SESSION_FILE = 'instagram_session.json'
 
@@ -13,18 +14,20 @@ def save_session():
     """Save Instagram session"""
     print('🚀 Instagram session save utility started...')
 
+    # Use config for consistent settings
+    config = ScraperConfig(headless=False)
+
     with sync_playwright() as p:
         # Launch browser (use real Chrome)
         browser = p.chromium.launch(
             channel='chrome',  # Use real Chrome
-            headless=False,
-            args=['--start-maximized']
+            headless=False
         )
 
-        # Create context
+        # Create context using config settings
         context = browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            viewport={'width': config.viewport_width, 'height': config.viewport_height},
+            user_agent=config.user_agent
         )
 
         page = context.new_page()

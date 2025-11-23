@@ -17,7 +17,8 @@ def example_custom_delays():
         # headless=False,  # Uncomment to see the browser window
 
         # Custom delays for slow internet
-        sleep_time=5.0,  # Base sleep time: 5 seconds (default: 2.5)
+        page_load_delay=5.0,  # Wait after page loads: 5 seconds (default: 2.0)
+        button_click_delay=5.0,  # Wait after button clicks: 5 seconds (default: 2.5)
         action_delay_min=3.0,  # Minimum delay before actions: 3 seconds (default: 2.0)
         action_delay_max=5.0,  # Maximum delay before actions: 5 seconds (default: 3.5)
 
@@ -47,7 +48,8 @@ def example_fast_internet():
 
     config = ScraperConfig(
         headless=True,
-        sleep_time=1.5,  # Faster base sleep time
+        page_load_delay=1.5,  # Faster page load wait
+        button_click_delay=1.5,  # Faster button click wait
         action_delay_min=1.0,  # Faster minimum delay
         action_delay_max=2.0,  # Faster maximum delay
     )
@@ -91,7 +93,8 @@ def example_default_config():
 
     # Default config values:
     # - headless=True (browser runs in background)
-    # - sleep_time=2.5 seconds
+    # - page_load_delay=2.0 seconds
+    # - button_click_delay=2.5 seconds
     # - action_delay_min=2.0 seconds
     # - action_delay_max=3.5 seconds
     # - scroll_delay_min=1.5 seconds

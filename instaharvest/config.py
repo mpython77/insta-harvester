@@ -109,7 +109,6 @@ class ScraperConfig:
 
     # ==================== SCROLL SETTINGS ====================
     max_scroll_attempts: int = 1000
-    no_new_content_threshold: int = 3
 
     # ==================== RETRY SETTINGS ====================
     max_retries: int = 3
@@ -121,7 +120,3 @@ class ScraperConfig:
 
     # ==================== OUTPUT ====================
     links_file: str = 'post_links.txt'
-
-    # ==================== DEPRECATED (kept for backwards compatibility) ====================
-    # Use specific delays above instead
-    sleep_time: float = 2.5  # Deprecated: use button_click_delay instead
