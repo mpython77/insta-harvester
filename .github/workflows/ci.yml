@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, claude/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build setuptools wheel
+
+    - name: Check package version
+      run: |
+        python -c "import re; content = open('setup.py').read(); version = re.search(r'version=\"([^\"]+)\"', content).group(1); print(f'Version: {version}')"
+
+    - name: Build package
+      run: |
+        python -m build
+
+    - name: Verify build artifacts
+      run: |
+        ls -lh dist/
+
+  syntax-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Check Python syntax
+      run: |
+        python -m py_compile setup.py
+        python -m py_compile instaharvest/__init__.py
+
+    - name: Verify version consistency
+      run: |
+        SETUP_VERSION=$(python -c "import re; content = open('setup.py').read(); print(re.search(r'version=\"([^\"]+)\"', content).group(1))")
+        INIT_VERSION=$(python -c "import re; content = open('instaharvest/__init__.py').read(); print(re.search(r\"__version__ = '([^']+)'\", content).group(1))")
+        echo "setup.py version: $SETUP_VERSION"
+        echo "__init__.py version: $INIT_VERSION"
+        if [ "$SETUP_VERSION" != "$INIT_VERSION" ]; then
+          echo "ERROR: Version mismatch!"
+          exit 1
+        fi
+        echo "✓ Versions match: $SETUP_VERSION"
