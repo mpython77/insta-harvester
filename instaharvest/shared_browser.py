@@ -110,8 +110,7 @@ class SharedBrowser:
         # Launch browser
         self.browser = self.playwright.chromium.launch(
             channel='chrome',
-            headless=headless,
-            args=['--start-maximized'] if not headless else []
+            headless=headless
         )
         self.logger.info(f"🌐 Browser launched (headless={headless})")
 

@@ -32,8 +32,7 @@ def unfollow_user(username: str, session_file: str = "instagram_session.json", c
         # Launch browser
         print("🌐 Launching browser...")
         browser = p.chromium.launch(
-            headless=config.headless,
-            args=['--start-maximized']
+            headless=config.headless
         )
 
         # Create context with session
