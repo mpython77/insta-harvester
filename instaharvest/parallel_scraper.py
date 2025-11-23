@@ -163,7 +163,13 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
         viewport_width=config_dict['viewport_width'],
         viewport_height=config_dict['viewport_height'],
         user_agent=config_dict['user_agent'],
-        default_timeout=config_dict['default_timeout']
+        default_timeout=config_dict['default_timeout'],
+        popup_animation_delay=config_dict['popup_animation_delay'],
+        popup_content_load_delay=config_dict['popup_content_load_delay'],
+        error_recovery_delay_min=config_dict['error_recovery_delay_min'],
+        error_recovery_delay_max=config_dict['error_recovery_delay_max'],
+        post_open_delay=config_dict['post_open_delay'],
+        ui_element_load_delay=config_dict['ui_element_load_delay']
     )
 
     batch_results = []
@@ -592,7 +598,13 @@ class ParallelPostDataScraper:
             'viewport_width': self.config.viewport_width,
             'viewport_height': self.config.viewport_height,
             'user_agent': self.config.user_agent,
-            'default_timeout': self.config.default_timeout
+            'default_timeout': self.config.default_timeout,
+            'popup_animation_delay': self.config.popup_animation_delay,
+            'popup_content_load_delay': self.config.popup_content_load_delay,
+            'error_recovery_delay_min': self.config.error_recovery_delay_min,
+            'error_recovery_delay_max': self.config.error_recovery_delay_max,
+            'post_open_delay': self.config.post_open_delay,
+            'ui_element_load_delay': self.config.ui_element_load_delay
         }
 
         # Create Manager Queue for real-time communication
