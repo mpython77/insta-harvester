@@ -7,26 +7,32 @@ Works with Instagram's div[role='button'] structure
 import time
 import random
 from playwright.sync_api import sync_playwright
+from instaharvest.config import ScraperConfig
 
 
-def unfollow_user(username: str, session_file: str = "instagram_session.json"):
+def unfollow_user(username: str, session_file: str = "instagram_session.json", config: ScraperConfig = None):
     """
     Unfollow an Instagram user using proven selectors
 
     Args:
         username: Instagram username to unfollow
         session_file: Path to session JSON file
+        config: Optional ScraperConfig for delays and settings
 
     Returns:
         bool: True if successful, False otherwise
     """
+    # Use provided config or create default
+    if config is None:
+        config = ScraperConfig(headless=False)  # Show browser by default for standalone script
+
     print(f"🔄 Starting unfollow process for @{username}")
 
     with sync_playwright() as p:
         # Launch browser
         print("🌐 Launching browser...")
         browser = p.chromium.launch(
-            headless=False,  # Show browser for debugging
+            headless=config.headless,
             args=['--start-maximized']
         )
 
@@ -38,7 +44,7 @@ def unfollow_user(username: str, session_file: str = "instagram_session.json"):
                 session_data = json.load(f)
 
             context = browser.new_context(
-                viewport={'width': 1280, 'height': 720},
+                viewport={'width': config.viewport_width, 'height': config.viewport_height},
                 storage_state=session_data
             )
         except FileNotFoundError:
@@ -54,7 +60,7 @@ def unfollow_user(username: str, session_file: str = "instagram_session.json"):
             url = f"https://www.instagram.com/{username}/"
             print(f"📍 Navigating to {url}")
             page.goto(url, wait_until="domcontentloaded")
-            time.sleep(3)  # Wait for page to load
+            time.sleep(config.page_load_delay)  # Wait for page to load
 
             print("✓ Page loaded")
 
@@ -91,7 +97,7 @@ def unfollow_user(username: str, session_file: str = "instagram_session.json"):
 
             # Wait for popup to appear
             print("  ⏳ Waiting for popup to appear...")
-            time.sleep(4)  # Important: wait for popup animation
+            time.sleep(config.popup_open_delay)  # Wait for popup animation
             print("  ✓ Popup should be open now")
 
             # Step 2: Find and click "Unfollow" confirmation button
@@ -173,18 +179,18 @@ def unfollow_user(username: str, session_file: str = "instagram_session.json"):
 
             # Click Unfollow button
             print("  👆 Clicking Unfollow button...")
-            time.sleep(random.uniform(1, 2))  # Human-like delay
+            time.sleep(random.uniform(config.action_delay_min, config.action_delay_max))  # Human-like delay
             unfollow_button.click()
 
             # Wait for action to complete
             print("  ⏳ Waiting for unfollow to complete...")
-            time.sleep(3)
+            time.sleep(config.button_click_delay)
 
             print(f"\n✅ Successfully unfollowed @{username}!")
 
-            # Keep browser open for a moment
-            print("\n⏸️  Keeping browser open for 5 seconds...")
-            time.sleep(5)
+            # Keep browser open for a moment (optional, can be configured)
+            print(f"\n⏸️  Keeping browser open for {config.page_stability_delay} seconds...")
+            time.sleep(config.page_stability_delay)
 
             context.close()
             browser.close()
