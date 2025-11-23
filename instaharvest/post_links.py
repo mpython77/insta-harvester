@@ -112,11 +112,12 @@ class PostLinksScraper(BaseScraper):
     def _extract_current_links(self) -> List[Dict[str, str]]:
         """
         Extract POST links from div._ac7v containers (NEW INSTAGRAM STRUCTURE)
+        OPTIMIZED: Fast extraction matching ReelLinksScraper approach
 
         Instagram structure:
-        - div._ac7v.x1ty9z65.xzboxd6 contains 3 posts/reels
-        - Each container has 3x <a href="/username/p/ABC/" or href="/username/reel/XYZ/">
-        - We only collect /p/ links (posts), skip /reel/
+        - div._ac7v.x1ty9z65.xzboxd6 contains 3-4 posts/reels per row
+        - Each container has 3-4x <a href="/username/p/ABC/" or href="/username/reel/XYZ/">
+        - We ONLY collect /p/ links (posts), skip /reel/
 
         Returns:
             List of dictionaries with 'url' and 'type' keys
@@ -127,7 +128,6 @@ class PostLinksScraper(BaseScraper):
 
             # Find all post/reel grid containers
             containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
-            self.logger.debug(f"Found {len(containers)} containers on page")
 
             for container in containers:
                 try:
@@ -172,6 +172,7 @@ class PostLinksScraper(BaseScraper):
     def _scroll_and_collect(self, target_count: int) -> List[Dict[str, str]]:
         """
         Scroll through profile and collect all links (IMPROVED for Instagram lazy loading)
+        OPTIMIZED: Matching ReelLinksScraper's proven approach
 
         Args:
             target_count: Target number of links
@@ -184,7 +185,7 @@ class PostLinksScraper(BaseScraper):
         all_links: Dict[str, str] = {}  # url -> type mapping
         scroll_attempts = 0
         no_new_links_count = 0
-        MAX_NO_NEW = 5  # Increased from 3 to 5 for better coverage
+        MAX_NO_NEW = 7  # Increased to 7 for better coverage (Instagram sometimes slow)
 
         while True:
             # Extract current links
@@ -209,7 +210,9 @@ class PostLinksScraper(BaseScraper):
             # Check if no new links found
             if new_count == previous_count:
                 no_new_links_count += 1
+                self.logger.info(f"⚠️ No new links found ({no_new_links_count}/{MAX_NO_NEW})")
             else:
+                # Reset counter if new links found
                 no_new_links_count = 0
 
             # Stopping conditions
@@ -224,13 +227,11 @@ class PostLinksScraper(BaseScraper):
                 )
                 break
 
-            if scroll_attempts >= self.config.max_scroll_attempts:
-                self.logger.warning(
-                    f"Max scroll attempts ({self.config.max_scroll_attempts}) reached"
-                )
+            if scroll_attempts >= 150:  # Increased limit matching ReelLinksScraper
+                self.logger.warning(f"Max scroll attempts (150) reached")
                 break
 
-            # IMPROVED: Scroll to bottom and wait for lazy loading
+            # IMPROVED: Fast scroll matching ReelLinksScraper
             self._aggressive_scroll()
 
             scroll_attempts += 1
@@ -241,35 +242,28 @@ class PostLinksScraper(BaseScraper):
 
     def _aggressive_scroll(self) -> None:
         """
-        Multi-stage scroll to ensure Instagram loads ALL containers
+        Fast scroll optimized for Instagram's div._ac7v container loading
+        SIMPLIFIED: Same approach as ReelLinksScraper for better performance
 
-        Instagram doesn't always load new containers on first scroll attempt.
-        We need to scroll multiple times and wait longer.
+        As we scroll, Instagram loads new div._ac7v containers (each with 3-4 posts)
         """
         try:
-            # STAGE 1: Scroll to last container
+            # Scroll to last container to trigger loading of next batch
             containers = self.page.locator('div._ac7v.x1ty9z65.xzboxd6').all()
 
             if len(containers) > 0:
+                # Scroll last container into view to trigger lazy loading
                 last_container = containers[-1]
                 last_container.scroll_into_view_if_needed()
-                time.sleep(self.config.scroll_post_delay)
-
-            # STAGE 2: Scroll to actual page bottom to trigger more loading
+                time.sleep(self.config.scroll_content_load_delay)
+            else:
+                # Fallback: scroll to bottom
+                self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                time.sleep(self.config.ui_stability_delay)
+        except:
+            # Fallback: scroll to bottom
             self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-            time.sleep(self.config.scroll_lazy_load_delay)
-
-            # STAGE 3: Small bounce to ensure detection
-            self.page.evaluate('window.scrollBy(0, -100)')
-            time.sleep(self.config.ui_micro_delay)
-            self.page.evaluate('window.scrollBy(0, 150)')
-            time.sleep(self.config.scroll_post_delay)
-
-        except Exception as e:
-            self.logger.debug(f"Scroll error: {e}")
-            # Fallback: just scroll to bottom
-            self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-            time.sleep(self.config.scroll_lazy_load_delay)
+            time.sleep(self.config.ui_stability_delay)
 
     def _save_links(self, links: List[Dict[str, str]]) -> None:
         """
