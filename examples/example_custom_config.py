@@ -91,6 +91,7 @@ def example_headless_mode():
 def example_default_config():
     """Example: Using default configuration"""
 
+    # Create default config explicitly (best practice!)
     # Default config values:
     # - headless=True (browser runs in background)
     # - page_load_delay=2.0 seconds
@@ -100,7 +101,8 @@ def example_default_config():
     # - scroll_delay_min=1.5 seconds
     # - scroll_delay_max=2.5 seconds
 
-    manager = FollowManager()  # Uses default config
+    config = ScraperConfig()  # Create explicit config
+    manager = FollowManager(config=config)  # Pass config to manager
 
     try:
         session_data = manager.load_session()

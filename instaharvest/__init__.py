@@ -37,22 +37,28 @@ Quick Start:
 
     # Follow/Unfollow management
     from instaharvest import FollowManager
+    from instaharvest.config import ScraperConfig
 
-    manager = FollowManager()
+    config = ScraperConfig()
+    manager = FollowManager(config=config)
     manager.setup_browser(session_data)
     result = manager.follow('username')
 
     # Direct messaging
     from instaharvest import MessageManager
+    from instaharvest.config import ScraperConfig
 
-    messenger = MessageManager()
+    config = ScraperConfig()
+    messenger = MessageManager(config=config)
     messenger.setup_browser(session_data)
     result = messenger.send_message('username', 'Hello!')
 
-    # Shared browser - all operations in one browser!
+    # Shared browser - all operations in one browser! (RECOMMENDED)
     from instaharvest import SharedBrowser
+    from instaharvest.config import ScraperConfig
 
-    with SharedBrowser() as browser:
+    config = ScraperConfig()
+    with SharedBrowser(config=config) as browser:
         browser.follow('user1')
         browser.send_message('user1', 'Hello!')
         followers = browser.get_followers('user1', limit=100)
@@ -60,8 +66,10 @@ Quick Start:
 
     # Collect followers with real-time output
     from instaharvest import FollowersCollector
+    from instaharvest.config import ScraperConfig
 
-    collector = FollowersCollector()
+    config = ScraperConfig()
+    collector = FollowersCollector(config=config)
     collector.setup_browser(session_data)
     followers = collector.get_followers('username', limit=100)
 
