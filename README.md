@@ -1,10 +1,20 @@
 # InstaHarvest 🌾
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
+[![PyPI version](https://img.shields.io/pypi/v/instaharvest)](https://pypi.org/project/instaharvest/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Code Style](https://img.shields.io/badge/code%20style-black-black)](https://github.com/psf/black)
+[![Downloads](https://img.shields.io/pypi/dm/instaharvest)](https://pypi.org/project/instaharvest/)
+[![GitHub issues](https://img.shields.io/github/issues/mpython77/insta-harvester)](https://github.com/mpython77/insta-harvester/issues)
+[![GitHub stars](https://img.shields.io/github/stars/mpython77/insta-harvester)](https://github.com/mpython77/insta-harvester/stargazers)
 
 **Professional Instagram Data Collection Toolkit** - A powerful and efficient library for Instagram automation, data collection, and analytics.
+
+> 📖 [Documentation](https://github.com/mpython77/insta-harvester#readme) |
+> 🐛 [Report Bug](https://github.com/mpython77/insta-harvester/issues) |
+> 💡 [Request Feature](https://github.com/mpython77/insta-harvester/issues) |
+> 🤝 [Contributing](CONTRIBUTING.md) |
+> 📋 [Changelog](CHANGELOG.md)
 
 ---
 
@@ -656,6 +666,8 @@ manager = FollowManager(config=config)
    - `CONFIGURATION_EXPLAINED.md` - Configuration help with examples
    - `CONFIGURATION_GUIDE.md` - Technical reference
    - `examples/README.md` - Example scripts guide
+   - `CHANGELOG.md` - Version history and changes
+   - `CONTRIBUTING.md` - How to contribute
 
 2. **Common issues:**
    - Unfollow errors → Increase `popup_open_delay`
@@ -664,6 +676,7 @@ manager = FollowManager(config=config)
 
 3. **Report bugs:**
    - GitHub Issues: https://github.com/mpython77/insta-harvester/issues
+   - See `CONTRIBUTING.md` for bug report guidelines
 
 4. **Email support:**
    - kelajak054@gmail.com
