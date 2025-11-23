@@ -74,7 +74,7 @@ Quick Start:
     followers = collector.get_followers('username', limit=100)
 
 Author: Doston
-Version: 2.5.0
+Version: 2.5.1
 License: MIT
 """
 
@@ -102,7 +102,7 @@ from .followers import FollowersCollector
 from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
 
-__version__ = '2.5.0'
+__version__ = '2.5.1'
 __author__ = 'Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
