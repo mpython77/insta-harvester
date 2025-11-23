@@ -73,7 +73,7 @@ Quick Start:
     collector.setup_browser(session_data)
     followers = collector.get_followers('username', limit=100)
 
-Author: Artem
+Author: Doston
 Version: 2.5.0
 License: MIT
 """
@@ -103,7 +103,7 @@ from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
 
 __version__ = '2.5.0'
-__author__ = 'Artem'
+__author__ = 'Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
 

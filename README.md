@@ -712,6 +712,6 @@ Built with:
 
 ---
 
-**Made with ❤️ by Artem**
+**Made with ❤️ by Doston**
 
 *Happy Harvesting! 🌾*
