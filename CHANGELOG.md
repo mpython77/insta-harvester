@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.4] - 2025-11-23
+
+### Fixed
+- **CRITICAL BUG**: Fixed `NameError: name 'self' is not defined` in parallel scraper worker processes
+- Fixed incorrect `self.config` references in module-level functions (`_extract_reel_tags`, `_extract_tags_robust`, `_worker_scrape_batch`)
+- Added proper `config` parameter to helper functions used in multiprocessing workers
+- Extended `config_dict` serialization to include all necessary timing parameters:
+  - `popup_animation_delay`
+  - `popup_content_load_delay`
+  - `error_recovery_delay_min`
+  - `error_recovery_delay_max`
+  - `post_open_delay`
+  - `ui_element_load_delay`
+- Parallel scraping now works correctly without runtime errors
+
+### Technical Details
+- Worker functions in multiprocessing pool cannot access `self` since they run in separate processes
+- All helper functions now properly receive and use `config` parameter instead of `self.config`
+- This fix affects `parallel_scraper.py` lines 47, 48, 261, 329, 330
+
 ## [2.5.3] - 2024-11-23
 
 ### Added
