@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.4] - 2024-11-23
+
+### Fixed
+- **CRITICAL**: Fixed "name 'self' is not defined" error in parallel scraper
+- Fixed `_extract_reel_tags()` function - now correctly receives config parameter
+- Fixed `_extract_tags_robust()` function - now correctly receives config parameter
+- Fixed timing delays in worker functions to use passed config instead of self.config
+- Parallel scraping with multiple workers now works correctly without errors
+
 ## [2.5.3] - 2024-11-23
 
 ### Added
