@@ -122,8 +122,11 @@ python examples/all_in_one.py
 Currently, we use manual testing with example scripts. Automated tests are welcome contributions!
 
 ```bash
+# Test your changes with example scripts
+python examples/all_in_one.py
+
 # Test specific functionality
-python tests/test_unfollow_debug.py
+python examples/save_session.py
 ```
 
 ---

@@ -608,7 +608,7 @@ config = ScraperConfig(
 manager = FollowManager(config=config)
 ```
 
-See **CONFIGURATION_EXPLAINED.md** for detailed fixes.
+See **CONFIGURATION_GUIDE.md** for detailed configuration options.
 
 #### Error: "Could not follow @username"
 
@@ -663,8 +663,7 @@ manager = FollowManager(config=config)
 
 1. **Check documentation:**
    - `README.md` - Main guide (this file)
-   - `CONFIGURATION_EXPLAINED.md` - Configuration help with examples
-   - `CONFIGURATION_GUIDE.md` - Technical reference
+   - `CONFIGURATION_GUIDE.md` - Complete configuration reference
    - `examples/README.md` - Example scripts guide
    - `CHANGELOG.md` - Version history and changes
    - `CONTRIBUTING.md` - How to contribute
