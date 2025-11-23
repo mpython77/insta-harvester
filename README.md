@@ -117,6 +117,15 @@ playwright install chrome
 
 ### Step 3: Create Instagram Session (REQUIRED!)
 
+**Option A: Using Python (Recommended)** ⭐
+
+```python
+from instaharvest import save_session
+save_session()
+```
+
+**Option B: Using Example Script**
+
 ```bash
 # Navigate to examples directory
 cd examples
@@ -157,6 +166,27 @@ python examples/main_advanced.py
 > Even when using default settings, explicitly creating config is **best practice**.
 > This prevents timing issues with popups, buttons, and rate limits.
 > See [Configuration Guide](https://github.com/mpython77/insta-harvester/blob/main/CONFIGURATION_GUIDE.md) for customization options.
+
+## 🚀 First-Time Setup
+
+Before using any features, create an Instagram session (one-time setup):
+
+```python
+from instaharvest import save_session
+
+# Create session - this will open a browser
+save_session()
+
+# Follow the prompts:
+# 1. Browser will open automatically
+# 2. Login to Instagram manually
+# 3. Press ENTER in terminal when done
+# 4. Session saved to instagram_session.json ✅
+```
+
+That's it! Now you can use all library features. The session will be reused automatically.
+
+---
 
 ## 📖 Quick Start Examples
 
@@ -508,11 +538,22 @@ with SharedBrowser(config=config) as browser:
 
 **First-time setup** - Save your Instagram session:
 
+### Method 1: Using Library Function (Recommended) ⭐
+
+```python
+from instaharvest import save_session
+
+# Create session - opens browser for manual login
+save_session()
+```
+
+### Method 2: Using Example Script
+
 ```bash
 python examples/save_session.py
 ```
 
-This will:
+Both methods will:
 1. Open Chrome browser
 2. Let you log in to Instagram manually
 3. Save session to `instagram_session.json`

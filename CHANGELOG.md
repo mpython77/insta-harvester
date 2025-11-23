@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.3] - 2024-11-23
+
+### Added
+- **Session utilities module** (`instaharvest/session_utils.py`)
+- `save_session()` function - Create Instagram session from anywhere after pip install
+- `check_session_exists()` function - Check if session file exists
+- `load_session_data()` function - Load session data from file
+- `get_default_session_path()` function - Get standard session file location
+- Session management now built into the library (no need for external scripts)
+
+### Changed
+- Session saving is now part of the main library API
+- Users can now create sessions with: `from instaharvest import save_session; save_session()`
+- Session file defaults to current working directory for portability
+- Improved session setup documentation
+
+### Fixed
+- **CRITICAL**: Users installing via `pip install instaharvest` can now create sessions without cloning repository
+- Resolved issue where session creation required access to examples directory
+- Session utilities now accessible from any Python environment
+
 ## [2.5.2] - 2024-11-23
 
 ### Added
