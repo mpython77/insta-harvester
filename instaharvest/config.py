@@ -69,6 +69,19 @@ class ScraperConfig:
     scroll_content_load_delay: float = 0.8  # Wait for content after scroll
     scroll_lazy_load_delay: float = 1.5  # Wait for lazy-loaded content
 
+    # ==================== SCROLL BEHAVIOR SETTINGS ====================
+    # Container-based scrolling (for post/reel link collection)
+    scroll_container_wait_timeout: float = 5.0  # Max seconds to wait for new containers to load
+    scroll_container_check_interval: float = 0.5  # Check every 0.5s if containers loaded
+    scroll_container_stability_wait: float = 0.5  # Wait after containers load for stability
+    scroll_adaptive_offset_small: int = 2  # Offset for ≤10 containers (closer to end)
+    scroll_adaptive_offset_large: int = 5  # Offset for >10 containers (further from end)
+    scroll_adaptive_threshold: int = 10  # Container count threshold for offset switching
+    scroll_fallback_pixels: int = 600  # Fallback scroll distance in pixels
+    scroll_fallback_wait: float = 1.5  # Wait after fallback scroll
+    scroll_max_no_new_attempts: int = 7  # Max attempts with no new links before stopping
+    scroll_max_attempts_override: int = 150  # Override max_scroll_attempts for link collection
+
     # ==================== INPUT & TYPING DELAYS ====================
     input_focus_delay: float = 0.5  # Wait after clicking input field
     input_before_type_delay_min: float = 1.0  # Min delay before typing

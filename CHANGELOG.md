@@ -10,10 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **CRITICAL**: Fixed post link extraction stopping at ~46 posts (was collecting only 46/90 posts)
 - **CRITICAL**: Added intelligent waiting for Instagram's lazy-loaded containers
+- **CRITICAL**: Removed ALL hardcoded values - now fully configurable via config.py
 - Optimized `_aggressive_scroll()` in PostLinksScraper with smart container detection
 - Simplified 3-stage scroll to single-stage fast scroll for better Instagram container loading
-- Increased `MAX_NO_NEW` from 5 to 7 attempts for better coverage of slow-loading content
-- Increased max scroll attempts from config limit to 150 (matching ReelLinksScraper)
 
 ### Changed
 - `_aggressive_scroll()` now monitors container count and waits up to 5 seconds for new containers to load
@@ -22,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Better handling of slow internet: won't move to next scroll until containers load or 5s timeout
 - Fallback: Medium 600px scroll if no new containers appear after 5s (increased from 300px)
 - **INFO-level logging**: Scroll progress now visible in INFO logs (not just DEBUG)
+- **ALL values now in config.py**: No more hardcoded numbers in code!
 
 ### Technical Details
 - PostLinksScraper now uses same scrolling strategy as ReelLinksScraper (which collects all reels successfully)
@@ -30,9 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **NEW**: Adaptive timing - fast networks load in 0.5-1s, slow networks get full 5s to load
 - **NEW**: Adaptive gradual scrolling - offset = 5 for >10 containers, offset = 2 for ≤10 containers
 - **NEW**: Larger fallback scroll - 600px instead of 300px for better unsticking
+- **NEW**: 10 new config parameters added to config.py (scroll behavior section):
+  * `scroll_container_wait_timeout` (5.0s)
+  * `scroll_container_check_interval` (0.5s)
+  * `scroll_container_stability_wait` (0.5s)
+  * `scroll_adaptive_offset_small` (2)
+  * `scroll_adaptive_offset_large` (5)
+  * `scroll_adaptive_threshold` (10)
+  * `scroll_fallback_pixels` (600)
+  * `scroll_fallback_wait` (1.5s)
+  * `scroll_max_no_new_attempts` (7)
+  * `scroll_max_attempts_override` (150)
 - Prevents overshooting: Even smaller scroll distances help Instagram load ALL content
 - More patient waiting for slow network/lazy loading (7 attempts vs 5)
 - Enhanced logging: Container positions and scroll actions visible in INFO level
+- **ZERO hardcoded values**: All magic numbers moved to config for easy tuning
 
 ## [2.5.4] - 2025-11-23
 

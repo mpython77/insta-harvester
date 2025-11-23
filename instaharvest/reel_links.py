@@ -158,7 +158,7 @@ class ReelLinksScraper(BaseScraper):
         all_reel_links: Set[str] = set()
         scroll_attempts = 0
         no_new_reels_count = 0
-        MAX_NO_NEW_REELS = 5  # Increased from 3 to 5 for better coverage
+        MAX_NO_NEW_REELS = self.config.scroll_max_no_new_attempts
 
         while True:
             # Extract current reel links
@@ -194,9 +194,9 @@ class ReelLinksScraper(BaseScraper):
                 break
 
             # Safety: Max scroll attempts
-            if scroll_attempts >= 150:  # Increased limit for better coverage
+            if scroll_attempts >= self.config.scroll_max_attempts_override:
                 self.logger.warning(
-                    f"Max scroll attempts (150) reached"
+                    f"Max scroll attempts ({self.config.scroll_max_attempts_override}) reached"
                 )
                 break
 
