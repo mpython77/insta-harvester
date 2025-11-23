@@ -254,15 +254,21 @@ class PostLinksScraper(BaseScraper):
             containers_before = len(containers)
 
             if len(containers) > 0:
-                # GRADUAL SCROLL: Scroll to 3rd container from end (not the very last)
-                # This prevents jumping too far and missing intermediate content
-                scroll_target_index = max(0, len(containers) - 3)
+                # ULTRA GRADUAL SCROLL: Scroll to 5-6 containers from end
+                # Even smaller steps to ensure Instagram loads all content
+                # Adaptive: fewer containers = closer to end, more containers = further back
+                if len(containers) <= 10:
+                    offset = 2  # If few containers, go closer to end
+                else:
+                    offset = 5  # If many containers, stay further back
+
+                scroll_target_index = max(0, len(containers) - offset)
                 target_container = containers[scroll_target_index]
 
-                # Scroll to target container (gradual, not to the very end)
+                # Scroll to target container (ultra gradual)
                 target_container.scroll_into_view_if_needed()
 
-                self.logger.debug(f"Scrolled to container {scroll_target_index + 1}/{len(containers)} (3 from end)")
+                self.logger.info(f"📜 Scrolled to container {scroll_target_index + 1}/{len(containers)} ({offset} from end)")
 
                 # INTELLIGENT WAIT: Keep checking until new containers load (max 5 seconds)
                 wait_time = 0
@@ -282,17 +288,17 @@ class PostLinksScraper(BaseScraper):
                         return
 
                 # If no new containers after max_wait, scroll a bit more
-                self.logger.debug(f"No new containers after {max_wait}s, trying small scroll")
-                self.page.evaluate('window.scrollBy(0, 300)')  # Small 300px scroll
-                time.sleep(1.0)
+                self.logger.info(f"⚠️ No new containers after {max_wait}s, trying medium scroll")
+                self.page.evaluate('window.scrollBy(0, 600)')  # Medium 600px scroll
+                time.sleep(1.5)
             else:
-                # Fallback: small scroll
-                self.page.evaluate('window.scrollBy(0, 300)')
-                time.sleep(1.0)
+                # Fallback: medium scroll
+                self.page.evaluate('window.scrollBy(0, 600)')
+                time.sleep(1.5)
         except:
-            # Fallback: small scroll
-            self.page.evaluate('window.scrollBy(0, 300)')
-            time.sleep(1.0)
+            # Fallback: medium scroll
+            self.page.evaluate('window.scrollBy(0, 600)')
+            time.sleep(1.5)
 
     def _save_links(self, links: List[Dict[str, str]]) -> None:
         """
