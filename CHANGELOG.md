@@ -8,16 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.1] - 2024-11-23
 
 ### Added
-- Comprehensive PyPI upload documentation (maintainer-only)
+- CHANGELOG.md with complete version history
+- CONTRIBUTING.md with contribution guidelines
 - SECURITY.md with proper vulnerability reporting process
-- tests/ directory for organized test scripts
+- Professional badges and quick navigation in README.md
 - ScraperConfig examples in all documentation
+- Git tag v2.5.1 for version tracking
 
 ### Changed
 - **BREAKING**: Updated author name from "Artem" to "Doston"
 - Improved all README.md examples to consistently use ScraperConfig
 - Enhanced markdown formatting across all documentation files
-- Moved test files to dedicated tests/ directory for better organization
+- Consolidated configuration documentation into single CONFIGURATION_GUIDE.md
 
 ### Fixed
 - **CRITICAL**: Fixed unfollow popup timing issue in all_in_one.py
@@ -31,7 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - INSTALL_UZ.md (contained outdated paths and wrong repository names)
-- PYPI_UPLOAD_GUIDE.md (maintainer-only, moved to separate documentation)
+- PYPI_UPLOAD_GUIDE.md (maintainer-only documentation)
+- CONFIGURATION_EXPLAINED.md (consolidated into CONFIGURATION_GUIDE.md)
+- tests/ directory (not needed for end users)
 - Redundant horizontal rules in README.md
 - Trailing whitespace from documentation files
 
@@ -40,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated SECURITY.md with actual project information and contact details
 - Improved examples/README.md with proper ScraperConfig usage patterns
 - Added prominent warning about always using ScraperConfig for reliability
+- Consolidated all configuration documentation into single comprehensive guide
 
 ## [2.5.0] - 2024-11-22
 
