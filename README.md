@@ -36,7 +36,8 @@
 
 ## 🚀 Installation
 
-### Method 1: Install from PyPI (Recommended)
+<details>
+<summary><b>📦 Method 1: Install from PyPI (Recommended)</b> - Click to expand</summary>
 
 ```bash
 # Install the package
@@ -46,7 +47,10 @@ pip install instaharvest
 playwright install chrome
 ```
 
-### Method 2: Install from GitHub (Latest Development Version)
+</details>
+
+<details>
+<summary><b>🔧 Method 2: Install from GitHub (Latest Development Version)</b> - Click to expand</summary>
 
 #### Step 1: Clone the Repository
 ```bash
@@ -78,9 +82,14 @@ cd /path/to/insta-harvester
 python examples/save_session.py
 ```
 
+</details>
+
 ---
 
 ## 🔧 Complete Setup Guide
+
+<details>
+<summary><b>📋 Step-by-Step Setup Instructions</b> - Click to expand</summary>
 
 ### Step 1: Verify Python Installation
 ```bash
@@ -138,6 +147,8 @@ python examples/all_in_one.py
 python examples/main_advanced.py
 ```
 
+</details>
+
 ---
 
 
@@ -149,7 +160,8 @@ python examples/main_advanced.py
 
 ## 📖 Quick Start Examples
 
-### Example 1: Follow a User
+<details>
+<summary><b>Example 1: Follow a User</b> - Click to expand</summary>
 
 ```python
 from instaharvest import FollowManager
@@ -173,7 +185,10 @@ print(result)  # {'success': True, 'status': 'followed', ...}
 manager.close()
 ```
 
-### Example 2: Send Direct Message
+</details>
+
+<details>
+<summary><b>Example 2: Send Direct Message</b> - Click to expand</summary>
 
 ```python
 from instaharvest import MessageManager
@@ -192,7 +207,10 @@ print(result)
 manager.close()
 ```
 
-### Example 3: Collect Followers
+</details>
+
+<details>
+<summary><b>Example 3: Collect Followers</b> - Click to expand</summary>
 
 ```python
 from instaharvest import FollowersCollector
@@ -211,7 +229,10 @@ print(f"Collected {len(followers)} followers")
 collector.close()
 ```
 
-### Example 4: All Operations in One Browser
+</details>
+
+<details>
+<summary><b>Example 4: All Operations in One Browser (SharedBrowser)</b> - Click to expand</summary>
 
 ```python
 from instaharvest import SharedBrowser
@@ -234,9 +255,14 @@ with SharedBrowser(config=config) as browser:
     print(f"Followers: {len(followers)}")
 ```
 
+</details>
+
 ---
 
 ## 📁 Example Scripts
+
+<details>
+<summary><b>📂 Ready-to-Use Scripts</b> - Click to expand</summary>
 
 The `examples/` directory contains ready-to-use scripts:
 
@@ -273,7 +299,12 @@ python examples/example_custom_config.py
 ```
 Shows how to customize configuration (delays, viewport, etc.).
 
+</details>
+
 ## 📖 Documentation
+
+<details>
+<summary><b>📚 Full API Documentation</b> - Click to expand</summary>
 
 ### 1. Profile Scraping
 
@@ -422,9 +453,14 @@ print(f"Date: {post.timestamp}")
 scraper.close()
 ```
 
+</details>
+
 ---
 
 ## 🎯 Complete Workflow Example
+
+<details>
+<summary><b>🔄 Full Automation Workflow</b> - Click to expand</summary>
 
 ```python
 from instaharvest import SharedBrowser
@@ -452,6 +488,8 @@ with SharedBrowser(config=config) as browser:
     for follower in followers[:5]:
         browser.send_message(follower, "Thanks for following!")
 ```
+
+</details>
 
 ---
 
@@ -484,6 +522,9 @@ This will:
 
 ## 📁 Project Structure
 
+<details>
+<summary><b>🗂️ Package Structure</b> - Click to expand</summary>
+
 ```
 instaharvest/
 ├── instaharvest/          # Main package
@@ -503,9 +544,14 @@ instaharvest/
 └── LICENSE                # MIT License
 ```
 
+</details>
+
 ---
 
 ## ⚙️ Configuration
+
+<details>
+<summary><b>🛠️ Configuration Options</b> - Click to expand</summary>
 
 ```python
 from instaharvest import ScraperConfig
@@ -520,9 +566,14 @@ config = ScraperConfig(
 )
 ```
 
+</details>
+
 ---
 
 ## 🛡️ Best Practices
+
+<details>
+<summary><b>✅ Recommended Practices</b> - Click to expand</summary>
 
 1. **Use SharedBrowser** - Reuses browser instance, much faster
 2. **Rate Limiting** - Built-in delays to avoid Instagram bans
@@ -530,9 +581,14 @@ config = ScraperConfig(
 4. **Error Handling** - Comprehensive exception handling
 5. **Logging** - Professional logging for debugging
 
+</details>
+
 ---
 
 ## 🔧 Troubleshooting
+
+<details>
+<summary><b>🔍 Common Issues & Solutions</b> - Click to expand</summary>
 
 ### Installation Issues
 
@@ -679,6 +735,8 @@ manager = FollowManager(config=config)
 
 4. **Email support:**
    - kelajak054@gmail.com
+
+</details>
 
 ---
 
