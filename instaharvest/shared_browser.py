@@ -76,16 +76,19 @@ class SharedBrowser:
 
         self.logger.info("✨ SharedBrowser initialized")
 
-    def start(self, headless: bool = False) -> None:
+    def start(self, headless: bool = None) -> None:
         """
         Start browser session
 
         Args:
-            headless: Run browser in headless mode (default: False)
+            headless: Run browser in headless mode (default: use config.headless)
 
         This opens browser once and loads the session.
         All subsequent operations will reuse this browser.
         """
+        # Use provided headless value, or fall back to config
+        if headless is None:
+            headless = self.config.headless
         self.logger.info("🚀 Starting shared browser session...")
 
         # Load session

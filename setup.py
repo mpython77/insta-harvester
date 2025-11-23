@@ -49,11 +49,12 @@ setup(
             "mypy>=1.0.0",
         ],
     },
-    entry_points={
-        "console_scripts": [
-            "instaharvest=instaharvest.cli:main",  # Optional CLI
-        ],
-    },
+    # CLI not implemented yet - removed to prevent installation errors
+    # entry_points={
+    #     "console_scripts": [
+    #         "instaharvest=instaharvest.cli:main",
+    #     ],
+    # },
     keywords=[
         "instagram",
         "scraper",

@@ -10,8 +10,8 @@ This folder contains all example scripts and usage demonstrations for InstaHarve
 examples/
 ├── save_session.py             # Create Instagram session (REQUIRED FIRST)
 ├── all_in_one.py               # Complete demo with ALL features
-├── example_custom_config.py    # Configuration customization examples
-└── unfollow_fixed.py           # Standalone unfollow script
+├── main_advanced.py            # Production scraping automation
+└── example_custom_config.py    # Configuration customization examples
 ```
 
 **Note:** All operations (follow, unfollow, messaging, collect followers/following, batch operations, etc.) are demonstrated in `all_in_one.py`. It's a complete interactive menu showing all library features.
