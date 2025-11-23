@@ -7,10 +7,19 @@ import json
 import os
 import time
 import random
-from typing import List, Set, Optional
+from typing import List, Set, Optional, Dict
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
+
+# Import library components for PostLinksScraper
+try:
+    from .base import BaseScraper
+    from .config import ScraperConfig
+    from .exceptions import ProfileNotFoundError
+    LIBRARY_AVAILABLE = True
+except ImportError:
+    LIBRARY_AVAILABLE = False
 
 
 class InstagramPostLinksScraper:
@@ -204,6 +213,239 @@ class InstagramPostLinksScraper:
             finally:
                 time.sleep(2)  # Ko'rish uchun
                 self.close()
+
+
+# Library-compatible wrapper (only if library components available)
+if LIBRARY_AVAILABLE:
+    class PostLinksScraper(BaseScraper):
+        """
+        Library-compatible POST links scraper - USES USER'S PROVEN 100% ACCURATE METHOD
+
+        This wrapper integrates the proven standalone method into the library.
+        Features:
+        - Collects ONLY posts (a[href*="/p/"]) and reels (a[href*="/reel/"])
+        - Uses user's proven human-like scrolling method
+        - Real-time progress tracking
+        - Smart stopping (3 attempts with no new links)
+        - Library-compatible interface
+        """
+
+        def __init__(self, config: Optional['ScraperConfig'] = None):
+            """Initialize post links scraper"""
+            super().__init__(config)
+            self.logger.info("PostLinksScraper ready (using user's proven 100% accurate method)")
+
+        def scrape(
+            self,
+            username: str,
+            target_count: Optional[int] = None,
+            save_to_file: bool = True
+        ) -> List[Dict[str, str]]:
+            """
+            Scrape all POST and REEL links from profile using USER'S PROVEN METHOD
+
+            Args:
+                username: Instagram username
+                target_count: Target number of links (None = scrape all)
+                save_to_file: Save links to file
+
+            Returns:
+                List of dictionaries with 'url' and 'type' keys
+            """
+            username = username.strip().lstrip('@')
+            self.logger.info(f"Starting post links scrape for: @{username}")
+
+            # Load session and setup browser
+            session_data = self.load_session()
+            self.setup_browser(session_data)
+
+            try:
+                # Navigate to profile
+                profile_url = f'https://www.instagram.com/{username}/'
+                self.goto_url(profile_url)
+
+                # Check profile exists
+                if not self._profile_exists():
+                    raise ProfileNotFoundError(f"Profile @{username} not found")
+
+                # Get target count if not provided
+                if target_count is None:
+                    target_count = self._get_posts_count()
+                    self.logger.info(f"Target: {target_count} posts")
+
+                # Scroll and collect links using USER'S PROVEN METHOD
+                links = self._scroll_and_collect_proven(target_count)
+
+                # Save to file
+                if save_to_file:
+                    self._save_links(links)
+
+                self.logger.info(f"Collected {len(links)} post links")
+                return links
+
+            finally:
+                self.close()
+
+        def _profile_exists(self) -> bool:
+            """Check if profile exists"""
+            try:
+                content = self.page.content()
+                return 'Page Not Found' not in content and 'Sorry, this page' not in content
+            except Exception:
+                return False
+
+        def _get_posts_count(self) -> int:
+            """Get total posts count from profile"""
+            try:
+                self.page.wait_for_selector('span:has-text("posts")', timeout=10000)
+                posts_element = self.page.locator('span:has-text("posts")').first
+                posts_text = posts_element.locator('span.html-span').first.inner_text()
+                count = int(posts_text.strip().replace(',', ''))
+                return count
+            except Exception as e:
+                self.logger.warning(f"Could not get posts count: {e}")
+                return 9999  # Large number as fallback
+
+        def _extract_current_links_proven(self) -> Set[str]:
+            """
+            Extract links using USER'S PROVEN DIRECT SELECTOR METHOD
+
+            Returns:
+                Set of URLs
+            """
+            try:
+                # USER'S PROVEN METHOD: Direct selector for posts and reels
+                links = self.page.locator('a[href*="/p/"], a[href*="/reel/"]').all()
+
+                hrefs = set()
+                for link in links:
+                    href = link.get_attribute('href')
+                    if href:
+                        # Make full URL
+                        if href.startswith('/'):
+                            href = f'https://www.instagram.com{href}'
+                        hrefs.add(href)
+
+                return hrefs
+
+            except Exception as e:
+                self.logger.error(f"Error extracting links: {e}")
+                return set()
+
+        def _scroll_and_collect_proven(self, target_count: int) -> List[Dict[str, str]]:
+            """
+            Scroll and collect links using USER'S PROVEN 100% ACCURATE METHOD
+
+            Args:
+                target_count: Target number of links
+
+            Returns:
+                List of dictionaries with 'url' and 'type' keys
+            """
+            self.logger.info(f"Starting scroll collection (target: {target_count})...")
+
+            all_links = set()
+            scroll_attempts = 0
+            no_new_links_count = 0
+            MAX_NO_NEW = 3  # USER'S PROVEN: Stop after 3 attempts with no new links
+
+            while True:
+                # Extract current links using proven method
+                current_links = self._extract_current_links_proven()
+                previous_count = len(all_links)
+                all_links.update(current_links)
+                new_count = len(all_links)
+
+                # Log progress
+                self.logger.info(
+                    f"Progress: {new_count}/{target_count} links "
+                    f"(+{new_count - previous_count} new)"
+                )
+
+                # Check if no new links found
+                if new_count == previous_count:
+                    no_new_links_count += 1
+                    self.logger.info(f"⚠️ No new links found ({no_new_links_count}/{MAX_NO_NEW})")
+                else:
+                    # Reset counter if new links found
+                    no_new_links_count = 0
+
+                # Stopping conditions
+                if new_count >= target_count:
+                    self.logger.info("✓ Target reached!")
+                    break
+
+                if no_new_links_count >= MAX_NO_NEW:
+                    self.logger.warning(
+                        f"No new links after {MAX_NO_NEW} attempts. "
+                        f"Collected: {new_count}/{target_count}"
+                    )
+                    break
+
+                if scroll_attempts >= 1000:
+                    self.logger.warning(f"Max scroll attempts (1000) reached")
+                    break
+
+                # USER'S PROVEN METHOD: Human-like scroll
+                self._human_like_scroll_proven()
+                scroll_attempts += 1
+
+            # Convert to list of dicts with type detection
+            result = []
+            for url in sorted(all_links):
+                if '/p/' in url:
+                    content_type = 'Post'
+                elif '/reel/' in url:
+                    content_type = 'Reel'
+                else:
+                    content_type = 'Unknown'
+                result.append({'url': url, 'type': content_type})
+
+            return result
+
+        def _human_like_scroll_proven(self) -> None:
+            """
+            USER'S PROVEN 100% ACCURATE SCROLLING METHOD
+
+            Scrolls 80% of viewport height and waits random 1.5-2.5 seconds
+            """
+            try:
+                # USER'S PROVEN: Scroll 80% of viewport (human-like)
+                self.page.evaluate('window.scrollBy(0, window.innerHeight * 0.8)')
+
+                # USER'S PROVEN: Random wait 1.5-2.5 seconds (anti-detection)
+                wait_time = random.uniform(1.5, 2.5)
+                time.sleep(wait_time)
+
+                self.logger.debug(f"Scrolled (waited {wait_time:.2f}s)")
+
+            except Exception as e:
+                self.logger.debug(f"Scroll error: {e}")
+                # Fallback: scroll to bottom
+                self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                time.sleep(2.0)
+
+        def _save_links(self, links: List[Dict[str, str]]) -> None:
+            """
+            Save links to file
+
+            Args:
+                links: List of link dictionaries with 'url' and 'type' keys
+            """
+            output_file = Path(self.config.links_file)
+
+            try:
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    for link_data in links:
+                        url = link_data['url']
+                        content_type = link_data['type']
+                        f.write(f"{url}\t{content_type}\n")
+
+                self.logger.info(f"Links saved to: {output_file}")
+
+            except Exception as e:
+                self.logger.error(f"Failed to save links: {e}")
+                raise
 
 
 def main():
