@@ -13,8 +13,8 @@
 > 📖 [Documentation](https://github.com/mpython77/insta-harvester#readme) |
 > 🐛 [Report Bug](https://github.com/mpython77/insta-harvester/issues) |
 > 💡 [Request Feature](https://github.com/mpython77/insta-harvester/issues) |
-> 🤝 [Contributing](CONTRIBUTING.md) |
-> 📋 [Changelog](CHANGELOG.md)
+> 🤝 [Contributing](https://github.com/mpython77/insta-harvester/blob/main/CONTRIBUTING.md) |
+> 📋 [Changelog](https://github.com/mpython77/insta-harvester/blob/main/CHANGELOG.md)
 
 ---
 
@@ -145,7 +145,7 @@ python examples/main_advanced.py
 > All examples below use `ScraperConfig()` for proper timing and reliability.
 > Even when using default settings, explicitly creating config is **best practice**.
 > This prevents timing issues with popups, buttons, and rate limits.
-> See [Configuration Guide](CONFIGURATION_GUIDE.md) for customization options.
+> See [Configuration Guide](https://github.com/mpython77/insta-harvester/blob/main/CONFIGURATION_GUIDE.md) for customization options.
 
 ## 📖 Quick Start Examples
 
@@ -608,7 +608,7 @@ config = ScraperConfig(
 manager = FollowManager(config=config)
 ```
 
-See **CONFIGURATION_GUIDE.md** for detailed configuration options.
+See **[Configuration Guide](https://github.com/mpython77/insta-harvester/blob/main/CONFIGURATION_GUIDE.md)** for detailed configuration options.
 
 #### Error: "Could not follow @username"
 
@@ -662,11 +662,11 @@ manager = FollowManager(config=config)
 ### Getting Help
 
 1. **Check documentation:**
-   - `README.md` - Main guide (this file)
-   - `CONFIGURATION_GUIDE.md` - Complete configuration reference
-   - `examples/README.md` - Example scripts guide
-   - `CHANGELOG.md` - Version history and changes
-   - `CONTRIBUTING.md` - How to contribute
+   - [README.md](https://github.com/mpython77/insta-harvester#readme) - Main guide
+   - [Configuration Guide](https://github.com/mpython77/insta-harvester/blob/main/CONFIGURATION_GUIDE.md) - Complete configuration reference
+   - [Examples Guide](https://github.com/mpython77/insta-harvester/blob/main/examples/README.md) - Example scripts guide
+   - [Changelog](https://github.com/mpython77/insta-harvester/blob/main/CHANGELOG.md) - Version history and changes
+   - [Contributing](https://github.com/mpython77/insta-harvester/blob/main/CONTRIBUTING.md) - How to contribute
 
 2. **Common issues:**
    - Unfollow errors → Increase `popup_open_delay`
