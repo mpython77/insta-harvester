@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.5] - 2025-11-23
+
+### Fixed
+- **CRITICAL**: Fixed post link extraction stopping at ~46 posts (was collecting only 46/90 posts)
+- Optimized `_aggressive_scroll()` in PostLinksScraper to match ReelLinksScraper's proven approach
+- Simplified 3-stage scroll to single-stage fast scroll for better Instagram container loading
+- Increased `MAX_NO_NEW` from 5 to 7 attempts for better coverage of slow-loading content
+- Increased max scroll attempts from config limit to 150 (matching ReelLinksScraper)
+- Improved scroll timing: replaced multi-stage delays with optimized `scroll_content_load_delay`
+
+### Technical Details
+- PostLinksScraper now uses same scrolling strategy as ReelLinksScraper (which collects all reels successfully)
+- Removed over-engineered 3-stage scroll that caused Instagram to miss containers
+- Better handling of Instagram's `div._ac7v.x1ty9z65.xzboxd6` virtual scrolling containers
+- More patient waiting for slow network/lazy loading (7 attempts vs 5)
+
 ## [2.5.4] - 2025-11-23
 
 ### Fixed
