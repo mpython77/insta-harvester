@@ -495,82 +495,55 @@ class FollowManager(BaseScraper):
                 self.logger.debug(f"⏱️ Waiting {delay_confirm:.1f}s before clicking Unfollow confirmation...")
                 time.sleep(delay_confirm)
 
-                # Try to find unfollow button with multiple selectors (different languages/HTML structures)
-                # Instagram uses both <button> and <div role="button"> elements!
+                # Use PROVEN selectors that ACTUALLY WORK on Instagram
                 unfollow_confirm_button = None
 
-                selectors_to_try = [
-                    # Method 1: Playwright text selector (most reliable, works with any element!)
-                    'text="Unfollow"',
+                # 1-usul: Eng ishonchli - span:has-text inside div[role='button']
+                try:
+                    self.logger.debug("Trying Method 1: div[role='button'] span:has-text('Unfollow')")
+                    unfollow_confirm_button = self.page.locator("div[role='button'] span:has-text('Unfollow')").first
+                    if unfollow_confirm_button.count() > 0:
+                        self.logger.debug("✓ Found with Method 1")
+                except Exception as e:
+                    self.logger.debug(f"Method 1 failed: {e}")
+                    unfollow_confirm_button = None
 
-                    # Method 2: Try div elements with role="button" (Instagram's NEW structure!)
-                    'div[role="dialog"] div[role="button"]:has-text("Unfollow")',
-                    'div[role="dialog"] [role="button"]:has-text("Unfollow")',
-                    'div[role="button"]:has-text("Unfollow")',
-
-                    # Method 3: Any element with "Unfollow" text
-                    '*:has-text("Unfollow")',
-
-                    # Method 4: Traditional button elements
-                    'button:has-text("Unfollow")',
-                    'div[role="dialog"] button',
-
-                    # Method 5: By position - first clickable element in dialog
-                    'div[role="dialog"] [role="button"]:first-child',
-                    'div[role="dialog"] div[role="button"]',
-
-                    # Method 6: Instagram's CSS class for buttons
-                    'div[role="dialog"] .x1i10hfl[role="button"]',
-                    'div.x1i10hfl[role="button"]',
-
-                    # Method 7: Any element with role=button in dialog
-                    'div[role="dialog"] [role="button"]',
-                ]
-
-                for selector in selectors_to_try:
+                # 2-usul: More specific with tabindex
+                if unfollow_confirm_button is None or unfollow_confirm_button.count() == 0:
                     try:
-                        button = self.page.locator(selector).first
-                        if button.count() > 0:
-                            # Found a button, check if it's visible
-                            try:
-                                if button.is_visible(timeout=1000):
-                                    unfollow_confirm_button = button
-                                    self.logger.debug(f"✓ Found unfollow button using selector: {selector}")
-                                    break
-                            except Exception:
-                                # is_visible failed, try next selector
-                                continue
+                        self.logger.debug("Trying Method 2: div[role='button'][tabindex='0'] span:has-text('Unfollow')")
+                        unfollow_confirm_button = self.page.locator("div[role='button'][tabindex='0'] span:has-text('Unfollow')").first
+                        if unfollow_confirm_button.count() > 0:
+                            self.logger.debug("✓ Found with Method 2")
                     except Exception as e:
-                        self.logger.debug(f"Selector '{selector}' failed: {e}")
-                        continue
+                        self.logger.debug(f"Method 2 failed: {e}")
+                        unfollow_confirm_button = None
 
-                if unfollow_confirm_button is None:
-                    # Last resort: Search ALL visible buttons for "Unfollow" text
+                # 3-usul: Playwright's get_by_role
+                if unfollow_confirm_button is None or unfollow_confirm_button.count() == 0:
                     try:
-                        self.logger.debug("⚠️ Using last resort: searching all visible buttons for 'Unfollow' text...")
-                        all_buttons = self.page.locator('[role="button"]')
-                        count = all_buttons.count()
-                        self.logger.debug(f"Found {count} elements with role=button on page")
-
-                        for i in range(min(count, 20)):  # Check first 20 buttons max
-                            try:
-                                btn = all_buttons.nth(i)
-                                if btn.is_visible(timeout=1000):
-                                    text = btn.inner_text(timeout=1000)
-                                    self.logger.debug(f"  Button {i}: '{text.strip()}'")
-                                    if 'unfollow' in text.lower():
-                                        unfollow_confirm_button = btn
-                                        self.logger.debug(f"✓ Found Unfollow button at index {i} with text: '{text}'")
-                                        break
-                            except Exception:
-                                continue
-
-                        if unfollow_confirm_button is None:
-                            self.logger.warning("Unfollow confirmation button not found - checked all visible buttons")
-                            return False
+                        self.logger.debug("Trying Method 3: get_by_role('button', name='Unfollow')")
+                        unfollow_confirm_button = self.page.get_by_role("button", name="Unfollow")
+                        if unfollow_confirm_button.count() > 0:
+                            self.logger.debug("✓ Found with Method 3")
                     except Exception as e:
-                        self.logger.warning(f"Last resort search failed: {e}")
-                        return False
+                        self.logger.debug(f"Method 3 failed: {e}")
+                        unfollow_confirm_button = None
+
+                # 4-usul: XPath fallback
+                if unfollow_confirm_button is None or unfollow_confirm_button.count() == 0:
+                    try:
+                        self.logger.debug("Trying Method 4: XPath //span[text()='Unfollow']/ancestor::div[@role='button'][1]")
+                        unfollow_confirm_button = self.page.locator("//span[text()='Unfollow']/ancestor::div[@role='button'][1]").first
+                        if unfollow_confirm_button.count() > 0:
+                            self.logger.debug("✓ Found with Method 4 (XPath)")
+                    except Exception as e:
+                        self.logger.debug(f"Method 4 failed: {e}")
+                        unfollow_confirm_button = None
+
+                if unfollow_confirm_button is None or unfollow_confirm_button.count() == 0:
+                    self.logger.warning("Unfollow confirmation button not found - tried all 4 methods")
+                    return False
 
                 # Click the button
                 try:
