@@ -22,6 +22,8 @@
 
 - 📊 **Profile Statistics** - Collect followers, following, posts count
 - ✓ **Verified Badge Check** - Detect if account has verified badge
+- 🎭 **Profile Category** - Extract profile category (Actor, Model, Photographer, etc.)
+- 📝 **Complete Bio** - Extract full bio with links, emails, mentions, and contact info
 - 🔗 **Post & Reel Links** - Intelligent scrolling and link collection
 - 🏷️ **Tagged Accounts** - Extract tags from posts and reels
 - 👥 **Followers/Following** - Collect lists with real-time output
@@ -353,6 +355,8 @@ print(f"Posts: {profile.posts}")
 print(f"Followers: {profile.followers}")
 print(f"Following: {profile.following}")
 print(f"Verified: {'✓ Yes' if profile.is_verified else '✗ No'}")
+print(f"Category: {profile.category or 'Not set'}")
+print(f"Bio: {profile.bio or 'No bio'}")
 
 scraper.close()
 ```

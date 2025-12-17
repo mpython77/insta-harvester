@@ -7,6 +7,8 @@ engagement management, and analytics.
 Features:
 - 📊 Profile statistics (posts, followers, following)
 - ✓ Verified badge detection - Check if account is verified
+- 🎭 Profile category extraction - Detect Actor, Model, Photographer, etc.
+- 📝 Complete bio extraction - All text, links, emails, mentions, contact info
 - 🔗 Post & Reel links collection with intelligent scrolling
 - 🏷️ Tagged accounts extraction (posts & reels)
 - 👥 Followers/Following collection with real-time output

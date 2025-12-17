@@ -20,6 +20,8 @@ class ProfileData:
     followers: str
     following: str
     is_verified: bool = False  # Whether the account has verified badge
+    category: Optional[str] = None  # Profile category (Actor, Model, Photographer, etc.)
+    bio: Optional[str] = None  # Complete bio with all information (links, emails, mentions, text)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -35,6 +37,8 @@ class ProfileScraper(BaseScraper):
     - Extract followers count
     - Extract following count
     - Check verified badge status
+    - Extract profile category (Actor, Model, Photographer, etc.)
+    - Extract complete bio (text, links, emails, mentions, contact info)
     - HTML structure change detection
     - Parallel execution support
     """
@@ -93,13 +97,16 @@ class ProfileScraper(BaseScraper):
                 posts=self.get_posts_count() if get_posts else 'N/A',
                 followers=self.get_followers_count() if get_followers else 'N/A',
                 following=self.get_following_count() if get_following else 'N/A',
-                is_verified=self._check_verified()
+                is_verified=self._check_verified(),
+                category=self._get_category(),
+                bio=self._get_bio()
             )
 
             verified_status = "✓ Verified" if data.is_verified else "Not verified"
+            category_info = f", Category: {data.category}" if data.category else ""
             self.logger.info(
                 f"Profile scrape complete: {data.posts} posts, "
-                f"{data.followers} followers, {data.following} following, {verified_status}"
+                f"{data.followers} followers, {data.following} following, {verified_status}{category_info}"
             )
 
             return data
@@ -150,6 +157,49 @@ class ProfileScraper(BaseScraper):
         except Exception as e:
             self.logger.debug(f"Verified check failed (account not verified or error): {e}")
             return False
+
+    def _get_category(self) -> Optional[str]:
+        """
+        Extract profile category (Actor, Model, Photographer, etc.)
+
+        Returns:
+            Profile category string or None if not set
+        """
+        try:
+            category_element = self.page.locator(self.config.selector_profile_category).first
+            if category_element.count() > 0:
+                category = category_element.inner_text().strip()
+                if category:
+                    self.logger.debug(f"✓ Profile category: {category}")
+                    return category
+            self.logger.debug("No profile category found")
+            return None
+        except Exception as e:
+            self.logger.debug(f"Category extraction failed: {e}")
+            return None
+
+    def _get_bio(self) -> Optional[str]:
+        """
+        Extract complete bio information including text, links, emails, mentions, and contact info
+
+        Returns:
+            Complete bio text with all information or None if empty
+        """
+        try:
+            bio_section = self.page.locator(self.config.selector_profile_bio_section).first
+            if bio_section.count() > 0:
+                # Get all text content from bio section
+                bio_text = bio_section.inner_text().strip()
+                if bio_text:
+                    # Remove excessive whitespace but preserve line breaks
+                    bio_text = '\n'.join(line.strip() for line in bio_text.split('\n') if line.strip())
+                    self.logger.debug(f"✓ Bio extracted ({len(bio_text)} characters)")
+                    return bio_text
+            self.logger.debug("No bio found")
+            return None
+        except Exception as e:
+            self.logger.debug(f"Bio extraction failed: {e}")
+            return None
 
     def get_posts_count(self) -> str:
         """

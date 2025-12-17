@@ -230,6 +230,8 @@ class ScraperConfig:
     selector_following_link: str = 'a[href*="/following/"]'
     selector_post_reel_links: str = 'a[href*="/p/"], a[href*="/reel/"]'
     selector_verified_badge: str = 'svg[aria-label="Verified"]'  # Verified account badge
+    selector_profile_category: str = 'div._ap3a._aaco._aacu._aacy._aad6._aade'  # Profile category (Actor, Model, etc.)
+    selector_profile_bio_section: str = 'section.xqui205.x172qv1o'  # Complete bio section with all info
 
     # Popup and dialog selectors
     selector_popup_dialog: str = 'div[role="dialog"]'
