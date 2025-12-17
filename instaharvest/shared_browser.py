@@ -73,6 +73,8 @@ class SharedBrowser:
         self._message_manager: Optional[MessageManager] = None
         self._followers_collector: Optional[FollowersCollector] = None
         self._profile_scraper: Optional[ProfileScraper] = None
+        self._post_links_scraper: Optional[PostLinksScraper] = None
+        self._reel_links_scraper: Optional[ReelLinksScraper] = None
 
         self.logger.info("✨ SharedBrowser initialized")
 
@@ -178,6 +180,20 @@ class SharedBrowser:
             self._profile_scraper.page = None
             self._profile_scraper = None
 
+        if self._post_links_scraper:
+            self._post_links_scraper.playwright = None
+            self._post_links_scraper.browser = None
+            self._post_links_scraper.context = None
+            self._post_links_scraper.page = None
+            self._post_links_scraper = None
+
+        if self._reel_links_scraper:
+            self._reel_links_scraper.playwright = None
+            self._reel_links_scraper.browser = None
+            self._reel_links_scraper.context = None
+            self._reel_links_scraper.page = None
+            self._reel_links_scraper = None
+
         # Close browser resources
         if self.page:
             self.page.close()
@@ -256,6 +272,32 @@ class SharedBrowser:
             scraper.page = self.page
             self._profile_scraper = scraper
         return self._profile_scraper
+
+    @property
+    def post_links_scraper(self) -> PostLinksScraper:
+        """Get PostLinksScraper instance (lazy loading)"""
+        if self._post_links_scraper is None:
+            scraper = PostLinksScraper(self.config)
+            # Inject existing browser components
+            scraper.playwright = self.playwright
+            scraper.browser = self.browser
+            scraper.context = self.context
+            scraper.page = self.page
+            self._post_links_scraper = scraper
+        return self._post_links_scraper
+
+    @property
+    def reel_links_scraper(self) -> ReelLinksScraper:
+        """Get ReelLinksScraper instance (lazy loading)"""
+        if self._reel_links_scraper is None:
+            scraper = ReelLinksScraper(self.config)
+            # Inject existing browser components
+            scraper.playwright = self.playwright
+            scraper.browser = self.browser
+            scraper.context = self.context
+            scraper.page = self.page
+            self._reel_links_scraper = scraper
+        return self._reel_links_scraper
 
     # ==================== CONVENIENCE METHODS ====================
 
@@ -380,6 +422,33 @@ class SharedBrowser:
             List of following usernames
         """
         return self.followers_collector.get_following(username, limit=limit, print_realtime=print_realtime)
+
+    def scrape_post_links(self, username: str, target_count: Optional[int] = None, save_to_file: bool = True) -> list:
+        """
+        Scrape post and reel links from a profile
+
+        Args:
+            username: Instagram username
+            target_count: Target number of links (None = scrape all)
+            save_to_file: Save links to file
+
+        Returns:
+            List of dictionaries with 'url' and 'type' keys
+        """
+        return self.post_links_scraper.scrape(username, target_count=target_count, save_to_file=save_to_file)
+
+    def scrape_reel_links(self, username: str, save_to_file: bool = True) -> list:
+        """
+        Scrape reel links from a profile
+
+        Args:
+            username: Instagram username
+            save_to_file: Save links to file
+
+        Returns:
+            List of reel URLs
+        """
+        return self.reel_links_scraper.scrape(username, save_to_file=save_to_file)
 
     # ==================== CONTEXT MANAGER ====================
 

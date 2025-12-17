@@ -75,9 +75,16 @@ class ProfileScraper(BaseScraper):
         username = username.strip().lstrip('@')
         self.logger.info(f"Starting profile scrape for: @{username}")
 
-        # Load session and setup browser
-        session_data = self.load_session()
-        self.setup_browser(session_data)
+        # Check if browser is already setup (SharedBrowser mode)
+        is_shared_browser = self.page is not None and self.browser is not None
+
+        if is_shared_browser:
+            self.logger.debug("Using existing browser session (SharedBrowser mode)")
+        else:
+            # Load session and setup browser (standalone mode)
+            self.logger.debug("Setting up new browser session (standalone mode)")
+            session_data = self.load_session()
+            self.setup_browser(session_data)
 
         try:
             # Navigate to profile
@@ -112,7 +119,11 @@ class ProfileScraper(BaseScraper):
             return data
 
         finally:
-            self.close()
+            # Only close browser if not in SharedBrowser mode
+            if not is_shared_browser:
+                self.close()
+            else:
+                self.logger.debug("Keeping browser open (SharedBrowser mode)")
 
     def _profile_exists(self) -> bool:
         """Check if profile exists"""
@@ -182,21 +193,118 @@ class ProfileScraper(BaseScraper):
         """
         Extract complete bio information including text, links, emails, mentions, and contact info
 
+        Uses targeted extraction to avoid highlights and other non-bio content:
+        1. Bio text: Only from bio section (not highlights/other sections)
+        2. External links: From link containers with specific attributes
+        3. Fallback: Old bio section selector
+
         Returns:
             Complete bio text with all information or None if empty
         """
         try:
-            bio_section = self.page.locator(self.config.selector_profile_bio_section).first
-            if bio_section.count() > 0:
-                # Get all text content from bio section
-                bio_text = bio_section.inner_text().strip()
-                if bio_text:
-                    # Remove excessive whitespace but preserve line breaks
-                    bio_text = '\n'.join(line.strip() for line in bio_text.split('\n') if line.strip())
-                    self.logger.debug(f"✓ Bio extracted ({len(bio_text)} characters)")
-                    return bio_text
+            bio_parts = []
+
+            # Strategy 1: Extract bio text ONLY from bio section
+            # Look for span._ap3a that is a direct child of bio section, not from highlights
+            # We need to be more selective - only get first few span._ap3a (bio is usually first 1-2)
+            bio_text_spans = self.page.locator(self.config.selector_profile_bio_text).all()
+
+            # Filter: Only take first 2-3 bio text spans (bio is always at the top)
+            # This avoids getting highlights names and other sections
+            bio_span_count = 0
+            max_bio_spans = 3  # Bio is usually within first 3 spans
+
+            if bio_text_spans:
+                for span in bio_text_spans:
+                    try:
+                        # Check if this span is inside a link container (skip if it is)
+                        parent_html = span.evaluate('el => el.parentElement?.outerHTML || ""')
+                        if 'svg' in parent_html or 'aria-label="Link icon"' in parent_html:
+                            continue  # Skip spans inside link containers
+
+                        # Check if this is inside a button/clickable area for bio (valid)
+                        # or if it's a highlight/other section (invalid)
+                        text = span.inner_text().strip()
+
+                        # Skip if empty or already added
+                        if not text or text in bio_parts:
+                            continue
+
+                        # Skip very short texts (likely not bio)
+                        if len(text) < 3:
+                            continue
+
+                        # Only take first few spans (bio is at the top)
+                        if bio_span_count >= max_bio_spans:
+                            break
+
+                        bio_parts.append(text)
+                        bio_span_count += 1
+                        self.logger.debug(f"✓ Found bio text #{bio_span_count}: {text[:50]}...")
+
+                    except Exception as e:
+                        self.logger.debug(f"Error extracting bio span: {e}")
+                        continue
+
+            # Strategy 2: Extract external links from bio
+            # Look for div.html-div with Link icon (external links section)
+            try:
+                # Find divs with Link icon SVG (these are external link containers)
+                link_containers = self.page.locator('div.html-div:has(svg[aria-label="Link icon"])').all()
+
+                for container in link_containers:
+                    try:
+                        # Get link text from <a> tags inside this container
+                        links = container.locator('a div._ap3a._aaco._aacw._atqw._aada._aade').all()
+                        for link in links:
+                            try:
+                                link_text = link.inner_text().strip()
+                                if link_text and link_text not in bio_parts:
+                                    bio_parts.append(link_text)
+                                    self.logger.debug(f"✓ Found external link: {link_text}")
+                            except Exception:
+                                continue
+                    except Exception:
+                        continue
+
+                # Also get Threads links
+                threads_links = self.page.locator('a[href*="threads.com"] span.x1lliihq.x193iq5w.x6ikm8r.x10wlt62').all()
+                for link in threads_links:
+                    try:
+                        link_text = link.inner_text().strip()
+                        if link_text and link_text not in bio_parts:
+                            bio_parts.append(link_text)
+                            self.logger.debug(f"✓ Found Threads link: {link_text}")
+                    except Exception:
+                        continue
+
+            except Exception as e:
+                self.logger.debug(f"Error extracting links: {e}")
+
+            # Strategy 3: Fallback - try old bio section selector
+            if not bio_parts:
+                self.logger.debug("Trying fallback bio section selector...")
+                bio_section = self.page.locator(self.config.selector_profile_bio_section).first
+                if bio_section.count() > 0:
+                    bio_text = bio_section.inner_text().strip()
+                    if bio_text:
+                        bio_parts.append(bio_text)
+                        self.logger.debug(f"✓ Bio extracted via fallback ({len(bio_text)} characters)")
+
+            # Combine all bio parts
+            if bio_parts:
+                # Join parts with newline, remove duplicates
+                full_bio = '\n'.join(bio_parts)
+                # Clean up whitespace while preserving line breaks
+                full_bio = '\n'.join(line.strip() for line in full_bio.split('\n') if line.strip())
+
+                if full_bio:
+                    self.logger.debug(f"✓ Complete bio extracted ({len(full_bio)} characters, {len(bio_parts)} parts)")
+                    return full_bio
+
             self.logger.debug("No bio found")
             return None
+
         except Exception as e:
             self.logger.debug(f"Bio extraction failed: {e}")
             return None

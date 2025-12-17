@@ -231,7 +231,10 @@ class ScraperConfig:
     selector_post_reel_links: str = 'a[href*="/p/"], a[href*="/reel/"]'
     selector_verified_badge: str = 'svg[aria-label="Verified"]'  # Verified account badge
     selector_profile_category: str = 'div._ap3a._aaco._aacu._aacy._aad6._aade'  # Profile category (Actor, Model, etc.)
-    selector_profile_bio_section: str = 'section.xqui205.x172qv1o'  # Complete bio section with all info
+    selector_profile_bio_section: str = 'section.xqui205.x172qv1o'  # Complete bio section with all info (fallback)
+    selector_profile_bio_text: str = 'span._ap3a._aaco._aacu._aacx._aad7._aade[dir="auto"]'  # Bio text content
+    selector_profile_bio_links: str = 'div.html-div'  # Bio external links section
+    selector_profile_header: str = 'header'  # Profile header containing bio
 
     # Popup and dialog selectors
     selector_popup_dialog: str = 'div[role="dialog"]'

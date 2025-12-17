@@ -11,7 +11,7 @@ long_description = (this_directory / "README.md").read_text(encoding='utf-8')
 
 setup(
     name="instaharvest",
-    version="2.5.4",
+    version="2.5.5",
     author="Doston",
     author_email="kelajak054@gmail.com",
     description="Professional Instagram data collection toolkit with automation features",
@@ -24,7 +24,6 @@ setup(
         "Intended Audience :: Developers",
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
-        "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",

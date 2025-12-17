@@ -5,7 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.5.5] - 2025-11-23
+## [2.5.5] - 2025-12-17
+
+### Fixed
+- **CRITICAL**: Fixed ProfileScraper opening new browser instead of using SharedBrowser session
+- **CRITICAL**: Fixed PostLinksScraper and ReelLinksScraper not working with SharedBrowser
+- **CRITICAL**: Fixed bio extraction not working with Instagram's new HTML structure
+- Enhanced login detection with 4-layer verification (URL, UI elements, form detection, page title)
+- Added automatic session recovery when login page is detected
+- Bio extraction now uses 3 strategies for maximum reliability (new span structure, external links, fallback)
+
+### Added
+- SharedBrowser support for PostLinksScraper and ReelLinksScraper
+- `scrape_post_links()` method to SharedBrowser
+- `scrape_reel_links()` method to SharedBrowser
+- Options 10 and 11 to all_in_one.py example (post/reel link scraping)
+- New bio selectors: `selector_profile_bio_text`, `selector_profile_bio_links`, `selector_profile_header`
+- Multi-strategy bio extraction (bio text + external links + fallback)
+
+### Changed
+- All scrapers now detect SharedBrowser mode and reuse existing browser session
+- Login detection now checks navigation UI elements before concluding session expired
+- ProfileScraper, PostLinksScraper, and ReelLinksScraper only close browser in standalone mode
+- Bio extraction completely rewritten to support Instagram's updated HTML structure
+
+### Technical Details
+- **Browser session handling**: All scrapers check `self.page is not None and self.browser is not None` to detect SharedBrowser mode
+- **Login detection improvements**:
+  - Method 1: URL check (`/accounts/login/`)
+  - Method 2: Navigation UI elements (nav bar, Direct messages icon)
+  - Method 3: Login form detection
+  - Method 4: Page title check
+- **Session recovery**: Automatically visits Instagram home to reactivate session before retrying
+- **Bio extraction strategies**:
+  - Strategy 1: Extract from `span._ap3a._aaco._aacu._aacx._aad7._aade[dir="auto"]`
+  - Strategy 2: Extract links from `div.html-div`
+  - Strategy 3: Fallback to old `section.xqui205.x172qv1o` selector
+- **SharedBrowser properties**: Added `post_links_scraper` and `reel_links_scraper` lazy-loaded properties
+
+## [2.5.4] - 2025-11-23
 
 ### Fixed
 - **CRITICAL**: Fixed post link extraction stopping at ~46 posts (was collecting only 46/90 posts)
