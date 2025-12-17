@@ -19,6 +19,7 @@ class ProfileData:
     posts: str
     followers: str
     following: str
+    is_verified: bool = False  # Whether the account has verified badge
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -33,6 +34,7 @@ class ProfileScraper(BaseScraper):
     - Extract posts count
     - Extract followers count
     - Extract following count
+    - Check verified badge status
     - HTML structure change detection
     - Parallel execution support
     """
@@ -60,7 +62,7 @@ class ProfileScraper(BaseScraper):
             get_following: Extract following count
 
         Returns:
-            ProfileData object
+            ProfileData object with verified status
 
         Raises:
             ProfileNotFoundError: If profile doesn't exist
@@ -90,12 +92,14 @@ class ProfileScraper(BaseScraper):
                 username=username,
                 posts=self.get_posts_count() if get_posts else 'N/A',
                 followers=self.get_followers_count() if get_followers else 'N/A',
-                following=self.get_following_count() if get_following else 'N/A'
+                following=self.get_following_count() if get_following else 'N/A',
+                is_verified=self._check_verified()
             )
 
+            verified_status = "✓ Verified" if data.is_verified else "Not verified"
             self.logger.info(
                 f"Profile scrape complete: {data.posts} posts, "
-                f"{data.followers} followers, {data.following} following"
+                f"{data.followers} followers, {data.following} following, {verified_status}"
             )
 
             return data
@@ -129,6 +133,23 @@ class ProfileScraper(BaseScraper):
             self.logger.warning(f"Profile stats selector timeout: {e}")
             # Fallback delay
             time.sleep(self.config.page_stability_delay)
+
+    def _check_verified(self) -> bool:
+        """
+        Check if account has verified badge
+
+        Returns:
+            True if account is verified, False otherwise
+        """
+        try:
+            verified_badge = self.page.locator(self.config.selector_verified_badge).first
+            is_verified = verified_badge.count() > 0
+            if is_verified:
+                self.logger.debug("✓ Account is verified")
+            return is_verified
+        except Exception as e:
+            self.logger.debug(f"Verified check failed (account not verified or error): {e}")
+            return False
 
     def get_posts_count(self) -> str:
         """

@@ -6,6 +6,7 @@ engagement management, and analytics.
 
 Features:
 - 📊 Profile statistics (posts, followers, following)
+- ✓ Verified badge detection - Check if account is verified
 - 🔗 Post & Reel links collection with intelligent scrolling
 - 🏷️ Tagged accounts extraction (posts & reels)
 - 👥 Followers/Following collection with real-time output

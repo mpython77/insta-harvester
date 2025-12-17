@@ -229,6 +229,7 @@ class ScraperConfig:
     selector_followers_link: str = 'a[href*="/followers/"]'
     selector_following_link: str = 'a[href*="/following/"]'
     selector_post_reel_links: str = 'a[href*="/p/"], a[href*="/reel/"]'
+    selector_verified_badge: str = 'svg[aria-label="Verified"]'  # Verified account badge
 
     # Popup and dialog selectors
     selector_popup_dialog: str = 'div[role="dialog"]'

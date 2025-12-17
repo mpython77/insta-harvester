@@ -21,6 +21,7 @@
 ## ✨ Features
 
 - 📊 **Profile Statistics** - Collect followers, following, posts count
+- ✓ **Verified Badge Check** - Detect if account has verified badge
 - 🔗 **Post & Reel Links** - Intelligent scrolling and link collection
 - 🏷️ **Tagged Accounts** - Extract tags from posts and reels
 - 👥 **Followers/Following** - Collect lists with real-time output
@@ -351,6 +352,7 @@ profile = scraper.scrape('username')
 print(f"Posts: {profile.posts}")
 print(f"Followers: {profile.followers}")
 print(f"Following: {profile.following}")
+print(f"Verified: {'✓ Yes' if profile.is_verified else '✗ No'}")
 
 scraper.close()
 ```
