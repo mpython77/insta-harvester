@@ -193,21 +193,71 @@ class ProfileScraper(BaseScraper):
         """
         Extract complete bio information including text, links, emails, mentions, and contact info
 
+        Uses multiple strategies to extract bio:
+        1. New structure: Bio text spans + external link divs
+        2. Fallback: Old bio section selector
+        3. Header section scan
+
         Returns:
             Complete bio text with all information or None if empty
         """
         try:
-            bio_section = self.page.locator(self.config.selector_profile_bio_section).first
-            if bio_section.count() > 0:
-                # Get all text content from bio section
-                bio_text = bio_section.inner_text().strip()
-                if bio_text:
-                    # Remove excessive whitespace but preserve line breaks
-                    bio_text = '\n'.join(line.strip() for line in bio_text.split('\n') if line.strip())
-                    self.logger.debug(f"✓ Bio extracted ({len(bio_text)} characters)")
-                    return bio_text
+            bio_parts = []
+
+            # Strategy 1: Extract bio text from new structure (span._ap3a._aaco._aacu._aacx._aad7._aade)
+            bio_text_spans = self.page.locator(self.config.selector_profile_bio_text).all()
+            if bio_text_spans:
+                for span in bio_text_spans:
+                    try:
+                        text = span.inner_text().strip()
+                        if text and text not in bio_parts:
+                            bio_parts.append(text)
+                            self.logger.debug(f"✓ Found bio text: {text[:50]}...")
+                    except Exception:
+                        continue
+
+            # Strategy 2: Extract external links from bio (div.html-div)
+            bio_link_divs = self.page.locator(self.config.selector_profile_bio_links).all()
+            if bio_link_divs:
+                for link_div in bio_link_divs:
+                    try:
+                        # Get all link text from this div
+                        links = link_div.locator('a').all()
+                        for link in links:
+                            try:
+                                link_text = link.inner_text().strip()
+                                if link_text and link_text not in bio_parts:
+                                    bio_parts.append(link_text)
+                                    self.logger.debug(f"✓ Found bio link: {link_text}")
+                            except Exception:
+                                continue
+                    except Exception:
+                        continue
+
+            # Strategy 3: Fallback - try old bio section selector
+            if not bio_parts:
+                self.logger.debug("Trying fallback bio section selector...")
+                bio_section = self.page.locator(self.config.selector_profile_bio_section).first
+                if bio_section.count() > 0:
+                    bio_text = bio_section.inner_text().strip()
+                    if bio_text:
+                        bio_parts.append(bio_text)
+                        self.logger.debug(f"✓ Bio extracted via fallback ({len(bio_text)} characters)")
+
+            # Combine all bio parts
+            if bio_parts:
+                # Join parts with newline, remove duplicates and excessive whitespace
+                full_bio = '\n'.join(bio_parts)
+                # Clean up whitespace while preserving line breaks
+                full_bio = '\n'.join(line.strip() for line in full_bio.split('\n') if line.strip())
+
+                if full_bio:
+                    self.logger.debug(f"✓ Complete bio extracted ({len(full_bio)} characters)")
+                    return full_bio
+
             self.logger.debug("No bio found")
             return None
+
         except Exception as e:
             self.logger.debug(f"Bio extraction failed: {e}")
             return None
