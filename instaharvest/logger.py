@@ -8,12 +8,15 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from .config import ScraperConfig
+
 
 def setup_logger(
     name: str,
     log_file: Optional[str] = None,
     level: str = 'INFO',
-    log_to_console: bool = True
+    log_to_console: bool = True,
+    config: Optional[ScraperConfig] = None
 ) -> logging.Logger:
     """
     Setup professional logger with file and console handlers
@@ -23,10 +26,14 @@ def setup_logger(
         log_file: Path to log file (optional)
         level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_to_console: Whether to log to console
+        config: ScraperConfig instance (optional)
 
     Returns:
         Configured logger instance
     """
+    if config is None:
+        config = ScraperConfig()
+
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, level.upper()))
 
@@ -35,8 +42,8 @@ def setup_logger(
 
     # Format: 2025-01-21 10:30:45 [INFO] scraper_name: Message
     formatter = logging.Formatter(
-        '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        config.log_format,
+        datefmt=config.log_date_format
     )
 
     # Console handler

@@ -25,15 +25,19 @@ except ImportError:
 class InstagramPostLinksScraper:
     """Instagram postlar linklarini scraping qilish - 100% ACCURATE"""
 
-    def __init__(self, username: str, session_file: str = 'instagram_session.json'):
+    def __init__(self, username: str, session_file: str = None):
         """
         Args:
             username: Instagram username (@ belgisisiz)
             session_file: Session fayl nomi (default: instagram_session.json)
         """
+        # Import here to avoid circular dependency
+        from .config import ScraperConfig
+        self.config = ScraperConfig()
+
         self.username = username.strip().lstrip('@')
-        self.profile_url = f'https://www.instagram.com/{self.username}/'
-        self.session_file = session_file
+        self.profile_url = self.config.profile_url_pattern.format(username=self.username)
+        self.session_file = session_file or self.config.session_file
         self.page: Optional[Page] = None
         self.context: Optional[BrowserContext] = None
         self.browser: Optional[Browser] = None
@@ -55,19 +59,19 @@ class InstagramPostLinksScraper:
 
         # Browser ochish
         self.browser = p.chromium.launch(
-            headless=False,
-            args=['--start-maximized']
+            headless=self.config.headless,
+            args=self.config.browser_args
         )
 
         # Session bilan context yaratish
         self.context = self.browser.new_context(
             storage_state=session_data,
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            viewport={'width': self.config.viewport_width, 'height': self.config.viewport_height},
+            user_agent=self.config.user_agent
         )
 
         self.page = self.context.new_page()
-        self.page.set_default_timeout(60000)
+        self.page.set_default_timeout(self.config.link_scraper_timeout)
 
         print('✅ Session yuklandi!')
 
@@ -75,13 +79,14 @@ class InstagramPostLinksScraper:
         """Profile sahifasiga o'tish"""
         print(f'🔍 Profile ochilmoqda: {self.username}')
 
-        self.page.goto(self.profile_url, wait_until='domcontentloaded', timeout=60000)
+        self.page.goto(self.profile_url, wait_until=self.config.page_load_wait_until, timeout=self.config.link_scraper_timeout)
 
         print('⏳ Sahifa yuklanishi kutilmoqda...')
-        time.sleep(3)
+        time.sleep(self.config.page_load_delay)
 
         # Profile mavjudligini tekshirish
-        if 'Page Not Found' in self.page.content() or 'Sorry, this page' in self.page.content():
+        page_content = self.page.content()
+        if any(text in page_content for text in self.config.profile_not_found_strings):
             raise ValueError(f'❌ Profile topilmadi: {self.username}')
 
         print('✅ Profile ochildi!')
@@ -89,10 +94,10 @@ class InstagramPostLinksScraper:
     def get_posts_count(self):
         """Posts sonini olish"""
         try:
-            self.page.wait_for_selector('span:has-text("posts")', timeout=10000)
-            posts_element = self.page.locator('span:has-text("posts")').first
+            self.page.wait_for_selector(self.config.selector_posts_count, timeout=self.config.posts_count_timeout)
+            posts_element = self.page.locator(self.config.selector_posts_count).first
             if posts_element:
-                posts_text = posts_element.locator('span.html-span').first.inner_text()
+                posts_text = posts_element.locator(self.config.selector_html_span).first.inner_text()
                 # Virgullarni olib tashlash va int ga o'girish
                 posts_count = int(posts_text.strip().replace(',', ''))
                 return posts_count
@@ -105,7 +110,7 @@ class InstagramPostLinksScraper:
         try:
             # Post va reel linklarini topish
             # /p/ yoki /reel/ pattern
-            links = self.page.locator('a[href*="/p/"], a[href*="/reel/"]').all()
+            links = self.page.locator(self.config.selector_post_reel_links).all()
 
             # Href larni olish
             hrefs = set()
@@ -114,7 +119,7 @@ class InstagramPostLinksScraper:
                 if href:
                     # To'liq URL yaratish
                     if href.startswith('/'):
-                        href = f'https://www.instagram.com{href}'
+                        href = self.config.instagram_base_url.rstrip('/') + href
                     hrefs.add(href)
 
             return hrefs
@@ -129,7 +134,7 @@ class InstagramPostLinksScraper:
         all_links = set()
         scroll_attempts = 0
         no_new_links_count = 0
-        max_no_new_attempts = 3  # 3 marta yangi link yuklanmasa to'xtatish
+        max_no_new_attempts = self.config.scroll_max_no_new_attempts
 
         while True:
             # Hozirgi linklarni olish
@@ -157,10 +162,10 @@ class InstagramPostLinksScraper:
                 break
 
             # Scroll qilish (odamga o'xshab) - USER'S PROVEN METHOD
-            self.page.evaluate('window.scrollBy(0, window.innerHeight * 0.8)')
+            self.page.evaluate(f'window.scrollBy(0, window.innerHeight * {self.config.scroll_viewport_percentage})')
 
             # 1.5-2.5 sekund kutish (random) - ANTI-DETECTION
-            wait_time = random.uniform(1.5, 2.5)
+            wait_time = random.uniform(self.config.scroll_wait_range[0], self.config.scroll_wait_range[1])
             time.sleep(wait_time)
 
             scroll_attempts += 1
@@ -290,16 +295,16 @@ if LIBRARY_AVAILABLE:
             """Check if profile exists"""
             try:
                 content = self.page.content()
-                return 'Page Not Found' not in content and 'Sorry, this page' not in content
+                return not any(text in content for text in self.config.profile_not_found_strings)
             except Exception:
                 return False
 
         def _get_posts_count(self) -> int:
             """Get total posts count from profile"""
             try:
-                self.page.wait_for_selector('span:has-text("posts")', timeout=10000)
-                posts_element = self.page.locator('span:has-text("posts")').first
-                posts_text = posts_element.locator('span.html-span').first.inner_text()
+                self.page.wait_for_selector(self.config.selector_posts_count, timeout=self.config.posts_count_timeout)
+                posts_element = self.page.locator(self.config.selector_posts_count).first
+                posts_text = posts_element.locator(self.config.selector_html_span).first.inner_text()
                 count = int(posts_text.strip().replace(',', ''))
                 return count
             except Exception as e:
@@ -315,7 +320,7 @@ if LIBRARY_AVAILABLE:
             """
             try:
                 # USER'S PROVEN METHOD: Direct selector for posts and reels
-                links = self.page.locator('a[href*="/p/"], a[href*="/reel/"]').all()
+                links = self.page.locator(self.config.selector_post_reel_links).all()
 
                 hrefs = set()
                 for link in links:
@@ -323,7 +328,7 @@ if LIBRARY_AVAILABLE:
                     if href:
                         # Make full URL
                         if href.startswith('/'):
-                            href = f'https://www.instagram.com{href}'
+                            href = self.config.instagram_base_url.rstrip('/') + href
                         hrefs.add(href)
 
                 return hrefs
@@ -347,7 +352,7 @@ if LIBRARY_AVAILABLE:
             all_links = set()
             scroll_attempts = 0
             no_new_links_count = 0
-            MAX_NO_NEW = 3  # USER'S PROVEN: Stop after 3 attempts with no new links
+            MAX_NO_NEW = self.config.scroll_max_no_new_attempts
 
             while True:
                 # Extract current links using proven method
@@ -382,8 +387,8 @@ if LIBRARY_AVAILABLE:
                     )
                     break
 
-                if scroll_attempts >= 1000:
-                    self.logger.warning(f"Max scroll attempts (1000) reached")
+                if scroll_attempts >= self.config.max_scroll_attempts:
+                    self.logger.warning(f"Max scroll attempts ({self.config.max_scroll_attempts}) reached")
                     break
 
                 # USER'S PROVEN METHOD: Human-like scroll
@@ -411,10 +416,10 @@ if LIBRARY_AVAILABLE:
             """
             try:
                 # USER'S PROVEN: Scroll 80% of viewport (human-like)
-                self.page.evaluate('window.scrollBy(0, window.innerHeight * 0.8)')
+                self.page.evaluate(f'window.scrollBy(0, window.innerHeight * {self.config.scroll_viewport_percentage})')
 
                 # USER'S PROVEN: Random wait 1.5-2.5 seconds (anti-detection)
-                wait_time = random.uniform(1.5, 2.5)
+                wait_time = random.uniform(self.config.scroll_wait_range[0], self.config.scroll_wait_range[1])
                 time.sleep(wait_time)
 
                 self.logger.debug(f"Scrolled (waited {wait_time:.2f}s)")
@@ -423,7 +428,7 @@ if LIBRARY_AVAILABLE:
                 self.logger.debug(f"Scroll error: {e}")
                 # Fallback: scroll to bottom
                 self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-                time.sleep(2.0)
+                time.sleep(self.config.scroll_post_delay)
 
         def _save_links(self, links: List[Dict[str, str]]) -> None:
             """

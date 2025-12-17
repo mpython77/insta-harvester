@@ -41,8 +41,8 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
 
     try:
         # METHOD 1: Click tag button to open popup
-        tag_button = page.locator('button:has(svg[aria-label="Tags"])').first
-        tag_button.click(timeout=3000)
+        tag_button = page.locator(config.selector_tag_button).first
+        tag_button.click(timeout=config.tag_button_click_timeout)
         print(f"[Worker {worker_id}] ✓ Clicked tag button, waiting for popup...")
         time.sleep(config.popup_animation_delay)
         time.sleep(config.popup_content_load_delay)
@@ -52,12 +52,12 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
         print(f"[Worker {worker_id}] Looking for popup container...")
 
         # Find popup container
-        popup_container = page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+        popup_container = page.locator(config.selector_popup_containers[0]).first
 
         if popup_container.count() == 0:
             print(f"[Worker {worker_id}] Popup container not found, trying alternative selectors...")
             # Alternative: role="dialog"
-            popup_container = page.locator('div[role="dialog"]').first
+            popup_container = page.locator(config.selector_popup_dialog).first
 
         # Extract links ONLY from within popup container
         popup_links = popup_container.locator('a[href^="/"]').all()
@@ -65,12 +65,12 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
 
         for link in popup_links:
             try:
-                href = link.get_attribute('href', timeout=1000)
+                href = link.get_attribute('href', timeout=config.attribute_timeout)
                 if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
                     username = href.strip('/').split('/')[-1]
 
                     # Filter system paths
-                    if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                    if username in config.instagram_system_paths:
                         continue
 
                     if username not in tagged:
@@ -81,8 +81,8 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
 
         # Close popup
         try:
-            close_button = page.locator('button:has(svg[aria-label="Close"])').first
-            close_button.click(timeout=2000)
+            close_button = page.locator(config.selector_close_button).first
+            close_button.click(timeout=config.popup_close_timeout)
             print(f"[Worker {worker_id}] ✓ Closed tag popup")
         except:
             pass
@@ -99,12 +99,12 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
     return []
 
 
-def _extract_reel_likes(soup: BeautifulSoup, page: Page, worker_id: int) -> str:
+def _extract_reel_likes(soup: BeautifulSoup, page: Page, worker_id: int, config: ScraperConfig) -> str:
     """Extract likes from REEL using reel-specific selector"""
     try:
         # Reel likes selector
-        likes_span = page.locator('span.x1ypdohk.x1s688f.x2fvf9.xe9ewy2[role="button"]').first
-        likes_text = likes_span.inner_text(timeout=3000).strip()
+        likes_span = page.locator(config.selector_reel_likes + '[role="button"]').first
+        likes_text = likes_span.inner_text(timeout=config.reel_likes_timeout).strip()
         likes_clean = likes_text.replace(',', '')
         print(f"[Worker {worker_id}] ✓ Reel likes: {likes_clean}")
         return likes_clean
@@ -113,20 +113,20 @@ def _extract_reel_likes(soup: BeautifulSoup, page: Page, worker_id: int) -> str:
         return 'N/A'
 
 
-def _extract_reel_timestamp(soup: BeautifulSoup, page: Page, worker_id: int) -> str:
+def _extract_reel_timestamp(soup: BeautifulSoup, page: Page, worker_id: int, config: ScraperConfig) -> str:
     """Extract timestamp from REEL"""
     try:
         # Method 1: time.x1p4m5qa element
-        time_elem = page.locator('time.x1p4m5qa').first
+        time_elem = page.locator(config.selector_reel_timestamp).first
 
         # Try title attribute first
-        title = time_elem.get_attribute('title', timeout=2000)
+        title = time_elem.get_attribute('title', timeout=config.visibility_timeout)
         if title:
             print(f"[Worker {worker_id}] ✓ Reel timestamp (title): {title}")
             return title
 
         # Fallback to datetime attribute
-        datetime_attr = time_elem.get_attribute('datetime', timeout=2000)
+        datetime_attr = time_elem.get_attribute('datetime', timeout=config.visibility_timeout)
         if datetime_attr:
             print(f"[Worker {worker_id}] ✓ Reel timestamp (datetime): {datetime_attr}")
             return datetime_attr
@@ -212,7 +212,7 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                     print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] 🔍 Scraping [{content_type}]: {url}")
 
                     # Navigate to post/reel
-                    page.goto(url, wait_until='domcontentloaded', timeout=60000)
+                    page.goto(url, wait_until=config.page_load_wait_until, timeout=config.navigation_timeout)
                     print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Page loaded")
 
                     # CRITICAL: Wait longer for content to load
@@ -226,19 +226,19 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                     if is_reel:
                         # REEL-specific extraction
                         tagged_accounts = _extract_reel_tags(soup, page, url, worker_id, config)
-                        likes = _extract_reel_likes(soup, page, worker_id)
-                        timestamp = _extract_reel_timestamp(soup, page, worker_id)
+                        likes = _extract_reel_likes(soup, page, worker_id, config)
+                        timestamp = _extract_reel_timestamp(soup, page, worker_id, config)
                     else:
                         # POST extraction (original logic)
                         # Try to wait for tag elements specifically
                         try:
-                            page.wait_for_selector('div._aa1y', timeout=5000, state='attached')
+                            page.wait_for_selector(config.selector_post_tag_container, timeout=config.post_tag_wait_timeout, state='attached')
                             print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Tag elements detected")
                         except:
                             print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
 
                         tagged_accounts = _extract_tags_robust(soup, page, url, worker_id, config)
-                        likes = _extract_likes_bs4(soup, page)
+                        likes = _extract_likes_bs4(soup, page, config)
                         timestamp = _extract_timestamp_bs4(soup)
 
                     result = {
@@ -327,20 +327,20 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
         print(f"[Worker {worker_id}] Using VIDEO post tag extraction (popup method)...")
         try:
             # Find and click tag button
-            tag_button = page.locator('button:has(svg[aria-label="Tags"])').first
+            tag_button = page.locator(config.selector_tag_button).first
 
             if tag_button.count() > 0:
                 # Click the tag button
-                tag_button.click(timeout=3000)
+                tag_button.click(timeout=config.tag_button_click_timeout)
                 time.sleep(config.popup_animation_delay)
                 time.sleep(config.popup_content_load_delay)
 
                 # CRITICAL: Extract from popup container ONLY
-                popup_container = page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+                popup_container = page.locator(config.selector_popup_containers[0]).first
 
                 if popup_container.count() == 0:
                     # Fallback: Try role="dialog"
-                    popup_container = page.locator('div[role="dialog"]').first
+                    popup_container = page.locator(config.selector_popup_dialog).first
 
                 if popup_container.count() > 0:
                     # Extract links ONLY from popup
@@ -348,12 +348,12 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
 
                     for link in popup_links:
                         try:
-                            href = link.get_attribute('href', timeout=1000)
+                            href = link.get_attribute('href', timeout=config.attribute_timeout)
                             if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
                                 username = href.strip('/').split('/')[-1]
 
                                 # Filter out system paths
-                                if username in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories']:
+                                if username in config.instagram_system_paths:
                                     continue
 
                                 if username and username not in tagged:
@@ -363,8 +363,8 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
 
                     # Close popup
                     try:
-                        close_button = page.locator('button:has(svg[aria-label="Close"])').first
-                        close_button.click(timeout=2000)
+                        close_button = page.locator(config.selector_close_button).first
+                        close_button.click(timeout=config.popup_close_timeout)
                     except:
                         page.keyboard.press('Escape')
 
@@ -393,7 +393,7 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
                 username = href.strip('/').split('/')[-1]
 
                 # Filter out system paths
-                if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                if username in config.instagram_system_paths:
                     continue
 
                 if username and username not in tagged:
@@ -407,16 +407,16 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
 
     # METHOD 2: Playwright - div._aa1y locator
     try:
-        tag_divs = page.locator('div._aa1y').all()
+        tag_divs = page.locator(config.selector_post_tag_container).all()
         for tag_div in tag_divs:
             try:
                 link = tag_div.locator('a[href]').first
-                href = link.get_attribute('href', timeout=2000)
+                href = link.get_attribute('href', timeout=config.visibility_timeout)
                 if href:
                     username = href.strip('/').split('/')[-1]
 
                     # Filter out system paths
-                    if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                    if username in config.instagram_system_paths:
                         continue
 
                     if username and username not in tagged:
@@ -435,7 +435,7 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
     return ['No tags']
 
 
-def _extract_likes_bs4(soup: BeautifulSoup, page: Page) -> str:
+def _extract_likes_bs4(soup: BeautifulSoup, page: Page, config: ScraperConfig) -> str:
     """Extract likes using BeautifulSoup + fallback to Playwright"""
     # Method 1: BS4 - span[role="button"]
     try:
@@ -456,7 +456,7 @@ def _extract_likes_bs4(soup: BeautifulSoup, page: Page) -> str:
         section = page.locator('section').first
         spans = section.locator('span[role="button"]').all()
         for span in spans[:2]:
-            text = span.inner_text(timeout=2000).strip()
+            text = span.inner_text(timeout=config.visibility_timeout).strip()
             if text and text.replace(',', '').isdigit():
                 return text.replace(',', '')
     except Exception:

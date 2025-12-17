@@ -64,8 +64,8 @@ class FollowManager(BaseScraper):
 
         try:
             # Navigate to profile
-            profile_url = f"https://www.instagram.com/{username}/"
-            if not self.goto_url(profile_url, delay=2):
+            profile_url = self.config.profile_url_pattern.format(username=username)
+            if not self.goto_url(profile_url, delay=self.config.follow_profile_load_delay):
                 return {
                     'success': False,
                     'status': 'error',
@@ -150,8 +150,8 @@ class FollowManager(BaseScraper):
 
         try:
             # Navigate to profile
-            profile_url = f"https://www.instagram.com/{username}/"
-            if not self.goto_url(profile_url, delay=2):
+            profile_url = self.config.profile_url_pattern.format(username=username)
+            if not self.goto_url(profile_url, delay=self.config.follow_profile_load_delay):
                 return {
                     'success': False,
                     'status': 'error',
@@ -229,8 +229,8 @@ class FollowManager(BaseScraper):
 
         try:
             # Navigate to profile
-            profile_url = f"https://www.instagram.com/{username}/"
-            if not self.goto_url(profile_url, delay=2):
+            profile_url = self.config.profile_url_pattern.format(username=username)
+            if not self.goto_url(profile_url, delay=self.config.follow_profile_load_delay):
                 return {
                     'success': False,
                     'following': False,
@@ -369,7 +369,7 @@ class FollowManager(BaseScraper):
             follow_button = self.page.locator('button:has-text("Follow")').first
             if follow_button.count() > 0:
                 # Make sure it's not "Follow Back"
-                button_text = follow_button.inner_text(timeout=2000)
+                button_text = follow_button.inner_text(timeout=self.config.follow_element_timeout)
                 if button_text.strip() == "Follow":
                     self.logger.debug("✓ Status: Not following (found 'Follow' button)")
                     return 'not_following'
@@ -403,8 +403,8 @@ class FollowManager(BaseScraper):
                 return False
 
             # Make sure it's the main Follow button (not "Follow Back")
-            button_text = follow_button.inner_text(timeout=2000)
-            if button_text.strip() not in ["Follow", "Follow Back"]:
+            button_text = follow_button.inner_text(timeout=self.config.follow_element_timeout)
+            if button_text.strip() not in self.config.follow_button_text:
                 self.logger.warning(f"Unexpected button text: {button_text}")
                 return False
 
@@ -414,7 +414,7 @@ class FollowManager(BaseScraper):
             time.sleep(delay_before)
 
             # Click button
-            follow_button.click(timeout=3000)
+            follow_button.click(timeout=self.config.follow_click_timeout)
 
             # Wait for action to complete
             self.logger.debug(f"⏱️ Waiting {self.config.button_click_delay}s for action to complete...")
@@ -446,23 +446,13 @@ class FollowManager(BaseScraper):
             # Step 1: Click "Following" button (can be <button> or <div role="button">)
             following_button = None
 
-            following_selectors = [
-                # Instagram's new structure: div with role="button"
-                'div[role="button"]:has-text("Following")',
-                '[role="button"]:has-text("Following")',
-                # Traditional button
-                'button:has-text("Following")',
-                # Text selector (most reliable)
-                'text="Following"',
-                # By Instagram's button class
-                'div.x1i10hfl[role="button"]:has-text("Following")',
-            ]
+            following_selectors = self.config.selector_following_buttons
 
             for selector in following_selectors:
                 try:
                     btn = self.page.locator(selector).first
                     if btn.count() > 0:
-                        if btn.is_visible(timeout=2000):
+                        if btn.is_visible(timeout=self.config.visibility_timeout):
                             following_button = btn
                             self.logger.debug(f"✓ Found Following button using: {selector}")
                             break
@@ -476,7 +466,7 @@ class FollowManager(BaseScraper):
 
             # Click the Following button
             try:
-                following_button.click(timeout=5000)
+                following_button.click(timeout=self.config.follow_click_timeout)
                 self.logger.debug("✓ Following button clicked successfully")
             except Exception as e:
                 self.logger.warning(f"Failed to click Following button: {e}")
@@ -495,18 +485,30 @@ class FollowManager(BaseScraper):
                 self.logger.debug(f"⏱️ Waiting {delay_confirm:.1f}s before clicking Unfollow confirmation...")
                 time.sleep(delay_confirm)
 
-                # Use PROVEN selectors that ACTUALLY WORK (from unfollow_fixed.py)
+                # Use config selectors for unfollow confirmation
                 unfollow_confirm_button = None
 
-                # Method 1: div[role='button'] span:has-text('Unfollow')
-                try:
-                    self.logger.debug("Trying Method 1: div[role='button'] span:has-text('Unfollow')")
-                    btn = self.page.locator("div[role='button'] span:has-text('Unfollow')").first
-                    if btn.count() > 0:  # Just check count, not visibility
-                        unfollow_confirm_button = btn
-                        self.logger.debug("✓ Found with Method 1")
-                except Exception as e:
-                    self.logger.debug(f"Method 1 failed: {e}")
+                # Try config selectors first
+                for selector in self.config.selector_unfollow_confirm_buttons:
+                    try:
+                        btn = self.page.locator(selector).first
+                        if btn.count() > 0:
+                            unfollow_confirm_button = btn
+                            self.logger.debug(f"✓ Found unfollow confirm button using config: {selector}")
+                            break
+                    except Exception as e:
+                        self.logger.debug(f"Config selector '{selector}' failed: {e}")
+
+                # Method 1 (fallback): div[role='button'] span:has-text('Unfollow')
+                if not unfollow_confirm_button:
+                    try:
+                        self.logger.debug("Trying Method 1: div[role='button'] span:has-text('Unfollow')")
+                        btn = self.page.locator("div[role='button'] span:has-text('Unfollow')").first
+                        if btn.count() > 0:  # Just check count, not visibility
+                            unfollow_confirm_button = btn
+                            self.logger.debug("✓ Found with Method 1")
+                    except Exception as e:
+                        self.logger.debug(f"Method 1 failed: {e}")
 
                 # Method 2: More specific with tabindex
                 if not unfollow_confirm_button:
@@ -549,13 +551,13 @@ class FollowManager(BaseScraper):
                         count = all_buttons.count()
                         self.logger.debug(f"Found {count} buttons on page")
 
-                        for i in range(min(count, 20)):
+                        for i in range(min(count, self.config.follow_max_button_search)):
                             try:
                                 btn = all_buttons.nth(i)
                                 if btn.is_visible():
                                     text = btn.inner_text()
                                     self.logger.debug(f"  Button {i}: '{text.strip()}'")
-                                    if 'unfollow' in text.lower():
+                                    if self.config.unfollow_text_search in text.lower():
                                         unfollow_confirm_button = btn
                                         self.logger.debug(f"✓ Found Unfollow button at index {i}!")
                                         break
@@ -570,7 +572,7 @@ class FollowManager(BaseScraper):
 
                 # Click the button
                 try:
-                    unfollow_confirm_button.click(timeout=3000)
+                    unfollow_confirm_button.click(timeout=self.config.follow_click_timeout)
                     self.logger.debug("✓ Unfollow button clicked")
                 except Exception as e:
                     self.logger.warning(f"Failed to click unfollow button: {e}")

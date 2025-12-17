@@ -21,6 +21,9 @@
 ## ✨ Features
 
 - 📊 **Profile Statistics** - Collect followers, following, posts count
+- ✓ **Verified Badge Check** - Detect if account has verified badge
+- 🎭 **Profile Category** - Extract profile category (Actor, Model, Photographer, etc.)
+- 📝 **Complete Bio** - Extract full bio with links, emails, mentions, and contact info
 - 🔗 **Post & Reel Links** - Intelligent scrolling and link collection
 - 🏷️ **Tagged Accounts** - Extract tags from posts and reels
 - 👥 **Followers/Following** - Collect lists with real-time output
@@ -351,6 +354,9 @@ profile = scraper.scrape('username')
 print(f"Posts: {profile.posts}")
 print(f"Followers: {profile.followers}")
 print(f"Following: {profile.following}")
+print(f"Verified: {'✓ Yes' if profile.is_verified else '✗ No'}")
+print(f"Category: {profile.category or 'Not set'}")
+print(f"Bio: {profile.bio or 'No bio'}")
 
 scraper.close()
 ```
@@ -500,21 +506,17 @@ from instaharvest.config import ScraperConfig
 config = ScraperConfig()
 
 with SharedBrowser(config=config) as browser:
-    # 1. Get profile stats
-    profile = browser.scrape_profile('target_user')
-    print(f"Target has {profile['followers']} followers")
-
-    # 2. Collect their followers
+    # 1. Collect followers from target user
     followers = browser.get_followers('target_user', limit=50)
     print(f"Collected {len(followers)} followers")
 
-    # 3. Follow them
+    # 2. Follow them
     for follower in followers[:10]:  # Follow first 10
         result = browser.follow(follower)
-        if result['status'] == 'success':
+        if result['success']:  # Check success key
             print(f"✓ Followed {follower}")
 
-    # 4. Send welcome message
+    # 3. Send welcome message
     for follower in followers[:5]:
         browser.send_message(follower, "Thanks for following!")
 ```

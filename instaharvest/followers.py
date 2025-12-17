@@ -59,8 +59,8 @@ class FollowersCollector(BaseScraper):
 
         try:
             # Navigate to profile
-            profile_url = f"https://www.instagram.com/{username}/"
-            if not self.goto_url(profile_url, delay=2):
+            profile_url = self.config.profile_url_pattern.format(username=username)
+            if not self.goto_url(profile_url, delay=self.config.followers_profile_load_delay):
                 self.logger.error(f"Failed to load profile: @{username}")
                 return []
 
@@ -112,8 +112,8 @@ class FollowersCollector(BaseScraper):
 
         try:
             # Navigate to profile
-            profile_url = f"https://www.instagram.com/{username}/"
-            if not self.goto_url(profile_url, delay=2):
+            profile_url = self.config.profile_url_pattern.format(username=username)
+            if not self.goto_url(profile_url, delay=self.config.followers_profile_load_delay):
                 self.logger.error(f"Failed to load profile: @{username}")
                 return []
 
@@ -154,14 +154,14 @@ class FollowersCollector(BaseScraper):
             time.sleep(delay_before)
 
             # Find followers link - contains "followers" text
-            followers_link = self.page.locator('a[href*="/followers/"]').first
+            followers_link = self.page.locator(self.config.selector_followers_link).first
 
             if followers_link.count() == 0:
                 self.logger.warning("Followers button not found")
                 return False
 
             # Click button
-            followers_link.click(timeout=3000)
+            followers_link.click(timeout=self.config.followers_link_timeout)
 
             # Wait for popup to open
             self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for popup to open...")
@@ -188,14 +188,14 @@ class FollowersCollector(BaseScraper):
             time.sleep(delay_before)
 
             # Find following link - contains "following" text
-            following_link = self.page.locator('a[href*="/following/"]').first
+            following_link = self.page.locator(self.config.selector_following_link).first
 
             if following_link.count() == 0:
                 self.logger.warning("Following button not found")
                 return False
 
             # Click button
-            following_link.click(timeout=3000)
+            following_link.click(timeout=self.config.followers_link_timeout)
 
             # Wait for popup to open
             self.logger.debug(f"⏱️ Waiting {self.config.popup_open_delay}s for popup to open...")
@@ -227,7 +227,7 @@ class FollowersCollector(BaseScraper):
         seen_usernames: Set[str] = set()
 
         no_new_followers_count = 0
-        max_no_new_attempts = 3  # Stop after 3 scrolls with no new followers
+        max_no_new_attempts = self.config.followers_max_no_new_scrolls
 
         scroll_count = 0
 
@@ -314,12 +314,12 @@ class FollowersCollector(BaseScraper):
         try:
             # Find all user containers
             # Using the specific class combination for user rows
-            user_containers = self.page.locator('div.x1qnrgzn.x1cek8b2.xb10e19.x19rwo8q.x1lliihq.x193iq5w.xh8yej3').all()
+            user_containers = self.page.locator(self.config.selector_follower_container).all()
 
             for container in user_containers:
                 try:
                     # Find span.xjp7ctv inside this container
-                    span = container.locator('span.xjp7ctv').first
+                    span = container.locator(self.config.selector_follower_username_span).first
 
                     if span.count() == 0:
                         continue
@@ -331,7 +331,7 @@ class FollowersCollector(BaseScraper):
                         continue
 
                     # Get href attribute
-                    href = link.get_attribute('href', timeout=1000)
+                    href = link.get_attribute('href', timeout=self.config.followers_attr_timeout)
 
                     if not href:
                         continue
@@ -340,7 +340,7 @@ class FollowersCollector(BaseScraper):
                     username = href.strip('/').split('/')[-1]
 
                     # Filter out system paths
-                    if username in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories', 'followers', 'following']:
+                    if username in self.config.instagram_system_paths:
                         continue
 
                     if username and username not in usernames:
@@ -364,7 +364,7 @@ class FollowersCollector(BaseScraper):
         try:
             # Method 1: Find scrollable dialog and scroll it
             # The dialog usually has overflow: auto
-            dialog = self.page.locator('div[role="dialog"]').first
+            dialog = self.page.locator(self.config.selector_popup_dialog).first
 
             if dialog.count() > 0:
                 # Scroll inside dialog

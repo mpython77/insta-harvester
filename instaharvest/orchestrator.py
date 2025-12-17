@@ -247,8 +247,8 @@ class InstagramOrchestrator:
         # Initialize Excel exporter if needed
         excel_exporter = None
         if save_excel:
-            excel_filename = f"instagram_data_{username}.xlsx"
-            excel_exporter = ExcelExporter(excel_filename, self.logger)
+            excel_filename = self.config.excel_filename_pattern.format(username=username)
+            excel_exporter = ExcelExporter(excel_filename, self.logger, self.config)
             self.excel_exporter = excel_exporter
             self.logger.info(f"Excel exporter initialized: {excel_filename}")
 
@@ -597,7 +597,7 @@ class InstagramOrchestrator:
         """Export results to JSON file"""
         import json
 
-        output_file = Path(f"instagram_data_{results['username']}.json")
+        output_file = Path(self.config.json_filename_pattern.format(username=results['username']))
 
         try:
             with open(output_file, 'w', encoding='utf-8') as f:

@@ -85,7 +85,7 @@ def save_session(session_file=None, headless=False):
         page = context.new_page()
 
         print('📱 Opening Instagram...')
-        page.goto('https://www.instagram.com/', wait_until='networkidle')
+        page.goto(config.instagram_base_url, wait_until=config.session_save_wait_until)
 
         print('\n✋ WAITING MODE:')
         print('1️⃣  Manually login to Instagram')

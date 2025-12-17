@@ -254,8 +254,8 @@ class PostDataScraper(BaseScraper):
                     ))
 
                 # Check memory usage and optimize if needed
-                if i % 10 == 0:  # Check every 10 posts
-                    if not self.performance_monitor.check_memory_threshold(500):
+                if i % self.config.memory_check_interval == 0:
+                    if not self.performance_monitor.check_memory_threshold(self.config.memory_threshold_mb):
                         self.performance_monitor.optimize_memory()
 
                 # Delay between posts (rate limiting)
@@ -314,10 +314,10 @@ class PostDataScraper(BaseScraper):
 
         # Check if this post has tags (look for Tags SVG)
         try:
-            has_tags = self.page.locator('svg[aria-label="Tags"]').count() > 0
+            has_tags = self.page.locator(self.config.selector_tag_button.replace('button:has(', '').replace(')', '')).count() > 0
             if not has_tags:
                 self.logger.debug("No tag icon found - post has no tags")
-                return ['No tags']
+                return [self.config.default_no_tags_text]
         except:
             pass
 
@@ -339,25 +339,25 @@ class PostDataScraper(BaseScraper):
             self.logger.debug("Using VIDEO post tag extraction (popup method)...")
             try:
                 # Find and click tag button
-                tag_button = self.page.locator('button:has(svg[aria-label="Tags"])').first
+                tag_button = self.page.locator(self.config.selector_tag_button).first
 
                 if tag_button.count() == 0:
                     self.logger.debug("No tag button found")
-                    return ['No tags']
+                    return [self.config.default_no_tags_text]
 
                 # Click the tag button
                 self.logger.debug("Clicking tag button...")
-                tag_button.click(timeout=3000)
+                tag_button.click(timeout=self.config.tag_button_click_timeout)
                 time.sleep(self.config.popup_animation_delay)
                 time.sleep(self.config.popup_content_load_delay)
 
                 # CRITICAL: Extract from popup container ONLY
                 self.logger.debug("Extracting tags from popup...")
-                popup_container = self.page.locator('div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl').first
+                popup_container = self.page.locator(self.config.selector_popup_containers[0]).first
 
                 if popup_container.count() == 0:
                     # Fallback: Try role="dialog"
-                    popup_container = self.page.locator('div[role="dialog"]').first
+                    popup_container = self.page.locator(self.config.selector_popup_dialog).first
 
                 if popup_container.count() > 0:
                     # Extract links ONLY from popup
@@ -370,7 +370,7 @@ class PostDataScraper(BaseScraper):
                                 username = href.strip('/').split('/')[-1]
 
                                 # Filter out system paths
-                                if username in ['explore', 'direct', 'accounts', 'p', 'reel', 'tv', 'stories']:
+                                if username in self.config.instagram_system_paths:
                                     continue
 
                                 if username and username not in tagged:
@@ -381,8 +381,8 @@ class PostDataScraper(BaseScraper):
 
                     # Close popup
                     try:
-                        close_button = self.page.locator('button:has(svg[aria-label="Close"])').first
-                        close_button.click(timeout=2000)
+                        close_button = self.page.locator(self.config.selector_close_button).first
+                        close_button.click(timeout=self.config.popup_close_timeout)
                     except:
                         self.page.keyboard.press('Escape')
 
@@ -402,21 +402,21 @@ class PostDataScraper(BaseScraper):
         self.logger.debug("Using IMAGE post tag extraction (div._aa1y method)...")
         try:
             # Find all tag containers
-            tag_containers = self.page.locator('div._aa1y').all()
-            self.logger.debug(f"Found {len(tag_containers)} div._aa1y tag containers")
+            tag_containers = self.page.locator(self.config.selector_post_tag_container).all()
+            self.logger.debug(f"Found {len(tag_containers)} {self.config.selector_post_tag_container} tag containers")
 
             for container in tag_containers:
                 try:
                     # Get the link inside this container
                     link = container.locator('a[href]').first
-                    href = link.get_attribute('href', timeout=2000)
+                    href = link.get_attribute('href', timeout=self.config.attribute_timeout)
 
                     if href:
                         # Extract username from href="/username/"
                         username = href.strip('/').split('/')[-1]
 
                         # Filter out system paths
-                        if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                        if username in self.config.instagram_system_paths:
                             continue
 
                         if username and username not in tagged:
@@ -448,7 +448,7 @@ class PostDataScraper(BaseScraper):
                     username = href.strip('/').split('/')[-1]
 
                     # Filter out system paths
-                    if username in ['explore', 'accounts', 'p', 'reel', 'direct', 'tv', 'stories']:
+                    if username in self.config.instagram_system_paths:
                         continue
 
                     if username and username not in tagged:
@@ -463,7 +463,7 @@ class PostDataScraper(BaseScraper):
 
         # No tags found
         self.logger.warning("⚠️ No tags found in this post")
-        return ['No tags']
+        return [self.config.default_no_tags_text]
 
     def get_likes_count(self) -> str:
         """
@@ -479,7 +479,7 @@ class PostDataScraper(BaseScraper):
 
             for span in spans[:2]:  # First 2 spans (likes and comments)
                 try:
-                    text = span.inner_text(timeout=2000).strip()
+                    text = span.inner_text(timeout=self.config.visibility_timeout).strip()
                     # Check if it's a number
                     if text and text.replace(',', '').replace('.', '').replace('K', '').replace('M', '').isdigit():
                         self.logger.debug(f"✓ Found likes (method 1): {text}")
@@ -496,8 +496,8 @@ class PostDataScraper(BaseScraper):
         # Method 2: Direct class selector
         try:
             section = self.page.locator('section').first
-            likes_span = section.locator('span.x1ypdohk.x1s688f').first
-            likes_text = likes_span.inner_text(timeout=2000).strip()
+            likes_span = section.locator(self.config.selector_likes_options[0]).first
+            likes_text = likes_span.inner_text(timeout=self.config.visibility_timeout).strip()
             if likes_text and likes_text.replace(',', '').isdigit():
                 self.logger.debug(f"✓ Found likes (method 2): {likes_text}")
                 return likes_text.replace(',', '')
@@ -507,7 +507,7 @@ class PostDataScraper(BaseScraper):
         # Method 3: Link-based (old structure)
         try:
             likes_link = self.page.locator('a[href*="/liked_by/"]').first
-            likes_text = likes_link.locator('span.html-span').first.inner_text(timeout=2000)
+            likes_text = likes_link.locator(self.config.selector_html_span).first.inner_text(timeout=self.config.visibility_timeout)
             if likes_text.replace(',', '').isdigit():
                 self.logger.debug(f"✓ Found likes (method 3): {likes_text}")
                 return likes_text.strip().replace(',', '')
@@ -520,8 +520,8 @@ class PostDataScraper(BaseScraper):
             for i in range(likes_count):
                 try:
                     span = self.page.locator('span:has-text("likes")').nth(i)
-                    number = span.locator('span.html-span').first
-                    text = number.inner_text(timeout=2000)
+                    number = span.locator(self.config.selector_html_span).first
+                    text = number.inner_text(timeout=self.config.visibility_timeout)
                     if text.replace(',', '').isdigit():
                         self.logger.debug(f"✓ Found likes (method 4): {text}")
                         return text.strip().replace(',', '')
@@ -581,8 +581,8 @@ class PostDataScraper(BaseScraper):
         """
         # Method 1: Reel-specific selector (user provided)
         try:
-            likes_span = self.page.locator('span.x1ypdohk.x1s688f.x2fvf9.xe9ewy2[role="button"]').first
-            likes_text = likes_span.inner_text(timeout=3000).strip()
+            likes_span = self.page.locator(self.config.selector_reel_likes + '[role="button"]').first
+            likes_text = likes_span.inner_text(timeout=self.config.reel_likes_timeout).strip()
             if likes_text:
                 self.logger.debug(f"✓ Found reel likes: {likes_text}")
                 return likes_text.replace(',', '')
@@ -594,7 +594,7 @@ class PostDataScraper(BaseScraper):
             spans = self.page.locator('span[role="button"]').all()
             for span in spans[:3]:  # Check first 3
                 try:
-                    text = span.inner_text(timeout=2000).strip()
+                    text = span.inner_text(timeout=self.config.visibility_timeout).strip()
                     # Check if it looks like a number
                     if text and (text.replace(',', '').replace('.', '').replace('K', '').replace('M', '').isdigit() or 'K' in text or 'M' in text):
                         self.logger.debug(f"✓ Found reel likes (method 2): {text}")
@@ -619,22 +619,22 @@ class PostDataScraper(BaseScraper):
         """
         # Method 1: time.x1p4m5qa selector
         try:
-            time_element = self.page.locator('time.x1p4m5qa').first
+            time_element = self.page.locator(self.config.selector_reel_timestamp).first
 
             # Try title attribute first
-            title = time_element.get_attribute('title', timeout=3000)
+            title = time_element.get_attribute('title', timeout=self.config.reel_element_timeout)
             if title:
                 self.logger.debug(f"✓ Found reel timestamp (title): {title}")
                 return title
 
             # Try datetime attribute
-            datetime_str = time_element.get_attribute('datetime', timeout=3000)
+            datetime_str = time_element.get_attribute('datetime', timeout=self.config.reel_element_timeout)
             if datetime_str:
                 self.logger.debug(f"✓ Found reel timestamp (datetime): {datetime_str}")
                 return datetime_str
 
             # Fallback to text
-            text = time_element.inner_text(timeout=3000)
+            text = time_element.inner_text(timeout=self.config.reel_element_timeout)
             if text:
                 self.logger.debug(f"✓ Found reel timestamp (text): {text}")
                 return text
@@ -673,16 +673,16 @@ class PostDataScraper(BaseScraper):
             self.logger.debug("Looking for reel tag button...")
 
             # Look for button with Tags SVG
-            tag_button = self.page.locator('button:has(svg[aria-label="Tags"])').first
+            tag_button = self.page.locator(self.config.selector_tag_button).first
 
             # Check if button exists
             if tag_button.count() == 0:
                 self.logger.debug("No tag button found - reel has no tags")
-                return ['No tags']
+                return [self.config.default_no_tags_text]
 
             # Click the tag button
             self.logger.debug("Clicking tag button...")
-            tag_button.click(timeout=3000)
+            tag_button.click(timeout=self.config.tag_button_click_timeout)
 
             # Step 2: Wait for popup to appear
             time.sleep(self.config.ui_animation_delay)
@@ -700,7 +700,7 @@ class PostDataScraper(BaseScraper):
                         if href and href.startswith('/') and href.endswith('/') and href.count('/') == 2:
                             username = href.strip('/').split('/')[-1]
                             # Filter out Instagram system paths
-                            if username and username not in ['explore', 'direct', 'accounts', 'p', 'reel'] and username not in tagged:
+                            if username and username not in self.config.instagram_system_paths and username not in tagged:
                                 tagged.append(username)
                     except:
                         continue
@@ -710,8 +710,8 @@ class PostDataScraper(BaseScraper):
 
                     # Close popup by clicking outside or close button
                     try:
-                        close_button = self.page.locator('button:has(svg[aria-label="Close"])').first
-                        close_button.click(timeout=2000)
+                        close_button = self.page.locator(self.config.selector_close_button).first
+                        close_button.click(timeout=self.config.popup_close_timeout)
                     except:
                         # Try pressing Escape
                         self.page.keyboard.press('Escape')
@@ -739,4 +739,4 @@ class PostDataScraper(BaseScraper):
             self.logger.debug(f"Fallback tag extraction failed: {e}")
 
         self.logger.warning("No tags found in reel")
-        return ['No tags']
+        return [self.config.default_no_tags_text]
