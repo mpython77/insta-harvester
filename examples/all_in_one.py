@@ -116,6 +116,9 @@ def main():
                     print(f"  Posts: {data.get('posts', 'N/A')}")
                     print(f"  Followers: {data.get('followers', 'N/A')}")
                     print(f"  Following: {data.get('following', 'N/A')}")
+                    print(f"  Verified: {'✓ Yes' if data.get('is_verified', False) else '✗ No'}")
+                    print(f"  Category: {data.get('category') or 'Not set'}")
+                    print(f"  Bio: {data.get('bio') or 'No bio'}")
                 except Exception as e:
                     print(f"❌ Error: {e}")
 
