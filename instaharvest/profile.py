@@ -75,9 +75,16 @@ class ProfileScraper(BaseScraper):
         username = username.strip().lstrip('@')
         self.logger.info(f"Starting profile scrape for: @{username}")
 
-        # Load session and setup browser
-        session_data = self.load_session()
-        self.setup_browser(session_data)
+        # Check if browser is already setup (SharedBrowser mode)
+        is_shared_browser = self.page is not None and self.browser is not None
+
+        if is_shared_browser:
+            self.logger.debug("Using existing browser session (SharedBrowser mode)")
+        else:
+            # Load session and setup browser (standalone mode)
+            self.logger.debug("Setting up new browser session (standalone mode)")
+            session_data = self.load_session()
+            self.setup_browser(session_data)
 
         try:
             # Navigate to profile
@@ -112,7 +119,11 @@ class ProfileScraper(BaseScraper):
             return data
 
         finally:
-            self.close()
+            # Only close browser if not in SharedBrowser mode
+            if not is_shared_browser:
+                self.close()
+            else:
+                self.logger.debug("Keeping browser open (SharedBrowser mode)")
 
     def _profile_exists(self) -> bool:
         """Check if profile exists"""

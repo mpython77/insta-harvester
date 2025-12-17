@@ -202,7 +202,7 @@ class BaseScraper(ABC):
         delay: Optional[float] = None
     ) -> bool:
         """
-        Navigate to URL with error handling
+        Navigate to URL with error handling and session recovery
 
         Args:
             url: URL to navigate to
@@ -229,12 +229,37 @@ class BaseScraper(ABC):
 
                 # Check if login required
                 if self._is_login_page():
-                    self.logger.error("Login page detected - session expired")
+                    self.logger.warning("Login page detected on first load - attempting session recovery...")
+
+                    # Try to recover by visiting Instagram home first
+                    if attempt < self.config.max_retries - 1:
+                        self.logger.info("Attempting to reactivate session by visiting Instagram home...")
+                        try:
+                            self.page.goto(
+                                self.config.instagram_base_url,
+                                wait_until='domcontentloaded',
+                                timeout=self.config.navigation_timeout
+                            )
+                            time.sleep(self.config.page_stability_delay)
+
+                            # Check if home page loaded successfully
+                            if not self._is_login_page():
+                                self.logger.info("Session reactivated, retrying target URL...")
+                                # Retry the original URL
+                                continue
+                        except Exception as recovery_error:
+                            self.logger.warning(f"Session recovery failed: {recovery_error}")
+
+                    # If recovery failed or last attempt, raise error
+                    self.logger.error("Login page detected - session expired or invalid")
                     raise LoginRequiredError("Session expired, login required")
 
                 self.logger.info(f"Successfully navigated to: {url}")
                 return True
 
+            except LoginRequiredError:
+                # Re-raise login errors immediately
+                raise
             except Exception as e:
                 self.logger.warning(
                     f"Navigation attempt {attempt + 1}/{self.config.max_retries} failed: {e}"
@@ -248,12 +273,83 @@ class BaseScraper(ABC):
         return False
 
     def _is_login_page(self) -> bool:
-        """Check if current page is login page"""
+        """
+        Check if current page is login page with multiple detection methods
+
+        Uses multiple signals to reliably detect if login is required:
+        1. URL check - if redirected to /accounts/login/
+        2. Page title check - login pages have specific titles
+        3. Login form detection - check for login form elements
+        4. Logged-in UI detection - check for navigation elements that only appear when logged in
+
+        Returns:
+            True if login is required, False if already logged in
+        """
         try:
+            current_url = self.page.url
+
+            # Method 1: URL-based detection (most reliable)
+            if '/accounts/login' in current_url or '/accounts/emailsignup' in current_url:
+                self.logger.debug("Login required: redirected to login URL")
+                return True
+
+            # Method 2: Check for logged-in UI elements (navigation bar, etc.)
+            # If we can find the main navigation bar or user menu, we're logged in
+            try:
+                # Wait briefly for navigation elements to appear
+                nav_selectors = [
+                    'nav[role="navigation"]',  # Main navigation
+                    'a[href*="/direct/"]',      # Direct messages link (only visible when logged in)
+                    'svg[aria-label="Home"]',   # Home icon in nav
+                    'span[role="link"]',        # User profile link in nav
+                ]
+
+                for selector in nav_selectors:
+                    if self.page.locator(selector).count() > 0:
+                        self.logger.debug(f"Logged in: found navigation element '{selector}'")
+                        return False  # Found logged-in UI element
+
+            except Exception as e:
+                self.logger.debug(f"Could not check navigation elements: {e}")
+
+            # Method 3: Content-based detection (fallback)
+            # Only use this if URL check and UI check didn't give clear answer
             content = self.page.content()
-            return any(s in content for s in self.config.login_detection_strings) or 'login' in self.page.url
-        except Exception:
+
+            # Check for login form elements
+            login_indicators = [
+                'name="username"',
+                'name="password"',
+                '"loginForm"',
+                'Log in to Instagram',
+            ]
+
+            if any(indicator in content for indicator in login_indicators):
+                self.logger.debug("Login required: found login form elements")
+                return True
+
+            # Check for config-based login detection strings
+            if any(s in content for s in self.config.login_detection_strings):
+                self.logger.debug("Login required: found login detection string")
+                return True
+
+            # Method 4: Check page title
+            try:
+                title = self.page.title()
+                if 'login' in title.lower() or 'sign up' in title.lower():
+                    self.logger.debug(f"Login required: page title indicates login page: '{title}'")
+                    return True
+            except Exception:
+                pass
+
+            # If none of the above detected login page, assume we're logged in
+            self.logger.debug("Session appears valid: no login indicators found")
             return False
+
+        except Exception as e:
+            self.logger.warning(f"Error checking login status: {e}")
+            # Conservative approach: if we can't tell, assume login required
+            return True
 
     def safe_extract(
         self,
