@@ -53,10 +53,12 @@ def main():
             print("  7. Batch send messages")
             print("  8. Get followers list")
             print("  9. Get following list")
+            print("  10. Scrape post links")
+            print("  11. Scrape reel links")
             print("  0. Exit")
             print("=" * 70)
 
-            choice = input("\nEnter choice (0-9): ").strip()
+            choice = input("\nEnter choice (0-11): ").strip()
 
             if choice == '0':
                 print("\n👋 Goodbye!")
@@ -205,6 +207,32 @@ def main():
                             for user in following:
                                 f.write(f"{user}\n")
                         print(f"✅ Saved to: {filename}")
+                except Exception as e:
+                    print(f"❌ Error: {e}")
+
+            elif choice == '10':
+                # Scrape post links
+                username = input("Enter username to scrape post links: ").strip()
+                target_input = input("Enter target count (or press Enter for all): ").strip()
+                target_count = int(target_input) if target_input else None
+
+                print(f"\n📸 Scraping post links from @{username}...")
+                try:
+                    links = browser.scrape_post_links(username, target_count=target_count, save_to_file=True)
+                    print(f"\n✅ Total links collected: {len(links)}")
+                    print(f"  Posts: {sum(1 for link in links if link.get('type') == 'post')}")
+                    print(f"  Reels: {sum(1 for link in links if link.get('type') == 'reel')}")
+                except Exception as e:
+                    print(f"❌ Error: {e}")
+
+            elif choice == '11':
+                # Scrape reel links
+                username = input("Enter username to scrape reel links: ").strip()
+
+                print(f"\n🎬 Scraping reel links from @{username}...")
+                try:
+                    links = browser.scrape_reel_links(username, save_to_file=True)
+                    print(f"\n✅ Total reel links collected: {len(links)}")
                 except Exception as e:
                     print(f"❌ Error: {e}")
 
