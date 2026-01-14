@@ -14,6 +14,7 @@ Features:
 - FULL COMMENT SCRAPING (NEW!) - Extract all comments with:
   - Comment text, likes count, timestamp
   - Author info (username, profile pic, verified status)
+  - Collaborators extraction (post co-authors)
   - Reply extraction (nested comments)
   - Real-time JSON & Excel export
 - Followers/Following collection with real-time output
@@ -132,7 +133,7 @@ Quick Start:
         save_session()
 
 Author: Doston
-Version: 2.6.0
+Version: 2.7.0
 License: MIT
 """
 
@@ -154,7 +155,7 @@ from .reel_links import ReelLinksScraper
 from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
-from .comment_scraper import CommentScraper, CommentData, CommentAuthor, PostCommentsData
+from .comment_scraper import CommentScraper, CommentData, CommentAuthor, PostCommentsData, Collaborator
 from .comments_export import CommentsExporter, RealTimeCommentsExporter, export_comments_to_json, export_comments_to_excel
 from .follow import FollowManager
 from .message import MessageManager
@@ -163,7 +164,7 @@ from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
 from .session_utils import save_session, check_session_exists, load_session_data, get_default_session_path
 
-__version__ = '2.6.0'
+__version__ = '2.7.0'
 __author__ = 'Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
@@ -205,6 +206,7 @@ __all__ = [
     'CommentData',
     'CommentAuthor',
     'PostCommentsData',
+    'Collaborator',
 
     # Export
     'ExcelExporter',

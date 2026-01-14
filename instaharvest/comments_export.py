@@ -18,7 +18,7 @@ from typing import List, Dict, Any, Optional, Union
 import logging
 
 from .config import ScraperConfig
-from .comment_scraper import CommentData, PostCommentsData, CommentAuthor
+from .comment_scraper import CommentData, PostCommentsData, CommentAuthor, Collaborator
 
 
 class CommentsExporter:
@@ -182,11 +182,15 @@ class CommentsExporter:
     def _save_json(self) -> None:
         """Save all data to JSON file"""
         try:
+            # Count total collaborators
+            total_collaborators = sum(len(p.collaborators) for p in self.posts_data)
+
             data = {
                 'username': self.username,
                 'total_posts': len(self.posts_data),
                 'total_comments': sum(p.total_comments_scraped for p in self.posts_data),
                 'total_replies': sum(p.total_replies_scraped for p in self.posts_data),
+                'total_collaborators': total_collaborators,
                 'exported_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'posts': [p.to_dict() for p in self.posts_data]
             }
@@ -222,6 +226,7 @@ class CommentsExporter:
             # Print summary
             total_comments = sum(p.total_comments_scraped for p in self.posts_data)
             total_replies = sum(p.total_replies_scraped for p in self.posts_data)
+            total_collaborators = sum(len(p.collaborators) for p in self.posts_data)
 
             self.logger.info(f"\n{'='*60}")
             self.logger.info("COMMENTS EXPORT COMPLETE!")
@@ -229,6 +234,7 @@ class CommentsExporter:
             self.logger.info(f"Posts processed: {len(self.posts_data)}")
             self.logger.info(f"Total comments: {total_comments}")
             self.logger.info(f"Total replies: {total_replies}")
+            self.logger.info(f"Total collaborators: {total_collaborators}")
             self.logger.info(f"Total rows in Excel: {len(self.excel_rows)}")
             if self.export_json:
                 self.logger.info(f"JSON file: {self.json_file}")
@@ -275,6 +281,7 @@ class CommentsExporter:
             'total_posts': len(self.posts_data),
             'total_comments': sum(p.total_comments_scraped for p in self.posts_data),
             'total_replies': sum(p.total_replies_scraped for p in self.posts_data),
+            'total_collaborators': sum(len(p.collaborators) for p in self.posts_data),
             'excel_rows': len(self.excel_rows),
             'json_file': str(self.json_file) if self.export_json else None,
             'excel_file': str(self.excel_file) if self.export_excel else None
@@ -436,6 +443,7 @@ def export_comments_to_json(
                 'total_posts': len(comments_data),
                 'total_comments': sum(p.total_comments_scraped for p in comments_data),
                 'total_replies': sum(p.total_replies_scraped for p in comments_data),
+                'total_collaborators': sum(len(p.collaborators) for p in comments_data),
                 'exported_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'posts': [p.to_dict() for p in comments_data]
             }

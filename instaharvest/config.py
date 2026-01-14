@@ -340,6 +340,7 @@ class ScraperConfig:
     # Feature flags
     scrape_comments: bool = False  # Enable comment scraping
     scrape_comment_replies: bool = True  # Include replies in comment scraping
+    scrape_collaborators: bool = True  # Extract post collaborators
 
     # Limits
     max_comments_per_post: Optional[int] = None  # None = all comments
@@ -354,16 +355,26 @@ class ScraperConfig:
     comment_post_delay_min: float = 3.0  # Min delay between posts (comment scraping)
     comment_post_delay_max: float = 5.0  # Max delay between posts (comment scraping)
 
-    # Comment CSS Selectors (based on Instagram HTML structure)
-    selector_comment_section: str = 'ul._a9z6._a9za'  # Main comment section
-    selector_comment_container: str = 'ul._a9ym'  # Individual comment container
-    selector_comment_item: str = 'li._a9zj'  # Comment list item
-    selector_comment_text: str = 'span._ap3a._aaco._aacu._aacx._aad7._aade'  # Comment text
-    selector_comment_time: str = 'time._a9ze._a9zf'  # Comment timestamp
-    selector_comment_likes_button: str = 'button._a9ze'  # Like count button
-    selector_comment_reply_button: str = 'button:has-text("Reply")'  # Reply button
-    selector_comment_view_replies: str = 'button:has-text("View")'  # View replies button
-    selector_comment_load_more: str = 'button:has-text("View all")'  # Load more comments
+    # Comment CSS Selectors for DIRECT URL VIEW (https://www.instagram.com/p/POST_ID/)
+    # NOTE: These are different from popup view selectors
+    selector_comment_section: str = 'div.x5yr21d'  # Comment section container
+    selector_comment_container: str = 'div.x5yr21d.xw2csxc'  # Comment container
+    selector_comment_item: str = 'li'  # Comment list item
+    selector_comment_username_link: str = 'a.notranslate._a6hd'  # Username link
+    selector_comment_username_text: str = 'span._ap3a._aaco._aacw._aacx._aad7._aade'  # Username text
+    selector_comment_text: str = 'span[dir="auto"]'  # Comment text span
+    selector_comment_time: str = 'time[datetime]'  # Comment timestamp
+    selector_comment_permalink: str = 'a[href*="/c/"]'  # Comment permalink (/p/POST_ID/c/COMMENT_ID/)
+    selector_comment_likes_button: str = 'span:has-text("like")'  # Like count span
+    selector_comment_reply_button: str = 'span:has-text("Reply")'  # Reply button
+    selector_comment_view_replies: str = 'span:has-text("View all")'  # View replies button
+    selector_comment_load_more: str = 'span:has-text("View all")'  # Load more comments
+
+    # Collaborator selectors (for post co-authors)
+    selector_collaborator_container: str = 'header'  # Collaborator section in header
+    selector_collaborator_link: str = 'a[href^="/"]'  # Collaborator profile link
+    selector_collaborator_image: str = 'img[alt*="profile picture"]'  # Collaborator profile image
+    selector_collaborator_others: str = 'span:has-text("and")'  # "and X others" text
 
     # Export settings
     comments_json_filename_pattern: str = "comments_{username}_{post_id}.json"
@@ -384,5 +395,15 @@ class ScraperConfig:
         'Is Reply',
         'Parent Comment ID',
         'Comment URL',
+        'Scraped At'
+    ])
+
+    # Excel columns for collaborators
+    collaborators_excel_columns: List[str] = field(default_factory=lambda: [
+        'Post URL',
+        'Post ID',
+        'Username',
+        'Profile URL',
+        'Is Verified',
         'Scraped At'
     ])
