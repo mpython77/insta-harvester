@@ -41,7 +41,7 @@ class ScraperConfig:
     viewport_width: int = 1280  # Browser window width (smaller for better fit)
     viewport_height: int = 720   # Browser window height (smaller for better fit)
     user_agent: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    browser_channel: str = 'chrome'  # Browser channel to use
+    browser_channel: str = 'chromium'  # Browser channel: 'chromium' (bundled) or 'chrome' (system)
     browser_args: List[str] = field(default_factory=lambda: ['--start-maximized'])  # Browser launch arguments
 
     # ==================== INSTAGRAM URLS ====================

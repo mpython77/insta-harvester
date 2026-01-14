@@ -189,6 +189,9 @@ class CommentScraper(BaseScraper):
         self.goto_url(post_url)
         time.sleep(self.config.post_open_delay)
 
+        # Wait for comments section to load
+        self._wait_for_comments_to_load()
+
         # Scrape comments
         comments = self._scrape_all_comments(
             max_comments=max_comments,
@@ -221,6 +224,45 @@ class CommentScraper(BaseScraper):
         if match:
             return match.group(1)
         return ''
+
+    def _wait_for_comments_to_load(self, timeout: float = 10.0) -> bool:
+        """
+        Wait for the comment section to appear on the page
+
+        Args:
+            timeout: Maximum time to wait in seconds
+
+        Returns:
+            True if comments section found, False otherwise
+        """
+        self.logger.debug("Waiting for comments section to load...")
+
+        # List of selectors that indicate comments are present
+        comment_indicators = [
+            'ul._a9z6',           # Main comment section container
+            'ul._a9ym',           # Individual comment containers
+            'li._a9zj',           # Comment list items
+            'span._ap3a._aaco',   # Comment text spans
+        ]
+
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            for selector in comment_indicators:
+                try:
+                    element = self.page.locator(selector).first
+                    if element.is_visible(timeout=500):
+                        self.logger.debug(f"Comments section found via '{selector}'")
+                        # Give a bit more time for all comments to render
+                        time.sleep(1.0)
+                        return True
+                except:
+                    continue
+
+            # Brief wait before trying again
+            time.sleep(0.5)
+
+        self.logger.warning("Comments section not found within timeout")
+        return False
 
     def _scrape_all_comments(
         self,
@@ -355,7 +397,7 @@ class CommentScraper(BaseScraper):
         """
         Extract all currently visible comments
 
-        Uses BeautifulSoup for reliable extraction
+        Uses BeautifulSoup for reliable extraction with multiple selector strategies
         """
         comments = []
 
@@ -365,9 +407,44 @@ class CommentScraper(BaseScraper):
             html = self.page.content()
             soup = BeautifulSoup(html, 'lxml')
 
-            # Find comment containers
-            # Based on user-provided HTML structure
-            comment_containers = soup.find_all('ul', class_='_a9ym')
+            # Try multiple selector strategies for comment containers
+            comment_containers = []
+
+            # Strategy 1: Find ul._a9ym containers (standard comment structure)
+            containers_v1 = soup.find_all('ul', class_='_a9ym')
+            if containers_v1:
+                self.logger.debug(f"Found {len(containers_v1)} comment containers (ul._a9ym)")
+                comment_containers.extend(containers_v1)
+
+            # Strategy 2: Find li elements with comment classes
+            if not comment_containers:
+                containers_v2 = soup.find_all('li', class_=re.compile(r'_a9zj'))
+                if containers_v2:
+                    self.logger.debug(f"Found {len(containers_v2)} comment items (li._a9zj)")
+                    comment_containers.extend(containers_v2)
+
+            # Strategy 3: Find comment section and get children
+            if not comment_containers:
+                comment_section = soup.find('ul', class_=re.compile(r'_a9z6'))
+                if comment_section:
+                    # Get direct children that contain comments
+                    children = comment_section.find_all(['div', 'ul'], recursive=False)
+                    self.logger.debug(f"Found {len(children)} children in comment section")
+                    comment_containers.extend(children)
+
+            # Strategy 4: Find any element containing comment text spans
+            if not comment_containers:
+                # Look for spans with comment text class inside any container
+                text_spans = soup.find_all('span', class_=re.compile(r'_ap3a.*_aade'))
+                if text_spans:
+                    self.logger.debug(f"Found {len(text_spans)} comment text spans")
+                    # Get parent containers
+                    for span in text_spans:
+                        parent = span.find_parent(['ul', 'li', 'div'])
+                        if parent and parent not in comment_containers:
+                            comment_containers.append(parent)
+
+            self.logger.debug(f"Total comment containers to parse: {len(comment_containers)}")
 
             for container in comment_containers:
                 try:
@@ -389,6 +466,11 @@ class CommentScraper(BaseScraper):
                 except Exception as e:
                     self.logger.debug(f"Failed to parse comment container: {e}")
                     continue
+
+            # If no comments found with BeautifulSoup, try Playwright
+            if not comments:
+                self.logger.debug("No comments found with BeautifulSoup, trying Playwright extraction")
+                comments = self._extract_comments_playwright(seen_ids)
 
         except ImportError:
             self.logger.warning("BeautifulSoup not available, using Playwright extraction")
@@ -893,35 +975,108 @@ class CommentScraper(BaseScraper):
         """
         Extract comments using Playwright (fallback method)
 
-        Used when BeautifulSoup is not available
+        Uses multiple selector strategies for robustness
         """
         comments = []
 
         try:
-            # Find all comment containers
-            containers = self.page.locator('ul._a9ym').all()
+            # Try multiple selector strategies
+            container_selectors = [
+                'ul._a9ym',           # Standard comment container
+                'li._a9zj',           # Comment list item
+                'div[role="button"]:has(h3)',  # Comment with username in h3
+            ]
+
+            containers = []
+            for selector in container_selectors:
+                try:
+                    found = self.page.locator(selector).all()
+                    if found:
+                        self.logger.debug(f"Playwright found {len(found)} elements with '{selector}'")
+                        containers.extend(found)
+                        break  # Use first successful selector
+                except Exception as e:
+                    self.logger.debug(f"Selector '{selector}' failed: {e}")
+                    continue
+
+            if not containers:
+                self.logger.debug("Playwright: No comment containers found")
+                return comments
 
             for container in containers:
                 try:
-                    # Extract username
-                    username_link = container.locator('a[href^="/"]').first
-                    href = username_link.get_attribute('href', timeout=1000)
-                    username = href.strip('/').split('/')[-1] if href else ''
+                    # Extract username - try multiple approaches
+                    username = ''
+                    href = ''
+
+                    # Method 1: Find h3 > a link
+                    try:
+                        h3_link = container.locator('h3 a[href^="/"]').first
+                        if h3_link.count() > 0:
+                            href = h3_link.get_attribute('href', timeout=1000)
+                    except:
+                        pass
+
+                    # Method 2: Find any user link
+                    if not href:
+                        try:
+                            user_link = container.locator('a[href^="/"]').first
+                            href = user_link.get_attribute('href', timeout=1000)
+                        except:
+                            pass
+
+                    if href:
+                        username = href.strip('/').split('/')[-1]
 
                     if not username or username in self.config.instagram_system_paths:
                         continue
 
-                    # Extract comment text
-                    text_span = container.locator('span[dir="auto"]').first
-                    comment_text = text_span.inner_text(timeout=1000) if text_span.count() > 0 else ''
+                    # Extract comment text - try multiple selectors
+                    comment_text = ''
+                    text_selectors = [
+                        'span._ap3a._aaco._aacu._aacx._aad7._aade',
+                        'span[dir="auto"]:not(:has(a))',
+                        'span[dir="auto"]',
+                    ]
+
+                    for text_sel in text_selectors:
+                        try:
+                            text_span = container.locator(text_sel).first
+                            if text_span.count() > 0:
+                                comment_text = text_span.inner_text(timeout=1000)
+                                if comment_text and comment_text != username:
+                                    break
+                        except:
+                            continue
+
+                    if not comment_text:
+                        continue
 
                     # Extract timestamp
-                    time_el = container.locator('time').first
-                    timestamp = time_el.get_attribute('title', timeout=1000) if time_el.count() > 0 else ''
-                    timestamp_iso = time_el.get_attribute('datetime', timeout=1000) if time_el.count() > 0 else ''
+                    timestamp = ''
+                    timestamp_iso = ''
+                    try:
+                        time_el = container.locator('time').first
+                        if time_el.count() > 0:
+                            timestamp = time_el.get_attribute('title', timeout=1000) or ''
+                            timestamp_iso = time_el.get_attribute('datetime', timeout=1000) or ''
+                    except:
+                        pass
+
+                    # Extract likes count
+                    likes_count = 0
+                    try:
+                        likes_btn = container.locator('button:has-text("like")').first
+                        if likes_btn.count() > 0:
+                            likes_text = likes_btn.inner_text(timeout=1000)
+                            match = re.search(r'(\d+)', likes_text)
+                            if match:
+                                likes_count = int(match.group(1))
+                    except:
+                        pass
 
                     # Generate ID
-                    comment_id = f"{username}_{hash(comment_text)}"
+                    comment_id = f"{username}_{abs(hash(comment_text))}"
 
                     if comment_id in seen_ids:
                         continue
@@ -939,13 +1094,14 @@ class CommentScraper(BaseScraper):
                         text=comment_text,
                         timestamp=timestamp,
                         timestamp_iso=timestamp_iso,
-                        likes_count=0,
+                        likes_count=likes_count,
                         reply_count=0,
                         comment_url='',
                         is_reply=False
                     )
 
                     comments.append(comment)
+                    self.logger.debug(f"Playwright extracted: @{username}: {comment_text[:30]}...")
 
                 except Exception as e:
                     self.logger.debug(f"Playwright comment extraction error: {e}")
@@ -954,6 +1110,7 @@ class CommentScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f"Playwright extraction failed: {e}")
 
+        self.logger.debug(f"Playwright extraction found {len(comments)} comments")
         return comments
 
     def scrape_multiple(
