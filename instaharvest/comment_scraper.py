@@ -230,17 +230,24 @@ class CommentScraper(BaseScraper):
         progress_callback: Optional[callable]
     ) -> List[CommentData]:
         """
-        Scrape all comments with scrolling
+        Scrape all comments with intelligent scrolling and button clicking
+
+        Algorithm:
+        1. Extract visible comments
+        2. Try to click "Load more comments" plus (+) button if exists
+        3. If button clicked, wait for comments to load, repeat from step 1
+        4. If no button, try scrolling to reveal more comments
+        5. If no new comments AND no button for 3 consecutive attempts, stop
 
         Uses intelligent scrolling to load and extract all comments
         """
         comments = []
         seen_comment_ids = set()
-        no_new_comments_count = 0
+        no_progress_count = 0  # Count of attempts with no new comments AND no button
         scroll_attempt = 0
+        max_no_progress = 3  # Stop after 3 attempts with no progress
 
-        # Get comment section container
-        comment_section_selector = self.config.selector_comment_section
+        self.logger.info("Starting comment extraction...")
 
         while True:
             # Check if we've reached max comments
@@ -249,15 +256,15 @@ class CommentScraper(BaseScraper):
                 break
 
             # Extract visible comments
+            comments_before = len(comments)
             new_comments = self._extract_visible_comments(
                 seen_ids=seen_comment_ids,
                 include_replies=include_replies,
                 max_replies_per_comment=max_replies_per_comment
             )
 
+            # Process new comments
             if new_comments:
-                no_new_comments_count = 0
-
                 for comment in new_comments:
                     # Check max limit
                     if max_comments and len(comments) >= max_comments:
@@ -273,17 +280,15 @@ class CommentScraper(BaseScraper):
                         except Exception as e:
                             self.logger.debug(f"Progress callback error: {e}")
 
+                    # Log comment
+                    text_preview = comment.text[:50] + '...' if len(comment.text) > 50 else comment.text
                     self.logger.debug(
                         f"[{len(comments)}] @{comment.author.username}: "
-                        f"{comment.text[:50]}... ({comment.likes_count} likes)"
+                        f"{text_preview} ({comment.likes_count} likes)"
                     )
-            else:
-                no_new_comments_count += 1
 
-            # Check if we should stop scrolling
-            if no_new_comments_count >= self.config.comment_max_no_new_scrolls:
-                self.logger.info(f"No new comments after {no_new_comments_count} scrolls, stopping")
-                break
+            comments_added = len(comments) - comments_before
+            found_new_comments = comments_added > 0
 
             # Check max scroll attempts
             scroll_attempt += 1
@@ -291,19 +296,54 @@ class CommentScraper(BaseScraper):
                 self.logger.info(f"Reached max scroll attempts: {scroll_attempt}")
                 break
 
-            # Try to load more comments
-            loaded_more = self._load_more_comments()
+            # Try to click "Load more comments" plus button
+            button_exists = self._check_load_more_button_exists()
+            clicked_button = False
 
-            if not loaded_more:
-                # Try scrolling the comment section
+            if button_exists:
+                clicked_button = self._load_more_comments()
+                if clicked_button:
+                    self.logger.debug(f"Clicked 'Load more comments' button, waiting for comments to load...")
+                    # Wait for comments to load after clicking button
+                    time.sleep(random.uniform(
+                        self.config.comment_scroll_delay_min,
+                        self.config.comment_scroll_delay_max
+                    ))
+                    # Reset no progress counter since we clicked button
+                    no_progress_count = 0
+                    continue  # Go back to extract new comments
+
+            # If no button found, try scrolling
+            if not clicked_button:
                 self._scroll_comment_section()
+                self.logger.debug("Scrolled comment section to load more")
+                # Wait for content to load after scroll
+                time.sleep(random.uniform(
+                    self.config.comment_scroll_delay_min,
+                    self.config.comment_scroll_delay_max
+                ))
 
-            # Wait for content to load
-            time.sleep(random.uniform(
-                self.config.comment_scroll_delay_min,
-                self.config.comment_scroll_delay_max
-            ))
+            # Check if we made any progress (new comments or button click)
+            if not found_new_comments and not clicked_button and not button_exists:
+                no_progress_count += 1
+                self.logger.debug(
+                    f"No progress attempt {no_progress_count}/{max_no_progress} "
+                    f"(no new comments, no button)"
+                )
 
+                # Stop if no progress after max attempts
+                if no_progress_count >= max_no_progress:
+                    self.logger.info(
+                        f"No new comments and no 'Load more' button after "
+                        f"{no_progress_count} attempts, comments exhausted"
+                    )
+                    break
+            else:
+                # Reset counter if we found something
+                if found_new_comments:
+                    no_progress_count = 0
+
+        self.logger.info(f"Comment extraction complete: {len(comments)} comments found")
         return comments
 
     def _extract_visible_comments(
@@ -615,13 +655,53 @@ class CommentScraper(BaseScraper):
 
     def _load_more_comments(self) -> bool:
         """
-        Click 'Load more comments' or 'View all comments' button
+        Click 'Load more comments' button (plus button) to load more comments
+
+        Instagram shows a plus (+) button with:
+        - Button class: _abl-
+        - SVG with aria-label="Load more comments"
+        - Title: "Load more comments"
 
         Returns:
-            True if more comments were loaded
+            True if button was found and clicked (more comments loading)
         """
         try:
-            # Various button texts for loading more comments
+            # Method 1: Find button by SVG aria-label (most reliable)
+            # The plus button has SVG with aria-label="Load more comments"
+            load_more_button = self.page.locator('button:has(svg[aria-label="Load more comments"])').first
+
+            try:
+                if load_more_button.is_visible(timeout=1000):
+                    load_more_button.click(timeout=2000)
+                    self.logger.debug("Clicked 'Load more comments' plus button (via SVG aria-label)")
+                    time.sleep(self.config.popup_animation_delay)
+                    return True
+            except:
+                pass
+
+            # Method 2: Find by button class _abl-
+            try:
+                plus_button = self.page.locator('button._abl-').first
+                if plus_button.is_visible(timeout=1000):
+                    plus_button.click(timeout=2000)
+                    self.logger.debug("Clicked 'Load more comments' plus button (via class _abl-)")
+                    time.sleep(self.config.popup_animation_delay)
+                    return True
+            except:
+                pass
+
+            # Method 3: Find by SVG title element
+            try:
+                title_button = self.page.locator('button:has(svg title:has-text("Load more comments"))').first
+                if title_button.is_visible(timeout=1000):
+                    title_button.click(timeout=2000)
+                    self.logger.debug("Clicked 'Load more comments' plus button (via title)")
+                    time.sleep(self.config.popup_animation_delay)
+                    return True
+            except:
+                pass
+
+            # Method 4: Fallback - Various text patterns for loading more comments
             load_more_patterns = [
                 'View all',
                 'Load more',
@@ -632,7 +712,7 @@ class CommentScraper(BaseScraper):
             for pattern in load_more_patterns:
                 try:
                     button = self.page.locator(f'button:has-text("{pattern}")').first
-                    if button.is_visible(timeout=1000):
+                    if button.is_visible(timeout=500):
                         button.click(timeout=2000)
                         self.logger.debug(f"Clicked '{pattern}' button")
                         time.sleep(self.config.popup_animation_delay)
@@ -640,7 +720,7 @@ class CommentScraper(BaseScraper):
                 except:
                     continue
 
-            # Try clicking any visible "View" button in comment section
+            # Method 5: Try clicking any visible "View" button in comment section
             try:
                 view_buttons = self.page.locator('div[role="button"]:has-text("View")').all()
                 for btn in view_buttons[:3]:  # Try first 3
@@ -656,6 +736,31 @@ class CommentScraper(BaseScraper):
 
         except Exception as e:
             self.logger.debug(f"Load more comments failed: {e}")
+
+        return False
+
+    def _check_load_more_button_exists(self) -> bool:
+        """
+        Check if 'Load more comments' plus button exists on page
+
+        Returns:
+            True if the button is visible
+        """
+        try:
+            # Check by SVG aria-label
+            button = self.page.locator('button:has(svg[aria-label="Load more comments"])')
+            if button.count() > 0 and button.first.is_visible(timeout=500):
+                return True
+        except:
+            pass
+
+        try:
+            # Check by button class
+            button = self.page.locator('button._abl-')
+            if button.count() > 0 and button.first.is_visible(timeout=500):
+                return True
+        except:
+            pass
 
         return False
 
