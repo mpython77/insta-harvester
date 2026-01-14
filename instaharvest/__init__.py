@@ -132,7 +132,7 @@ Quick Start:
         save_session()
 
 Author: Doston
-Version: 2.5.5
+Version: 2.6.0
 License: MIT
 """
 
