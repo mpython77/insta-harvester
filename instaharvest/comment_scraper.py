@@ -529,7 +529,14 @@ class CommentScraper(BaseScraper):
         """
         Extract all currently visible comments from direct URL view
 
-        Uses selectors specific to direct URL HTML structure
+        Uses selectors specific to direct URL HTML structure.
+        Based on Instagram's current HTML structure where each comment has:
+        - Profile picture link: a._a6hd with img[alt*="profile picture"]
+        - Username span: span._ap3a._aaco._aacw._aacx._aad7._aade
+        - Comment permalink: a[href*="/c/"] with time[datetime]
+        - Comment text: span[dir="auto"] with specific classes (x5n08af)
+        - Likes: span with "X likes" inside role="button" div
+        - View replies: "View all X replies" in div.xpdvgm7
         """
         comments = []
 
@@ -539,52 +546,69 @@ class CommentScraper(BaseScraper):
             html = self.page.content()
             soup = BeautifulSoup(html, 'lxml')
 
-            # Find comment containers in direct URL view
-            # The structure is different from popup view
             comment_containers = []
+            seen_container_ids = set()
 
-            # Strategy 1: Find all div containers with comment-like structure
-            # Look for containers that have username links and timestamps
-            all_divs = soup.find_all('div', class_=re.compile(r'x5yr21d|xw2csxc|x1odjw0f'))
-            for div in all_divs:
-                # Check if this div contains comment elements
-                if div.find('a', href=re.compile(r'/c/\d+')):
-                    comment_containers.append(div)
+            # PRIMARY STRATEGY: Find by comment permalink (most reliable)
+            # Each comment has a unique permalink like /p/POST_ID/c/COMMENT_ID/
+            comment_links = soup.find_all('a', href=re.compile(r'/p/[^/]+/c/\d+/'))
+            self.logger.debug(f"Found {len(comment_links)} comment permalinks")
 
-            # Strategy 2: Find li elements that contain comments
+            for link in comment_links:
+                try:
+                    # Navigate up to find the comment container
+                    # The container is typically 4-8 levels up from the permalink
+                    container = self._find_comment_container(link)
+                    if container:
+                        container_id = id(container)
+                        if container_id not in seen_container_ids:
+                            seen_container_ids.add(container_id)
+                            comment_containers.append(container)
+                except Exception as e:
+                    self.logger.debug(f"Error finding container for permalink: {e}")
+                    continue
+
+            # FALLBACK STRATEGY 1: Find by username span class
             if not comment_containers:
-                all_lis = soup.find_all('li')
-                for li in all_lis:
-                    # Check for username and comment text
-                    has_username = li.find('a', class_=re.compile(r'notranslate|_a6hd'))
-                    has_text = li.find('span', class_=re.compile(r'_ap3a'))
-                    if has_username or has_text:
-                        comment_containers.append(li)
-
-            # Strategy 3: Find by comment permalink pattern
-            if not comment_containers:
-                comment_links = soup.find_all('a', href=re.compile(r'/p/[^/]+/c/\d+/'))
-                for link in comment_links:
-                    # Get parent container
-                    parent = link.find_parent(['div', 'li', 'article'])
-                    if parent and parent not in comment_containers:
-                        comment_containers.append(parent)
-
-            # Strategy 4: Find by username pattern in spans
-            if not comment_containers:
-                username_spans = soup.find_all('span', class_=re.compile(r'_ap3a.*_aaco.*_aacw'))
+                self.logger.debug("Trying username span strategy")
+                username_spans = soup.find_all('span', class_=re.compile(r'_ap3a.*_aaco.*_aacw.*_aacx.*_aad7.*_aade'))
                 for span in username_spans:
-                    parent = span.find_parent(['div', 'li'])
-                    if parent and parent not in comment_containers:
-                        comment_containers.append(parent)
+                    try:
+                        container = self._find_comment_container(span)
+                        if container:
+                            container_id = id(container)
+                            if container_id not in seen_container_ids:
+                                seen_container_ids.add(container_id)
+                                comment_containers.append(container)
+                    except:
+                        continue
 
-            self.logger.debug(f"Found {len(comment_containers)} potential comment containers")
+            # FALLBACK STRATEGY 2: Find by profile picture pattern
+            if not comment_containers:
+                self.logger.debug("Trying profile picture strategy")
+                profile_pics = soup.find_all('img', alt=re.compile(r"'s profile picture", re.I))
+                for img in profile_pics:
+                    try:
+                        container = self._find_comment_container(img)
+                        if container:
+                            container_id = id(container)
+                            if container_id not in seen_container_ids:
+                                seen_container_ids.add(container_id)
+                                comment_containers.append(container)
+                    except:
+                        continue
+
+            self.logger.debug(f"Found {len(comment_containers)} unique comment containers")
 
             for container in comment_containers:
                 try:
                     comment = self._parse_comment_container_direct(container, soup)
 
                     if comment and comment.comment_id not in seen_ids:
+                        # Skip if this looks like post caption (no comment ID from URL)
+                        if comment.comment_id.startswith('caption_'):
+                            continue
+
                         # Extract replies if enabled
                         if include_replies:
                             comment.replies = self._extract_replies_for_comment(
@@ -593,7 +617,8 @@ class CommentScraper(BaseScraper):
                                 max_replies=max_replies_per_comment,
                                 parent_comment_id=comment.comment_id
                             )
-                            comment.reply_count = len(comment.replies)
+                            if comment.replies:
+                                comment.reply_count = max(comment.reply_count, len(comment.replies))
 
                         comments.append(comment)
 
@@ -614,178 +639,320 @@ class CommentScraper(BaseScraper):
 
         return comments
 
+    def _find_comment_container(self, element) -> Optional[Any]:
+        """
+        Find the full comment container starting from any element inside a comment.
+
+        The comment container should include:
+        - Profile picture
+        - Username
+        - Comment text
+        - Timestamp
+        - Likes/Reply buttons
+        - View replies button (optional)
+
+        Returns the container element or None if not found.
+        """
+        if element is None:
+            return None
+
+        # Navigate up the DOM tree looking for the comment container
+        current = element
+        max_levels = 15  # Maximum levels to traverse up
+
+        for _ in range(max_levels):
+            parent = current.parent
+            if parent is None or parent.name in ['body', 'html', '[document]']:
+                break
+
+            # Check if this parent is a good comment container
+            # A good container has: profile picture, username, and comment text/timestamp
+            has_profile_pic = parent.find('img', alt=re.compile(r"'s profile picture", re.I))
+            has_username = parent.find('span', class_=re.compile(r'_ap3a.*_aaco'))
+            has_timestamp = parent.find('time', attrs={'datetime': True})
+            has_comment_link = parent.find('a', href=re.compile(r'/c/\d+'))
+
+            # Also check for text content spans
+            has_text_spans = parent.find_all('span', {'dir': 'auto'})
+            has_content_span = len(has_text_spans) >= 2  # Username + comment text
+
+            # Container must have at least username and timestamp or comment link
+            if has_username and (has_timestamp or has_comment_link) and has_content_span:
+                # Make sure we're not too high up (not the entire page)
+                # Check that the container isn't absurdly large
+                all_usernames = parent.find_all('span', class_=re.compile(r'_ap3a.*_aaco.*_aad7.*_aade'))
+                # If this container has more than 2 usernames, we're probably too high
+                if len(all_usernames) <= 2:
+                    return parent
+
+            current = parent
+
+        # If we couldn't find a proper container, return a reasonable ancestor
+        # Go up 5-6 levels from the original element
+        current = element
+        for i in range(6):
+            if current.parent and current.parent.name not in ['body', 'html', '[document]']:
+                current = current.parent
+            else:
+                break
+
+        return current
+
     def _parse_comment_container_direct(self, container, soup) -> Optional[CommentData]:
         """
         Parse a single comment container from direct URL view
 
-        Direct URL HTML structure:
-        - Profile picture: img[alt*="'s profile picture"]
-        - Username link: a.notranslate._a6hd[href^="/"] or a[href^="/username/"]
-        - Username text: span._ap3a._aaco._aacw._aacx._aad7._aade
-        - Comment text: span with dir="auto" after username
-        - Timestamp: time[datetime] with relative text (e.g., "8w")
-        - Comment URL: a[href="/p/POST_ID/c/COMMENT_ID/"]
-        - Likes: span containing "X likes" or "1 like"
-        - View replies: span containing "View all X replies"
+        Instagram HTML structure (as of 2025):
+        =======================================
+        Comment Container:
+        ├── Profile Picture Area
+        │   └── a._a6hd[href="/username/"]
+        │       └── img[alt="username's profile picture"][src="..."]
+        │
+        ├── Content Area
+        │   ├── Username + Timestamp Row
+        │   │   ├── span._ap3a._aaco._aacw._aacx._aad7._aade (username text)
+        │   │   │   └── inside: a.notranslate._a6hd[href="/username/"]
+        │   │   └── a[href="/p/POST_ID/c/COMMENT_ID/"]
+        │   │       └── time[datetime="ISO"][title="Date"]
+        │   │
+        │   ├── Comment Text Row
+        │   │   └── span[dir="auto"][class*="x5n08af"] (actual comment text)
+        │   │
+        │   └── Action Buttons Row (div with style --x-height: 16px)
+        │       ├── div[role="button"] > span "882 likes"
+        │       ├── div[role="button"] > span "Reply"
+        │       └── div[role="button"] > span "See translation"
+        │
+        └── Like Heart Button (svg aria-label="Like")
+
+        View Replies (sibling div with class xpdvgm7):
+        └── div[role="button"] > span "View all 6 replies"
         """
         try:
-            # === EXTRACT USERNAME ===
+            # ==================== EXTRACT USERNAME ====================
             username = ''
             profile_url = ''
 
-            # Method 1: Find username link (a.notranslate or a._a6hd)
-            username_link = container.find('a', class_=re.compile(r'notranslate|_a6hd'))
-            if username_link:
-                href = username_link.get('href', '')
-                if href and href.startswith('/'):
-                    username = href.strip('/').split('/')[0]
-                    profile_url = f'https://www.instagram.com{href}'
+            # Primary: Find username span with specific Instagram classes
+            username_span = container.find('span', class_=re.compile(r'_ap3a.*_aaco.*_aacw.*_aacx.*_aad7.*_aade'))
+            if username_span:
+                username = username_span.get_text(strip=True)
+                # Also get profile URL from parent link
+                parent_link = username_span.find_parent('a')
+                if parent_link:
+                    href = parent_link.get('href', '')
+                    if href.startswith('/') and not href.startswith('/p/'):
+                        profile_url = f'https://www.instagram.com{href}'
 
-            # Method 2: Find username from span._ap3a inside a link
+            # Fallback: Find from notranslate link
             if not username:
-                username_span = container.find('span', class_=re.compile(r'_ap3a.*_aaco.*_aacw.*_aad7.*_aade'))
-                if username_span:
-                    # Check if inside a link
-                    parent_link = username_span.find_parent('a')
-                    if parent_link and parent_link.get('href', '').startswith('/'):
-                        username = parent_link.get('href', '').strip('/').split('/')[0]
-                    else:
-                        # Username might be text content
-                        text = username_span.get_text(strip=True)
-                        # Validate - should be short and no spaces
-                        if text and len(text) < 50 and ' ' not in text:
-                            username = text
+                username_link = container.find('a', class_=re.compile(r'notranslate'))
+                if username_link:
+                    href = username_link.get('href', '')
+                    if href and href.startswith('/'):
+                        parts = href.strip('/').split('/')
+                        if parts and parts[0] not in ['p', 'reel', 'c', 'explore']:
+                            username = parts[0]
+                            profile_url = f'https://www.instagram.com/{username}/'
 
-            # Method 3: Find from any link with profile pattern
+            # Fallback 2: Find from profile picture link
             if not username:
-                all_links = container.find_all('a', href=re.compile(r'^/[^/]+/$'))
-                for link in all_links:
-                    href = link.get('href', '')
-                    potential = href.strip('/').split('/')[0]
-                    if potential and potential not in self.config.instagram_system_paths:
-                        if not re.match(r'^(p|reel|c|\d+)$', potential):
-                            username = potential
-                            profile_url = f'https://www.instagram.com{href}'
-                            break
+                profile_pic = container.find('img', alt=re.compile(r"'s profile picture", re.I))
+                if profile_pic:
+                    alt_text = profile_pic.get('alt', '')
+                    match = re.match(r"([^']+)'s profile picture", alt_text, re.I)
+                    if match:
+                        username = match.group(1)
+                        # Find the parent link for profile URL
+                        parent_link = profile_pic.find_parent('a')
+                        if parent_link:
+                            href = parent_link.get('href', '')
+                            if href.startswith('/'):
+                                profile_url = f'https://www.instagram.com{href}'
 
             # Skip if no username or system path
             if not username:
                 return None
             if username in self.config.instagram_system_paths:
                 return None
+            # Skip if username looks like a URL path
+            if re.match(r'^(p|reel|c|\d+)$', username):
+                return None
 
-            # === EXTRACT PROFILE PICTURE ===
+            # ==================== EXTRACT PROFILE PICTURE ====================
             profile_pic_url = ''
-            img_tag = container.find('img', alt=re.compile(rf"{re.escape(username)}'s profile picture", re.I))
+            # Try exact username match first
+            img_tag = container.find('img', alt=re.compile(rf"^{re.escape(username)}'s profile picture$", re.I))
             if not img_tag:
+                # Try any profile picture
                 img_tag = container.find('img', alt=re.compile(r"'s profile picture", re.I))
             if img_tag:
                 profile_pic_url = img_tag.get('src', '')
 
-            # === CHECK VERIFIED STATUS ===
+            # ==================== CHECK VERIFIED STATUS ====================
             is_verified = container.find('svg', {'aria-label': 'Verified'}) is not None
 
-            # === EXTRACT COMMENT TEXT ===
-            comment_text = ''
-
-            # Method 1: Find span with dir="auto" that contains text (not username)
-            auto_spans = container.find_all('span', {'dir': 'auto'})
-            for span in auto_spans:
-                text = span.get_text(strip=True)
-                # Skip if empty, username, or very short
-                if not text or text == username or len(text) <= 1:
-                    continue
-                # Skip if contains just a username link
-                if span.find('a') and len(text) < 30:
-                    # Check if it's mostly a link
-                    link_text = ''.join(a.get_text() for a in span.find_all('a'))
-                    if link_text and link_text.strip() == text.strip():
-                        continue
-                comment_text = text
-                break
-
-            # Method 2: Find span._ap3a with comment text
-            if not comment_text:
-                text_span = container.find('span', class_=re.compile(r'_ap3a'))
-                if text_span and text_span.get('dir') == 'auto':
-                    text = text_span.get_text(strip=True)
-                    if text and text != username:
-                        comment_text = text
-
-            # Method 3: Look for h1 > span structure (caption style)
-            if not comment_text:
-                h1 = container.find('h1')
-                if h1:
-                    span = h1.find('span')
-                    if span:
-                        text = span.get_text(strip=True)
-                        if text and text != username:
-                            comment_text = text
-
-            # === EXTRACT TIMESTAMP ===
-            timestamp = ''
-            timestamp_iso = ''
-            time_element = container.find('time')
-            if time_element:
-                timestamp = time_element.get_text(strip=True)
-                timestamp_iso = time_element.get('datetime', '')
-
-            # === EXTRACT COMMENT URL AND ID ===
+            # ==================== EXTRACT COMMENT URL AND ID ====================
             comment_url = ''
             comment_id = ''
 
-            comment_link = container.find('a', href=re.compile(r'/p/[^/]+/c/\d+/'))
+            # Find comment permalink: /p/POST_ID/c/COMMENT_ID/
+            comment_link = container.find('a', href=re.compile(r'/p/[^/]+/c/\d+/?'))
             if comment_link:
                 href = comment_link.get('href', '')
                 comment_url = 'https://www.instagram.com' + href
-                match = re.search(r'/c/(\d+)/', href)
+                match = re.search(r'/c/(\d+)/?', href)
                 if match:
                     comment_id = match.group(1)
 
-            # Generate ID if not found from URL
+            # Generate caption ID if no comment permalink found (this is likely the caption)
             if not comment_id:
-                comment_id = f"{username}_{abs(hash(comment_text))}"
+                comment_id = f"caption_{username}_{abs(hash(str(container)[:100]))}"
 
-            # === EXTRACT LIKES COUNT ===
+            # ==================== EXTRACT TIMESTAMP ====================
+            timestamp = ''
+            timestamp_iso = ''
+
+            # Find time element (usually inside the comment permalink)
+            time_element = container.find('time', attrs={'datetime': True})
+            if time_element:
+                timestamp = time_element.get_text(strip=True)  # e.g., "8w"
+                timestamp_iso = time_element.get('datetime', '')  # e.g., "2025-11-15T05:51:34.000Z"
+
+            # ==================== EXTRACT COMMENT TEXT ====================
+            comment_text = ''
+
+            # Find all spans with dir="auto" - these contain text content
+            auto_spans = container.find_all('span', {'dir': 'auto'})
+
+            # Filter and find the actual comment text span
+            # The comment text is usually:
+            # 1. NOT the username span (doesn't have _ap3a _aaco _aacw _aacx _aad7 _aade)
+            # 2. NOT a timestamp (inside time element)
+            # 3. NOT "likes", "Reply", "See translation" buttons
+            # 4. Has actual content
+
+            button_texts = {'like', 'likes', 'reply', 'see translation', 'view all', 'replies'}
+
+            for span in auto_spans:
+                # Skip if this is the username span
+                span_class = span.get('class', [])
+                if isinstance(span_class, list):
+                    class_str = ' '.join(span_class)
+                else:
+                    class_str = str(span_class)
+
+                # Skip username spans
+                if '_ap3a' in class_str and '_aade' in class_str:
+                    continue
+
+                # Skip if inside a time element
+                if span.find_parent('time'):
+                    continue
+
+                text = span.get_text(strip=True)
+
+                # Skip empty or too short
+                if not text or len(text) <= 1:
+                    continue
+
+                # Skip if it's just the username
+                if text.lower() == username.lower():
+                    continue
+
+                # Skip button texts
+                text_lower = text.lower()
+                if any(btn in text_lower for btn in button_texts):
+                    # But allow if text is much longer than just button text
+                    if len(text) < 30:
+                        continue
+
+                # Skip timestamp-like text (1w, 2d, 3h, etc.)
+                if re.match(r'^\d+[wdhms]$', text):
+                    continue
+
+                # Skip if text contains just username + timestamp pattern
+                if re.match(rf'^{re.escape(username)}\s*\d+[wdhms]$', text, re.I):
+                    continue
+
+                # This is likely the comment text
+                comment_text = text
+                break
+
+            # If still no comment text, try another approach
+            if not comment_text:
+                # Look for span with class containing x5n08af (comment text marker)
+                text_spans = container.find_all('span', class_=re.compile(r'x5n08af'))
+                for span in text_spans:
+                    text = span.get_text(strip=True)
+                    if text and text != username and len(text) > 1:
+                        comment_text = text
+                        break
+
+            # ==================== EXTRACT LIKES COUNT ====================
             likes_count = 0
 
-            # Find text containing "X likes" or "1 like"
-            all_text = container.get_text(' ', strip=True)
-            likes_match = re.search(r'(\d+)\s*likes?', all_text, re.I)
-            if likes_match:
-                likes_count = int(likes_match.group(1))
+            # Strategy 1: Find spans with exact "X likes" or "X like" pattern
+            # These are inside role="button" divs
+            button_divs = container.find_all('div', {'role': 'button'})
+            for btn_div in button_divs:
+                btn_text = btn_div.get_text(strip=True)
+                likes_match = re.match(r'^(\d+)\s*likes?$', btn_text, re.I)
+                if likes_match:
+                    likes_count = int(likes_match.group(1))
+                    break
 
-            # Also check spans specifically
+            # Strategy 2: Find span with "X likes" pattern
             if likes_count == 0:
-                spans = container.find_all('span')
-                for span in spans:
+                likes_spans = container.find_all('span')
+                for span in likes_spans:
                     text = span.get_text(strip=True)
-                    if 'like' in text.lower():
-                        match = re.search(r'(\d+)', text)
-                        if match:
-                            likes_count = int(match.group(1))
-                            break
+                    # Match "882 likes" or "1 like"
+                    likes_match = re.match(r'^(\d{1,},?\d*)\s*likes?$', text, re.I)
+                    if likes_match:
+                        # Handle comma-separated numbers (e.g., "1,234 likes")
+                        count_str = likes_match.group(1).replace(',', '')
+                        likes_count = int(count_str)
+                        break
 
-            # === CHECK TRANSLATION AVAILABLE ===
-            has_translation = bool(container.find(string=re.compile(r'See\s*translation', re.I)))
+            # ==================== CHECK TRANSLATION AVAILABLE ====================
+            has_translation = False
+            for btn_div in button_divs:
+                btn_text = btn_div.get_text(strip=True).lower()
+                if 'translation' in btn_text or 'tarjima' in btn_text:
+                    has_translation = True
+                    break
 
-            # === EXTRACT REPLY COUNT ===
+            # ==================== EXTRACT REPLY COUNT ====================
             reply_count = 0
-            view_replies = container.find(string=re.compile(r'View.*(\d+).*repl', re.I))
-            if view_replies:
-                match = re.search(r'(\d+)', str(view_replies))
-                if match:
-                    reply_count = int(match.group(1))
 
-            # Also check "View all X replies" pattern
+            # Strategy 1: Find "View all X replies" in the container or nearby sibling
+            # This is usually in a separate div with class xpdvgm7
+            reply_div = container.find('div', class_=re.compile(r'xpdvgm7'))
+            if reply_div:
+                reply_text = reply_div.get_text(strip=True)
+                reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', reply_text, re.I)
+                if reply_match:
+                    reply_count = int(reply_match.group(1))
+
+            # Strategy 2: Check in button divs
             if reply_count == 0:
-                view_all = container.find(string=re.compile(r'View\s+all\s+(\d+)\s+replies', re.I))
-                if view_all:
-                    match = re.search(r'(\d+)', str(view_all))
-                    if match:
-                        reply_count = int(match.group(1))
+                for btn_div in button_divs:
+                    btn_text = btn_div.get_text(strip=True)
+                    reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', btn_text, re.I)
+                    if reply_match:
+                        reply_count = int(reply_match.group(1))
+                        break
 
-            # Create author object
+            # Strategy 3: Search entire container text
+            if reply_count == 0:
+                all_text = container.get_text(' ', strip=True)
+                reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', all_text, re.I)
+                if reply_match:
+                    reply_count = int(reply_match.group(1))
+
+            # ==================== CREATE RESULT ====================
             author = CommentAuthor(
                 username=username,
                 profile_url=profile_url or f'https://www.instagram.com/{username}/',
@@ -817,7 +984,12 @@ class CommentScraper(BaseScraper):
         max_replies: Optional[int],
         parent_comment_id: str
     ) -> List[CommentData]:
-        """Extract replies for a specific comment"""
+        """
+        Extract replies for a specific comment
+
+        Replies are loaded dynamically when "View all X replies" is clicked.
+        They appear in nested containers below the parent comment.
+        """
         replies = []
 
         try:
@@ -833,16 +1005,39 @@ class CommentScraper(BaseScraper):
             html = self.page.content()
             soup = BeautifulSoup(html, 'lxml')
 
-            # Find reply containers - they're usually nested or indented
-            # Look for containers after "View X replies" with reply-like structure
+            # Find reply containers using the improved container finding logic
             reply_containers = []
+            seen_container_ids = set()
 
-            # Find all elements with reply pattern
-            all_reply_links = soup.find_all('a', href=re.compile(r'/c/\d+/'))
+            # Find all comment permalinks and their containers
+            all_reply_links = soup.find_all('a', href=re.compile(r'/p/[^/]+/c/\d+/?'))
+
             for link in all_reply_links:
-                container = link.find_parent(['div', 'li'])
-                if container and container not in reply_containers:
-                    reply_containers.append(container)
+                try:
+                    # Get comment ID from this link
+                    href = link.get('href', '')
+                    match = re.search(r'/c/(\d+)/?', href)
+                    if not match:
+                        continue
+
+                    link_comment_id = match.group(1)
+
+                    # Skip if this is the parent comment
+                    if link_comment_id == parent_comment_id:
+                        continue
+
+                    # Find the container for this reply
+                    container = self._find_comment_container(link)
+                    if container:
+                        container_id = id(container)
+                        if container_id not in seen_container_ids:
+                            seen_container_ids.add(container_id)
+                            reply_containers.append(container)
+
+                except Exception:
+                    continue
+
+            self.logger.debug(f"Found {len(reply_containers)} potential reply containers for comment {parent_comment_id}")
 
             for container in reply_containers:
                 if max_replies and len(replies) >= max_replies:
@@ -850,7 +1045,11 @@ class CommentScraper(BaseScraper):
 
                 reply = self._parse_comment_container_direct(container, soup)
                 if reply and reply.comment_id != parent_comment_id:
-                    # Check if this is actually a reply (not main comment)
+                    # Skip caption entries
+                    if reply.comment_id.startswith('caption_'):
+                        continue
+
+                    # Check if this is not a duplicate
                     if reply.comment_id not in [r.comment_id for r in replies]:
                         reply.is_reply = True
                         reply.parent_comment_id = parent_comment_id
@@ -1022,72 +1221,158 @@ class CommentScraper(BaseScraper):
         """
         Extract comments using Playwright (fallback method)
 
-        Uses locators specific to direct URL view
+        Uses locators specific to Instagram's direct URL view.
+        This is a backup when BeautifulSoup parsing fails.
+
+        Key selectors based on HTML structure:
+        - Comment permalinks: a[href*="/c/"] (most reliable marker)
+        - Username: span with _ap3a _aaco _aacw _aacx _aad7 _aade classes
+        - Profile picture: img[alt*="profile picture"]
+        - Comment text: span[dir="auto"] (excluding username span)
+        - Timestamp: time[datetime]
+        - Likes: div[role="button"] with "X likes" text
         """
         comments = []
 
         try:
-            # Find elements that look like comments
-            # Strategy 1: Elements with timestamp links
-            time_elements = self.page.locator('time[datetime]').all()
+            # Primary strategy: Find comment permalinks (most reliable)
+            comment_links = self.page.locator('a[href*="/c/"]').all()
+            self.logger.debug(f"Playwright found {len(comment_links)} comment permalinks")
 
-            for time_el in time_elements:
+            for link in comment_links:
                 try:
-                    # Get parent container
-                    container = time_el.locator('xpath=ancestor::div[position()<=4]').last
+                    # Get comment ID from permalink
+                    href = link.get_attribute('href', timeout=1000)
+                    if not href:
+                        continue
 
-                    # Try to extract username
+                    match = re.search(r'/c/(\d+)/?', href)
+                    if not match:
+                        continue
+
+                    comment_id = match.group(1)
+
+                    if comment_id in seen_ids:
+                        continue
+
+                    # Navigate to container (go up the DOM tree)
+                    # The container should have username, text, timestamp
+                    container = link.locator('xpath=ancestor::div[.//img[contains(@alt, "profile picture")]][1]')
+
+                    if not container.count():
+                        # Try alternative: go up 6-8 levels
+                        container = link.locator('xpath=ancestor::div[8]')
+
+                    if not container.count():
+                        continue
+
+                    # Extract username
                     username = ''
                     try:
-                        user_link = container.locator('a[href^="/"]').first
-                        href = user_link.get_attribute('href', timeout=1000)
-                        if href:
-                            username = href.strip('/').split('/')[0]
+                        # Try username span first
+                        username_span = container.locator('span._ap3a._aaco._aacw._aacx._aad7._aade').first
+                        username = username_span.inner_text(timeout=1000)
                     except:
                         pass
+
+                    if not username:
+                        try:
+                            # Try from profile picture alt
+                            profile_pic = container.locator('img[alt*="profile picture"]').first
+                            alt_text = profile_pic.get_attribute('alt', timeout=1000)
+                            if alt_text:
+                                match = re.match(r"([^']+)'s profile picture", alt_text, re.I)
+                                if match:
+                                    username = match.group(1)
+                        except:
+                            pass
 
                     if not username or username in self.config.instagram_system_paths:
                         continue
 
-                    # Extract text
-                    comment_text = ''
+                    # Extract profile picture URL
+                    profile_pic_url = ''
                     try:
-                        text_span = container.locator('span[dir="auto"]').first
-                        comment_text = text_span.inner_text(timeout=1000)
+                        profile_pic = container.locator('img[alt*="profile picture"]').first
+                        profile_pic_url = profile_pic.get_attribute('src', timeout=1000) or ''
                     except:
                         pass
 
-                    if not comment_text or comment_text == username:
+                    # Extract comment text
+                    comment_text = ''
+                    try:
+                        # Get all spans with dir="auto"
+                        text_spans = container.locator('span[dir="auto"]').all()
+                        for span in text_spans:
+                            try:
+                                text = span.inner_text(timeout=500)
+                                # Skip username, empty, short texts, button texts
+                                if not text or len(text) <= 1:
+                                    continue
+                                if text.lower() == username.lower():
+                                    continue
+                                if text.lower() in ['reply', 'see translation', 'like', 'likes']:
+                                    continue
+                                if re.match(r'^\d+[wdhms]$', text):  # Skip timestamps
+                                    continue
+                                if re.match(r'^\d+\s*likes?$', text, re.I):  # Skip likes count
+                                    continue
+                                if 'view all' in text.lower():  # Skip view replies
+                                    continue
+
+                                comment_text = text
+                                break
+                            except:
+                                continue
+                    except:
+                        pass
+
+                    if not comment_text:
                         continue
 
                     # Extract timestamp
                     timestamp = ''
                     timestamp_iso = ''
                     try:
+                        time_el = container.locator('time[datetime]').first
                         timestamp = time_el.inner_text(timeout=1000)
-                        timestamp_iso = time_el.get_attribute('datetime', timeout=1000)
+                        timestamp_iso = time_el.get_attribute('datetime', timeout=1000) or ''
                     except:
                         pass
 
-                    # Generate ID
-                    comment_id = f"{username}_{abs(hash(comment_text))}"
-
-                    if comment_id in seen_ids:
-                        continue
-
-                    # Extract likes
+                    # Extract likes count
                     likes_count = 0
                     try:
-                        text = container.inner_text(timeout=1000)
-                        match = re.search(r'(\d+)\s*likes?', text, re.I)
-                        if match:
-                            likes_count = int(match.group(1))
+                        button_divs = container.locator('div[role="button"]').all()
+                        for btn in button_divs:
+                            try:
+                                btn_text = btn.inner_text(timeout=500)
+                                likes_match = re.match(r'^(\d+)\s*likes?$', btn_text.strip(), re.I)
+                                if likes_match:
+                                    likes_count = int(likes_match.group(1))
+                                    break
+                            except:
+                                continue
                     except:
                         pass
+
+                    # Extract reply count
+                    reply_count = 0
+                    try:
+                        all_text = container.inner_text(timeout=1000)
+                        reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', all_text, re.I)
+                        if reply_match:
+                            reply_count = int(reply_match.group(1))
+                    except:
+                        pass
+
+                    # Build comment URL
+                    comment_url = f'https://www.instagram.com{href}' if href.startswith('/') else href
 
                     author = CommentAuthor(
                         username=username,
-                        profile_url=f'https://www.instagram.com/{username}/'
+                        profile_url=f'https://www.instagram.com/{username}/',
+                        profile_picture_url=profile_pic_url
                     )
 
                     comment = CommentData(
@@ -1097,13 +1382,13 @@ class CommentScraper(BaseScraper):
                         timestamp=timestamp,
                         timestamp_iso=timestamp_iso,
                         likes_count=likes_count,
-                        reply_count=0,
-                        comment_url='',
+                        reply_count=reply_count,
+                        comment_url=comment_url,
                         is_reply=False
                     )
 
                     comments.append(comment)
-                    self.logger.debug(f"Playwright extracted: @{username}")
+                    self.logger.debug(f"Playwright extracted: @{username} - {comment_text[:30]}...")
 
                 except Exception as e:
                     self.logger.debug(f"Playwright element extraction error: {e}")
