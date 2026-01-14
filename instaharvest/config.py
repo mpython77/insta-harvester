@@ -335,3 +335,54 @@ class ScraperConfig:
         'views': 'span.xrbpuxu',
         'audio': 'div._ac0k a'
     })
+
+    # ==================== COMMENT SCRAPING SETTINGS ====================
+    # Feature flags
+    scrape_comments: bool = False  # Enable comment scraping
+    scrape_comment_replies: bool = True  # Include replies in comment scraping
+
+    # Limits
+    max_comments_per_post: Optional[int] = None  # None = all comments
+    max_replies_per_comment: Optional[int] = None  # None = all replies
+    comment_max_scroll_attempts: int = 100  # Max scroll attempts to load comments
+    comment_max_no_new_scrolls: int = 5  # Stop after X scrolls with no new comments
+
+    # Delays (in seconds)
+    comment_scroll_delay_min: float = 1.0  # Min delay between comment scrolls
+    comment_scroll_delay_max: float = 2.0  # Max delay between comment scrolls
+    comment_reply_load_delay: float = 1.5  # Wait for replies to load
+    comment_post_delay_min: float = 3.0  # Min delay between posts (comment scraping)
+    comment_post_delay_max: float = 5.0  # Max delay between posts (comment scraping)
+
+    # Comment CSS Selectors (based on Instagram HTML structure)
+    selector_comment_section: str = 'ul._a9z6._a9za'  # Main comment section
+    selector_comment_container: str = 'ul._a9ym'  # Individual comment container
+    selector_comment_item: str = 'li._a9zj'  # Comment list item
+    selector_comment_text: str = 'span._ap3a._aaco._aacu._aacx._aad7._aade'  # Comment text
+    selector_comment_time: str = 'time._a9ze._a9zf'  # Comment timestamp
+    selector_comment_likes_button: str = 'button._a9ze'  # Like count button
+    selector_comment_reply_button: str = 'button:has-text("Reply")'  # Reply button
+    selector_comment_view_replies: str = 'button:has-text("View")'  # View replies button
+    selector_comment_load_more: str = 'button:has-text("View all")'  # Load more comments
+
+    # Export settings
+    comments_json_filename_pattern: str = "comments_{username}_{post_id}.json"
+    comments_excel_filename_pattern: str = "comments_{username}.xlsx"
+
+    # Excel columns for comments
+    comments_excel_columns: List[str] = field(default_factory=lambda: [
+        'Post URL',
+        'Post ID',
+        'Comment ID',
+        'Author Username',
+        'Author Verified',
+        'Comment Text',
+        'Likes Count',
+        'Reply Count',
+        'Timestamp',
+        'Timestamp ISO',
+        'Is Reply',
+        'Parent Comment ID',
+        'Comment URL',
+        'Scraped At'
+    ])

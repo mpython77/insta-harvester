@@ -7,6 +7,7 @@ import time
 import signal
 import sys
 import atexit
+import random
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
@@ -18,6 +19,8 @@ from .reel_links import ReelLinksScraper
 from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
+from .comment_scraper import CommentScraper, CommentData, PostCommentsData
+from .comments_export import CommentsExporter, export_comments_to_json, export_comments_to_excel
 from .logger import setup_logger
 
 
@@ -31,12 +34,15 @@ class InstagramOrchestrator:
     3. Collect REEL links from /reels/ page (REELS ONLY - SEPARATE!)
     4. Scrape data from posts (tags, likes, timestamp)
     5. Scrape data from reels (tags, likes, timestamp - SEPARATE!)
+    6. (Optional) Scrape comments with full data (text, likes, replies, author info)
 
     Features:
     - Complete end-to-end scraping
     - Separate handling of posts and reels (no mixing!)
+    - Full comment scraping with replies
     - Progress tracking
     - Error resilience
+    - Real-time data export (JSON + Excel)
     - Data export with Type column (Post/Reel)
     """
 
@@ -202,7 +208,10 @@ class InstagramOrchestrator:
         username: str,
         parallel: Optional[int] = None,
         save_excel: bool = False,
-        export_json: bool = True
+        export_json: bool = True,
+        scrape_comments: bool = False,
+        max_comments_per_post: Optional[int] = None,
+        include_replies: bool = True
     ) -> Dict[str, Any]:
         """
         Advanced complete scraping with parallel processing and Excel export
@@ -212,6 +221,9 @@ class InstagramOrchestrator:
             parallel: Number of parallel contexts (None = sequential, 3 = 3 tabs)
             save_excel: Save to Excel in real-time
             export_json: Export to JSON file
+            scrape_comments: Enable full comment scraping
+            max_comments_per_post: Max comments per post (None = all)
+            include_replies: Include replies in comment scraping
 
         Returns:
             Dictionary with all scraped data
@@ -221,7 +233,9 @@ class InstagramOrchestrator:
             >>> results = orchestrator.scrape_complete_profile_advanced(
             ...     'cristiano',
             ...     parallel=3,
-            ...     save_excel=True
+            ...     save_excel=True,
+            ...     scrape_comments=True,
+            ...     max_comments_per_post=100
             ... )
         """
         username = username.strip().lstrip('@')
@@ -229,6 +243,7 @@ class InstagramOrchestrator:
         self.logger.info(f"ADVANCED PROFILE SCRAPE: @{username}")
         self.logger.info(f"Parallel: {parallel if parallel else 'Sequential'}")
         self.logger.info(f"Excel Export: {save_excel}")
+        self.logger.info(f"Comment Scraping: {scrape_comments}")
         self.logger.info(f"{'='*60}\n")
 
         results = {
@@ -237,7 +252,8 @@ class InstagramOrchestrator:
             'post_links': [],
             'reel_links': [],
             'posts_data': [],
-            'reels_data': []
+            'reels_data': [],
+            'comments_data': []  # NEW: Comments data
         }
 
         # Track current state for graceful shutdown
@@ -347,6 +363,52 @@ class InstagramOrchestrator:
             results['reels_data'] = [r.to_dict() for r in reels_data]
             self.logger.info(f"✓ Scraped {len(reels_data)} reels")
 
+        # Check for shutdown request
+        if self.shutdown_requested:
+            self.logger.warning("Shutdown requested after STEP 3.5")
+            if excel_exporter:
+                excel_exporter.finalize()
+            return results
+
+        # STEP 4: Scrape comments (if enabled)
+        comments_exporter = None
+        if scrape_comments and post_links:
+            self.logger.info(
+                f"\nSTEP 4: Scraping comments from {len(post_links)} posts..."
+            )
+            self.logger.info(f"Max comments per post: {max_comments_per_post or 'All'}")
+            self.logger.info(f"Include replies: {include_replies}")
+
+            # Initialize comments exporter
+            if save_excel:
+                comments_exporter = CommentsExporter(
+                    username=username,
+                    logger=self.logger,
+                    config=self.config,
+                    export_json=export_json,
+                    export_excel=True
+                )
+
+            # Scrape comments from all posts
+            comments_data = self._scrape_comments(
+                post_links=[link['url'] for link in post_links],
+                max_comments_per_post=max_comments_per_post,
+                include_replies=include_replies,
+                comments_exporter=comments_exporter
+            )
+
+            results['comments_data'] = [c.to_dict() for c in comments_data]
+            self.current_results = results
+
+            # Calculate totals
+            total_comments = sum(c.total_comments_scraped for c in comments_data)
+            total_replies = sum(c.total_replies_scraped for c in comments_data)
+            self.logger.info(f"✓ Scraped {total_comments} comments, {total_replies} replies")
+
+            # Finalize comments exporter
+            if comments_exporter:
+                comments_exporter.finalize()
+
         # Finalize Excel
         if excel_exporter:
             excel_exporter.finalize()
@@ -357,6 +419,13 @@ class InstagramOrchestrator:
             self.logger.info("\nExporting JSON...")
             self._export_results(results)
 
+        # Calculate comment stats for summary
+        total_comments_scraped = 0
+        total_replies_scraped = 0
+        if results.get('comments_data'):
+            total_comments_scraped = sum(c.get('total_comments_scraped', 0) for c in results['comments_data'])
+            total_replies_scraped = sum(c.get('total_replies_scraped', 0) for c in results['comments_data'])
+
         self.logger.info(f"\n{'='*60}")
         self.logger.info("ADVANCED SCRAPING COMPLETE!")
         self.logger.info(f"{'='*60}")
@@ -365,6 +434,9 @@ class InstagramOrchestrator:
         self.logger.info(f"Reel links: {len(results['reel_links'])}")
         self.logger.info(f"Posts scraped: {len(results['posts_data'])}")
         self.logger.info(f"Reels scraped: {len(results['reels_data'])}")
+        if scrape_comments:
+            self.logger.info(f"Comments scraped: {total_comments_scraped}")
+            self.logger.info(f"Replies scraped: {total_replies_scraped}")
         self.logger.info(f"{'='*60}\n")
 
         return results
@@ -589,9 +661,163 @@ class InstagramOrchestrator:
             reels_data.append(reel_data)
 
         if excel_exporter:
-            self.logger.info("✓ Excel writing completed in real-time")
+            self.logger.info("Excel writing completed in real-time")
 
         return reels_data
+
+    def _scrape_comments(
+        self,
+        post_links: List[str],
+        max_comments_per_post: Optional[int],
+        include_replies: bool,
+        comments_exporter: Optional[CommentsExporter] = None
+    ) -> List[PostCommentsData]:
+        """
+        Scrape comments from multiple posts
+
+        Args:
+            post_links: List of post URLs
+            max_comments_per_post: Max comments per post (None = all)
+            include_replies: Include replies
+            comments_exporter: Optional exporter for real-time export
+
+        Returns:
+            List of PostCommentsData objects
+        """
+        comments_data = []
+
+        scraper = CommentScraper(self.config)
+        session_data = scraper.load_session()
+        scraper.setup_browser(session_data)
+
+        try:
+            for i, url in enumerate(post_links, 1):
+                # Check for shutdown request
+                if self.shutdown_requested:
+                    self.logger.warning(f"Shutdown requested at comment scraping {i}/{len(post_links)}")
+                    break
+
+                self.logger.info(f"[{i}/{len(post_links)}] Scraping comments: {url}")
+
+                try:
+                    post_comments = scraper.scrape(
+                        url,
+                        max_comments=max_comments_per_post,
+                        include_replies=include_replies
+                    )
+                    comments_data.append(post_comments)
+
+                    # Real-time export
+                    if comments_exporter:
+                        comments_exporter.add_post_comments(post_comments)
+
+                    self.logger.info(
+                        f"   {post_comments.total_comments_scraped} comments, "
+                        f"{post_comments.total_replies_scraped} replies"
+                    )
+
+                except Exception as e:
+                    self.logger.error(f"Failed to scrape comments from {url}: {e}")
+                    # Add empty result
+                    comments_data.append(PostCommentsData(
+                        post_url=url,
+                        post_id=scraper._extract_post_id(url),
+                        total_comments_scraped=0,
+                        total_replies_scraped=0,
+                        comments=[]
+                    ))
+
+                # Delay between posts
+                if i < len(post_links):
+                    delay = random.uniform(
+                        self.config.comment_post_delay_min,
+                        self.config.comment_post_delay_max
+                    )
+                    time.sleep(delay)
+
+        finally:
+            scraper.close()
+
+        return comments_data
+
+    def scrape_comments_only(
+        self,
+        username: str,
+        post_urls: Optional[List[str]] = None,
+        max_comments_per_post: Optional[int] = None,
+        include_replies: bool = True,
+        save_excel: bool = True,
+        export_json: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Scrape only comments from posts (standalone method)
+
+        Use this when you already have post URLs or want to scrape just comments
+
+        Args:
+            username: Instagram username (for file naming)
+            post_urls: List of post URLs (if None, will collect from profile)
+            max_comments_per_post: Max comments per post
+            include_replies: Include replies
+            save_excel: Save to Excel
+            export_json: Export to JSON
+
+        Returns:
+            Dictionary with comments data
+        """
+        username = username.strip().lstrip('@')
+        self.logger.info(f"\n{'='*60}")
+        self.logger.info(f"COMMENT SCRAPING: @{username}")
+        self.logger.info(f"{'='*60}\n")
+
+        # If no post URLs provided, collect them first
+        if not post_urls:
+            self.logger.info("Collecting post links first...")
+            post_links = self._collect_post_links(username)
+            post_urls = [link['url'] for link in post_links]
+            self.logger.info(f"Collected {len(post_urls)} post URLs")
+
+        # Initialize exporter
+        comments_exporter = None
+        if save_excel or export_json:
+            comments_exporter = CommentsExporter(
+                username=username,
+                logger=self.logger,
+                config=self.config,
+                export_json=export_json,
+                export_excel=save_excel
+            )
+
+        # Scrape comments
+        self.logger.info(f"\nScraping comments from {len(post_urls)} posts...")
+        comments_data = self._scrape_comments(
+            post_links=post_urls,
+            max_comments_per_post=max_comments_per_post,
+            include_replies=include_replies,
+            comments_exporter=comments_exporter
+        )
+
+        # Finalize exporter
+        if comments_exporter:
+            comments_exporter.finalize()
+
+        # Build results
+        results = {
+            'username': username,
+            'total_posts': len(post_urls),
+            'total_comments': sum(c.total_comments_scraped for c in comments_data),
+            'total_replies': sum(c.total_replies_scraped for c in comments_data),
+            'comments_data': [c.to_dict() for c in comments_data]
+        }
+
+        self.logger.info(f"\n{'='*60}")
+        self.logger.info("COMMENT SCRAPING COMPLETE!")
+        self.logger.info(f"Posts processed: {len(post_urls)}")
+        self.logger.info(f"Total comments: {results['total_comments']}")
+        self.logger.info(f"Total replies: {results['total_replies']}")
+        self.logger.info(f"{'='*60}\n")
+
+        return results
 
     def _export_results(self, results: Dict[str, Any]) -> None:
         """Export results to JSON file"""

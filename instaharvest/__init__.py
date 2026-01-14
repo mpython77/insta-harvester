@@ -1,25 +1,30 @@
 """
-InstaHarvest 🌾 - Professional Instagram Data Collection Toolkit
+InstaHarvest - Professional Instagram Data Collection Toolkit
 
 A powerful and efficient Instagram automation library for data collection,
 engagement management, and analytics.
 
 Features:
-- 📊 Profile statistics (posts, followers, following)
-- ✓ Verified badge detection - Check if account is verified
-- 🎭 Profile category extraction - Detect Actor, Model, Photographer, etc.
-- 📝 Complete bio extraction - All text, links, emails, mentions, contact info
-- 🔗 Post & Reel links collection with intelligent scrolling
-- 🏷️ Tagged accounts extraction (posts & reels)
-- 👥 Followers/Following collection with real-time output
-- 💬 Direct messaging with smart rate limiting
-- 🤝 Follow/Unfollow management
-- ⚡ Parallel processing - Scrape multiple posts simultaneously
-- 📑 Real-time Excel export
-- 🌐 Shared browser sessions - Single browser for all operations
-- 🔍 HTML structure change detection
-- 📝 Professional logging
-- 🧩 Modular design for library usage
+- Profile statistics (posts, followers, following)
+- Verified badge detection - Check if account is verified
+- Profile category extraction - Detect Actor, Model, Photographer, etc.
+- Complete bio extraction - All text, links, emails, mentions, contact info
+- Post & Reel links collection with intelligent scrolling
+- Tagged accounts extraction (posts & reels)
+- FULL COMMENT SCRAPING (NEW!) - Extract all comments with:
+  - Comment text, likes count, timestamp
+  - Author info (username, profile pic, verified status)
+  - Reply extraction (nested comments)
+  - Real-time JSON & Excel export
+- Followers/Following collection with real-time output
+- Direct messaging with smart rate limiting
+- Follow/Unfollow management
+- Parallel processing - Scrape multiple posts simultaneously
+- Real-time Excel export
+- Shared browser sessions - Single browser for all operations
+- HTML structure change detection
+- Professional logging
+- Modular design for library usage
 
 Quick Start:
     # Simple usage
@@ -37,6 +42,47 @@ Quick Start:
         parallel=3,        # 3 parallel browser tabs
         save_excel=True    # Real-time Excel export
     )
+
+    # Full comment scraping (NEW!)
+    from instaharvest import InstagramOrchestrator, ScraperConfig
+
+    config = ScraperConfig()
+    orchestrator = InstagramOrchestrator(config)
+
+    # Option 1: Scrape everything including comments
+    results = orchestrator.scrape_complete_profile_advanced(
+        'username',
+        parallel=3,
+        save_excel=True,
+        scrape_comments=True,         # Enable comment scraping
+        max_comments_per_post=100,    # Limit per post (None = all)
+        include_replies=True          # Include reply threads
+    )
+
+    # Option 2: Scrape only comments
+    results = orchestrator.scrape_comments_only(
+        'username',
+        max_comments_per_post=50,
+        include_replies=True,
+        save_excel=True,
+        export_json=True
+    )
+
+    # Option 3: Low-level comment scraping
+    from instaharvest import CommentScraper
+
+    scraper = CommentScraper()
+    scraper.setup_browser(session_data)
+    comments = scraper.scrape(
+        'https://www.instagram.com/p/ABC123/',
+        max_comments=100,
+        include_replies=True
+    )
+    # comments.total_comments_scraped
+    # comments.comments[0].author.username
+    # comments.comments[0].text
+    # comments.comments[0].likes_count
+    # comments.comments[0].replies
 
     # Follow/Unfollow management
     from instaharvest import FollowManager
@@ -108,6 +154,8 @@ from .reel_links import ReelLinksScraper
 from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
+from .comment_scraper import CommentScraper, CommentData, CommentAuthor, PostCommentsData
+from .comments_export import CommentsExporter, RealTimeCommentsExporter, export_comments_to_json, export_comments_to_excel
 from .follow import FollowManager
 from .message import MessageManager
 from .followers import FollowersCollector
@@ -115,7 +163,7 @@ from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
 from .session_utils import save_session, check_session_exists, load_session_data, get_default_session_path
 
-__version__ = '2.5.5'
+__version__ = '2.6.0'
 __author__ = 'Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
@@ -144,6 +192,7 @@ __all__ = [
     'ReelLinksScraper',
     'ReelDataScraper',
     'ParallelPostDataScraper',
+    'CommentScraper',
     'FollowManager',
     'MessageManager',
     'FollowersCollector',
@@ -153,9 +202,16 @@ __all__ = [
     'ProfileData',
     'PostData',
     'ReelData',
+    'CommentData',
+    'CommentAuthor',
+    'PostCommentsData',
 
     # Export
     'ExcelExporter',
+    'CommentsExporter',
+    'RealTimeCommentsExporter',
+    'export_comments_to_json',
+    'export_comments_to_excel',
 
     # Orchestrator
     'InstagramOrchestrator',

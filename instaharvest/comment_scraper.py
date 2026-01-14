@@ -1,0 +1,771 @@
+"""
+Instagram Scraper - Comment Data Extractor
+Full comment scraping with likes, replies, timestamps, and user info
+
+PROFESSIONAL VERSION with:
+- Full comment extraction (text, likes, timestamp, reply count)
+- User info extraction (username, profile picture)
+- Reply extraction (nested comments)
+- Real-time progress tracking
+- Intelligent scrolling for all comments
+- Error recovery and retry logic
+"""
+
+import time
+import random
+import re
+from typing import List, Optional, Dict, Any, Tuple
+from dataclasses import dataclass, field, asdict
+from datetime import datetime
+
+from .base import BaseScraper
+from .config import ScraperConfig
+from .error_handler import ErrorHandler
+from .performance import PerformanceMonitor
+from .logger import setup_logger
+
+
+@dataclass
+class CommentAuthor:
+    """Comment author data structure"""
+    username: str
+    profile_url: str = ''
+    profile_picture_url: str = ''
+    is_verified: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return asdict(self)
+
+
+@dataclass
+class CommentData:
+    """Single comment data structure"""
+    comment_id: str
+    author: CommentAuthor
+    text: str
+    timestamp: str
+    timestamp_iso: str
+    likes_count: int
+    reply_count: int
+    comment_url: str
+    is_reply: bool = False
+    parent_comment_id: Optional[str] = None
+    replies: List['CommentData'] = field(default_factory=list)
+    has_translation: bool = False
+    scraped_at: str = ''
+
+    def __post_init__(self):
+        if not self.scraped_at:
+            self.scraped_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary (recursive for replies)"""
+        data = {
+            'comment_id': self.comment_id,
+            'author': self.author.to_dict() if isinstance(self.author, CommentAuthor) else self.author,
+            'text': self.text,
+            'timestamp': self.timestamp,
+            'timestamp_iso': self.timestamp_iso,
+            'likes_count': self.likes_count,
+            'reply_count': self.reply_count,
+            'comment_url': self.comment_url,
+            'is_reply': self.is_reply,
+            'parent_comment_id': self.parent_comment_id,
+            'has_translation': self.has_translation,
+            'scraped_at': self.scraped_at,
+            'replies': [r.to_dict() if isinstance(r, CommentData) else r for r in self.replies]
+        }
+        return data
+
+
+@dataclass
+class PostCommentsData:
+    """All comments for a single post"""
+    post_url: str
+    post_id: str
+    total_comments_scraped: int
+    total_replies_scraped: int
+    comments: List[CommentData]
+    scraped_at: str = ''
+    scraping_duration_seconds: float = 0.0
+
+    def __post_init__(self):
+        if not self.scraped_at:
+            self.scraped_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            'post_url': self.post_url,
+            'post_id': self.post_id,
+            'total_comments_scraped': self.total_comments_scraped,
+            'total_replies_scraped': self.total_replies_scraped,
+            'scraped_at': self.scraped_at,
+            'scraping_duration_seconds': self.scraping_duration_seconds,
+            'comments': [c.to_dict() for c in self.comments]
+        }
+
+    def get_all_comments_flat(self) -> List[CommentData]:
+        """Get all comments including replies as flat list"""
+        result = []
+        for comment in self.comments:
+            result.append(comment)
+            result.extend(comment.replies)
+        return result
+
+
+class CommentScraper(BaseScraper):
+    """
+    Instagram Comment Scraper - PROFESSIONAL VERSION
+
+    Extracts full comment data from Instagram posts:
+    - Comment text
+    - Author info (username, profile pic, verified status)
+    - Likes count
+    - Timestamp (human readable + ISO format)
+    - Reply count
+    - Nested replies
+    - Comment URL/ID
+
+    Features:
+    - Intelligent scrolling to load all comments
+    - Reply expansion
+    - Real-time progress callback
+    - Error recovery
+    - Performance monitoring
+    """
+
+    def __init__(self, config: Optional[ScraperConfig] = None, enable_diagnostics: bool = True):
+        """
+        Initialize comment scraper
+
+        Args:
+            config: Scraper configuration
+            enable_diagnostics: Enable diagnostic mode
+        """
+        super().__init__(config)
+
+        self.error_handler = ErrorHandler(self.logger)
+        self.performance_monitor = PerformanceMonitor(self.logger)
+        self.enable_diagnostics = enable_diagnostics
+
+        self.logger.info("CommentScraper ready (Professional Mode)")
+
+    def scrape(
+        self,
+        post_url: str,
+        *,
+        max_comments: Optional[int] = None,
+        include_replies: bool = True,
+        max_replies_per_comment: Optional[int] = None,
+        progress_callback: Optional[callable] = None
+    ) -> PostCommentsData:
+        """
+        Scrape all comments from a single post
+
+        Args:
+            post_url: URL of the Instagram post
+            max_comments: Maximum number of main comments to scrape (None = all)
+            include_replies: Whether to scrape replies
+            max_replies_per_comment: Max replies per comment (None = all)
+            progress_callback: Callback function for progress updates
+                              signature: callback(scraped_count: int, comment: CommentData)
+
+        Returns:
+            PostCommentsData object with all comments
+        """
+        start_time = time.time()
+
+        # Extract post ID from URL
+        post_id = self._extract_post_id(post_url)
+
+        self.logger.info(f"Scraping comments from: {post_url}")
+        self.logger.info(f"Post ID: {post_id}")
+        self.logger.info(f"Max comments: {max_comments or 'All'}")
+        self.logger.info(f"Include replies: {include_replies}")
+
+        # Navigate to post
+        self.goto_url(post_url)
+        time.sleep(self.config.post_open_delay)
+
+        # Scrape comments
+        comments = self._scrape_all_comments(
+            max_comments=max_comments,
+            include_replies=include_replies,
+            max_replies_per_comment=max_replies_per_comment,
+            progress_callback=progress_callback
+        )
+
+        # Calculate totals
+        total_replies = sum(len(c.replies) for c in comments)
+        duration = time.time() - start_time
+
+        result = PostCommentsData(
+            post_url=post_url,
+            post_id=post_id,
+            total_comments_scraped=len(comments),
+            total_replies_scraped=total_replies,
+            comments=comments,
+            scraping_duration_seconds=round(duration, 2)
+        )
+
+        self.logger.info(f"Scraped {len(comments)} comments, {total_replies} replies in {duration:.2f}s")
+
+        return result
+
+    def _extract_post_id(self, url: str) -> str:
+        """Extract post ID from Instagram URL"""
+        # Pattern: /p/ABC123/ or /reel/ABC123/
+        match = re.search(r'/(?:p|reel)/([A-Za-z0-9_-]+)/?', url)
+        if match:
+            return match.group(1)
+        return ''
+
+    def _scrape_all_comments(
+        self,
+        max_comments: Optional[int],
+        include_replies: bool,
+        max_replies_per_comment: Optional[int],
+        progress_callback: Optional[callable]
+    ) -> List[CommentData]:
+        """
+        Scrape all comments with scrolling
+
+        Uses intelligent scrolling to load and extract all comments
+        """
+        comments = []
+        seen_comment_ids = set()
+        no_new_comments_count = 0
+        scroll_attempt = 0
+
+        # Get comment section container
+        comment_section_selector = self.config.selector_comment_section
+
+        while True:
+            # Check if we've reached max comments
+            if max_comments and len(comments) >= max_comments:
+                self.logger.info(f"Reached max comments limit: {max_comments}")
+                break
+
+            # Extract visible comments
+            new_comments = self._extract_visible_comments(
+                seen_ids=seen_comment_ids,
+                include_replies=include_replies,
+                max_replies_per_comment=max_replies_per_comment
+            )
+
+            if new_comments:
+                no_new_comments_count = 0
+
+                for comment in new_comments:
+                    # Check max limit
+                    if max_comments and len(comments) >= max_comments:
+                        break
+
+                    comments.append(comment)
+                    seen_comment_ids.add(comment.comment_id)
+
+                    # Progress callback
+                    if progress_callback:
+                        try:
+                            progress_callback(len(comments), comment)
+                        except Exception as e:
+                            self.logger.debug(f"Progress callback error: {e}")
+
+                    self.logger.debug(
+                        f"[{len(comments)}] @{comment.author.username}: "
+                        f"{comment.text[:50]}... ({comment.likes_count} likes)"
+                    )
+            else:
+                no_new_comments_count += 1
+
+            # Check if we should stop scrolling
+            if no_new_comments_count >= self.config.comment_max_no_new_scrolls:
+                self.logger.info(f"No new comments after {no_new_comments_count} scrolls, stopping")
+                break
+
+            # Check max scroll attempts
+            scroll_attempt += 1
+            if scroll_attempt >= self.config.comment_max_scroll_attempts:
+                self.logger.info(f"Reached max scroll attempts: {scroll_attempt}")
+                break
+
+            # Try to load more comments
+            loaded_more = self._load_more_comments()
+
+            if not loaded_more:
+                # Try scrolling the comment section
+                self._scroll_comment_section()
+
+            # Wait for content to load
+            time.sleep(random.uniform(
+                self.config.comment_scroll_delay_min,
+                self.config.comment_scroll_delay_max
+            ))
+
+        return comments
+
+    def _extract_visible_comments(
+        self,
+        seen_ids: set,
+        include_replies: bool,
+        max_replies_per_comment: Optional[int]
+    ) -> List[CommentData]:
+        """
+        Extract all currently visible comments
+
+        Uses BeautifulSoup for reliable extraction
+        """
+        comments = []
+
+        try:
+            from bs4 import BeautifulSoup
+
+            html = self.page.content()
+            soup = BeautifulSoup(html, 'lxml')
+
+            # Find comment containers
+            # Based on user-provided HTML structure
+            comment_containers = soup.find_all('ul', class_='_a9ym')
+
+            for container in comment_containers:
+                try:
+                    comment = self._parse_comment_container(container, soup)
+
+                    if comment and comment.comment_id not in seen_ids:
+                        # Extract replies if enabled
+                        if include_replies:
+                            comment.replies = self._extract_replies_for_comment(
+                                container,
+                                soup,
+                                max_replies=max_replies_per_comment,
+                                parent_comment_id=comment.comment_id
+                            )
+                            comment.reply_count = len(comment.replies)
+
+                        comments.append(comment)
+
+                except Exception as e:
+                    self.logger.debug(f"Failed to parse comment container: {e}")
+                    continue
+
+        except ImportError:
+            self.logger.warning("BeautifulSoup not available, using Playwright extraction")
+            comments = self._extract_comments_playwright(seen_ids)
+        except Exception as e:
+            self.logger.error(f"Comment extraction failed: {e}")
+
+        return comments
+
+    def _parse_comment_container(self, container, soup) -> Optional[CommentData]:
+        """
+        Parse a single comment container element
+
+        Based on the HTML structure provided by user:
+        - Username: <a href="/username/">username</a>
+        - Profile pic: <img alt="username's profile picture" src="...">
+        - Comment text: <span class="_ap3a _aaco _aacu _aacx _aad7 _aade">text</span>
+        - Timestamp: <time datetime="..." title="...">1h</time>
+        - Likes: button with "X like" or "X likes"
+        - Comment link: /p/POST_ID/c/COMMENT_ID/
+        """
+        try:
+            # Find the li element (main comment container)
+            li_element = container.find('li', class_='_a9zj')
+            if not li_element:
+                return None
+
+            # Extract username
+            username = ''
+            username_link = li_element.find('a', href=re.compile(r'^/[^/]+/$'))
+            if username_link:
+                href = username_link.get('href', '')
+                username = href.strip('/').split('/')[-1]
+
+                # Filter out system paths
+                if username in self.config.instagram_system_paths:
+                    return None
+
+            if not username:
+                return None
+
+            # Extract profile picture URL
+            profile_pic_url = ''
+            img_tag = li_element.find('img', alt=re.compile(r"'s profile picture"))
+            if img_tag:
+                profile_pic_url = img_tag.get('src', '')
+
+            # Check verified status
+            is_verified = li_element.find('svg', {'aria-label': 'Verified'}) is not None
+
+            # Extract comment text
+            comment_text = ''
+            text_span = li_element.find('span', class_=re.compile(r'_ap3a.*_aade'))
+            if text_span:
+                comment_text = text_span.get_text(strip=True)
+
+            if not comment_text:
+                # Fallback: look for span with dir="auto"
+                auto_spans = li_element.find_all('span', {'dir': 'auto'})
+                for span in auto_spans:
+                    text = span.get_text(strip=True)
+                    if text and len(text) > 1:
+                        comment_text = text
+                        break
+
+            # Extract timestamp
+            timestamp = ''
+            timestamp_iso = ''
+            time_element = li_element.find('time')
+            if time_element:
+                timestamp = time_element.get('title', '') or time_element.get_text(strip=True)
+                timestamp_iso = time_element.get('datetime', '')
+
+            # Extract comment URL and ID
+            comment_url = ''
+            comment_id = ''
+            comment_link = li_element.find('a', href=re.compile(r'/p/[^/]+/c/\d+/'))
+            if comment_link:
+                comment_url = 'https://www.instagram.com' + comment_link.get('href', '')
+                # Extract comment ID from URL
+                match = re.search(r'/c/(\d+)/', comment_url)
+                if match:
+                    comment_id = match.group(1)
+
+            # Generate comment ID if not found
+            if not comment_id:
+                comment_id = f"{username}_{hash(comment_text)}"
+
+            # Extract likes count
+            likes_count = 0
+            likes_button = li_element.find('button')
+            if likes_button:
+                likes_text = likes_button.get_text(strip=True)
+                likes_match = re.search(r'(\d+)\s*like', likes_text, re.IGNORECASE)
+                if likes_match:
+                    likes_count = int(likes_match.group(1))
+
+            # Also check for span with like count
+            if likes_count == 0:
+                like_spans = li_element.find_all('span')
+                for span in like_spans:
+                    text = span.get_text(strip=True)
+                    if 'like' in text.lower():
+                        match = re.search(r'(\d+)', text)
+                        if match:
+                            likes_count = int(match.group(1))
+                            break
+
+            # Check if has translation option
+            has_translation = li_element.find(string=re.compile('translation', re.IGNORECASE)) is not None
+
+            # Extract reply count (if shown)
+            reply_count = 0
+            reply_text = li_element.find(string=re.compile(r'View.*repl', re.IGNORECASE))
+            if reply_text:
+                match = re.search(r'(\d+)', str(reply_text))
+                if match:
+                    reply_count = int(match.group(1))
+
+            # Create author object
+            author = CommentAuthor(
+                username=username,
+                profile_url=f'https://www.instagram.com/{username}/',
+                profile_picture_url=profile_pic_url,
+                is_verified=is_verified
+            )
+
+            # Create comment object
+            return CommentData(
+                comment_id=comment_id,
+                author=author,
+                text=comment_text,
+                timestamp=timestamp,
+                timestamp_iso=timestamp_iso,
+                likes_count=likes_count,
+                reply_count=reply_count,
+                comment_url=comment_url,
+                is_reply=False,
+                has_translation=has_translation
+            )
+
+        except Exception as e:
+            self.logger.debug(f"Comment parsing error: {e}")
+            return None
+
+    def _extract_replies_for_comment(
+        self,
+        comment_container,
+        soup,
+        max_replies: Optional[int],
+        parent_comment_id: str
+    ) -> List[CommentData]:
+        """Extract replies for a specific comment"""
+        replies = []
+
+        try:
+            # Click "View replies" button if exists
+            self._expand_replies(parent_comment_id)
+
+            # Wait for replies to load
+            time.sleep(self.config.comment_reply_load_delay)
+
+            # Re-parse HTML to get replies
+            html = self.page.content()
+            soup = BeautifulSoup(html, 'lxml')
+
+            # Find reply containers (usually nested under main comment)
+            # Look for nested comment structures
+            reply_containers = soup.find_all('ul', class_='_a9ym')
+
+            for container in reply_containers:
+                if max_replies and len(replies) >= max_replies:
+                    break
+
+                reply = self._parse_comment_container(container, soup)
+                if reply and reply.comment_id != parent_comment_id:
+                    reply.is_reply = True
+                    reply.parent_comment_id = parent_comment_id
+                    replies.append(reply)
+
+        except Exception as e:
+            self.logger.debug(f"Reply extraction error: {e}")
+
+        return replies
+
+    def _expand_replies(self, comment_id: str) -> bool:
+        """Click 'View replies' button for a comment"""
+        try:
+            # Look for "View replies" or "View X replies" button
+            view_replies_buttons = self.page.locator(
+                'button:has-text("View"), span:has-text("View")'
+            ).filter(has_text=re.compile(r'repl', re.IGNORECASE))
+
+            count = view_replies_buttons.count()
+            for i in range(count):
+                try:
+                    button = view_replies_buttons.nth(i)
+                    if button.is_visible():
+                        button.click(timeout=2000)
+                        time.sleep(self.config.popup_animation_delay)
+                        return True
+                except:
+                    continue
+
+        except Exception as e:
+            self.logger.debug(f"Expand replies failed: {e}")
+
+        return False
+
+    def _load_more_comments(self) -> bool:
+        """
+        Click 'Load more comments' or 'View all comments' button
+
+        Returns:
+            True if more comments were loaded
+        """
+        try:
+            # Various button texts for loading more comments
+            load_more_patterns = [
+                'View all',
+                'Load more',
+                'more comments',
+                'View previous'
+            ]
+
+            for pattern in load_more_patterns:
+                try:
+                    button = self.page.locator(f'button:has-text("{pattern}")').first
+                    if button.is_visible(timeout=1000):
+                        button.click(timeout=2000)
+                        self.logger.debug(f"Clicked '{pattern}' button")
+                        time.sleep(self.config.popup_animation_delay)
+                        return True
+                except:
+                    continue
+
+            # Try clicking any visible "View" button in comment section
+            try:
+                view_buttons = self.page.locator('div[role="button"]:has-text("View")').all()
+                for btn in view_buttons[:3]:  # Try first 3
+                    try:
+                        if btn.is_visible():
+                            btn.click(timeout=1000)
+                            time.sleep(self.config.ui_animation_delay)
+                            return True
+                    except:
+                        continue
+            except:
+                pass
+
+        except Exception as e:
+            self.logger.debug(f"Load more comments failed: {e}")
+
+        return False
+
+    def _scroll_comment_section(self) -> None:
+        """Scroll within the comment section to load more"""
+        try:
+            # Try to find and scroll the comment section container
+            comment_section = self.page.locator(self.config.selector_comment_section).first
+
+            if comment_section.is_visible():
+                # Scroll within the container
+                comment_section.evaluate('el => el.scrollTop += el.clientHeight * 0.8')
+            else:
+                # Fallback: scroll the page
+                self.page.evaluate('window.scrollBy(0, window.innerHeight * 0.5)')
+
+        except Exception as e:
+            self.logger.debug(f"Scroll comment section failed: {e}")
+            # Fallback: keyboard scroll
+            try:
+                self.page.keyboard.press('PageDown')
+            except:
+                pass
+
+    def _extract_comments_playwright(self, seen_ids: set) -> List[CommentData]:
+        """
+        Extract comments using Playwright (fallback method)
+
+        Used when BeautifulSoup is not available
+        """
+        comments = []
+
+        try:
+            # Find all comment containers
+            containers = self.page.locator('ul._a9ym').all()
+
+            for container in containers:
+                try:
+                    # Extract username
+                    username_link = container.locator('a[href^="/"]').first
+                    href = username_link.get_attribute('href', timeout=1000)
+                    username = href.strip('/').split('/')[-1] if href else ''
+
+                    if not username or username in self.config.instagram_system_paths:
+                        continue
+
+                    # Extract comment text
+                    text_span = container.locator('span[dir="auto"]').first
+                    comment_text = text_span.inner_text(timeout=1000) if text_span.count() > 0 else ''
+
+                    # Extract timestamp
+                    time_el = container.locator('time').first
+                    timestamp = time_el.get_attribute('title', timeout=1000) if time_el.count() > 0 else ''
+                    timestamp_iso = time_el.get_attribute('datetime', timeout=1000) if time_el.count() > 0 else ''
+
+                    # Generate ID
+                    comment_id = f"{username}_{hash(comment_text)}"
+
+                    if comment_id in seen_ids:
+                        continue
+
+                    # Create author
+                    author = CommentAuthor(
+                        username=username,
+                        profile_url=f'https://www.instagram.com/{username}/'
+                    )
+
+                    # Create comment
+                    comment = CommentData(
+                        comment_id=comment_id,
+                        author=author,
+                        text=comment_text,
+                        timestamp=timestamp,
+                        timestamp_iso=timestamp_iso,
+                        likes_count=0,
+                        reply_count=0,
+                        comment_url='',
+                        is_reply=False
+                    )
+
+                    comments.append(comment)
+
+                except Exception as e:
+                    self.logger.debug(f"Playwright comment extraction error: {e}")
+                    continue
+
+        except Exception as e:
+            self.logger.error(f"Playwright extraction failed: {e}")
+
+        return comments
+
+    def scrape_multiple(
+        self,
+        post_urls: List[str],
+        *,
+        max_comments_per_post: Optional[int] = None,
+        include_replies: bool = True,
+        progress_callback: Optional[callable] = None,
+        delay_between_posts: bool = True
+    ) -> List[PostCommentsData]:
+        """
+        Scrape comments from multiple posts
+
+        Args:
+            post_urls: List of post URLs
+            max_comments_per_post: Max comments per post
+            include_replies: Include replies
+            progress_callback: Progress callback
+            delay_between_posts: Add delay between posts
+
+        Returns:
+            List of PostCommentsData objects
+        """
+        self.logger.info(f"Scraping comments from {len(post_urls)} posts...")
+
+        # Load session and setup browser
+        session_data = self.load_session()
+        self.setup_browser(session_data)
+
+        results = []
+
+        try:
+            for i, url in enumerate(post_urls, 1):
+                self.logger.info(f"[{i}/{len(post_urls)}] Scraping comments: {url}")
+
+                try:
+                    comments_data = self.scrape(
+                        url,
+                        max_comments=max_comments_per_post,
+                        include_replies=include_replies,
+                        progress_callback=progress_callback
+                    )
+                    results.append(comments_data)
+
+                except Exception as e:
+                    self.logger.error(f"Failed to scrape comments from {url}: {e}")
+                    results.append(PostCommentsData(
+                        post_url=url,
+                        post_id=self._extract_post_id(url),
+                        total_comments_scraped=0,
+                        total_replies_scraped=0,
+                        comments=[]
+                    ))
+
+                # Delay between posts
+                if delay_between_posts and i < len(post_urls):
+                    delay = random.uniform(
+                        self.config.comment_post_delay_min,
+                        self.config.comment_post_delay_max
+                    )
+                    self.logger.debug(f"Waiting {delay:.1f}s before next post...")
+                    time.sleep(delay)
+
+        finally:
+            self.close()
+
+        # Print summary
+        total_comments = sum(r.total_comments_scraped for r in results)
+        total_replies = sum(r.total_replies_scraped for r in results)
+
+        self.logger.info(f"\n{'='*60}")
+        self.logger.info("COMMENT SCRAPING COMPLETE!")
+        self.logger.info(f"Posts processed: {len(results)}")
+        self.logger.info(f"Total comments: {total_comments}")
+        self.logger.info(f"Total replies: {total_replies}")
+        self.logger.info(f"{'='*60}")
+
+        return results
