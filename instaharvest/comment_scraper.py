@@ -765,25 +765,129 @@ class CommentScraper(BaseScraper):
         return False
 
     def _scroll_comment_section(self) -> None:
-        """Scroll within the comment section to load more"""
+        """
+        Scroll within the comment section to load more comments
+
+        Instagram's comment section structure:
+        - The comment list (ul._a9z6._a9za) is NOT scrollable
+        - The scrollable container is a parent div with overflow-y: auto/scroll
+        - We need to find and scroll that parent container
+
+        Multiple scroll strategies are used for robustness
+        """
+        scroll_success = False
+
+        # Strategy 1: Find scrollable parent of comment section
         try:
-            # Try to find and scroll the comment section container
-            comment_section = self.page.locator(self.config.selector_comment_section).first
+            scroll_success = self.page.evaluate('''() => {
+                // Find the comment list
+                const commentList = document.querySelector('ul._a9z6._a9za');
+                if (!commentList) return false;
 
-            if comment_section.is_visible():
-                # Scroll within the container
-                comment_section.evaluate('el => el.scrollTop += el.clientHeight * 0.8')
-            else:
-                # Fallback: scroll the page
-                self.page.evaluate('window.scrollBy(0, window.innerHeight * 0.5)')
+                // Find scrollable parent by traversing up the DOM
+                let parent = commentList.parentElement;
+                let scrolled = false;
 
+                while (parent && parent !== document.body) {
+                    const style = window.getComputedStyle(parent);
+                    const overflowY = style.overflowY;
+                    const overflow = style.overflow;
+
+                    // Check if this element is scrollable
+                    if (overflowY === 'auto' || overflowY === 'scroll' ||
+                        overflow === 'auto' || overflow === 'scroll') {
+                        // Check if it actually has scrollable content
+                        if (parent.scrollHeight > parent.clientHeight) {
+                            const scrollAmount = parent.clientHeight * 0.7;
+                            parent.scrollTop += scrollAmount;
+                            scrolled = true;
+                            break;
+                        }
+                    }
+                    parent = parent.parentElement;
+                }
+
+                return scrolled;
+            }''')
+
+            if scroll_success:
+                self.logger.debug("Scrolled comment section via scrollable parent")
+                return
         except Exception as e:
-            self.logger.debug(f"Scroll comment section failed: {e}")
-            # Fallback: keyboard scroll
-            try:
-                self.page.keyboard.press('PageDown')
-            except:
-                pass
+            self.logger.debug(f"Scrollable parent strategy failed: {e}")
+
+        # Strategy 2: Scroll dialog container (for modal views)
+        try:
+            dialog = self.page.locator('div[role="dialog"]').first
+            if dialog.is_visible():
+                scroll_success = dialog.evaluate('''el => {
+                    // Find scrollable div inside dialog
+                    const scrollableDivs = el.querySelectorAll('div');
+                    for (const div of scrollableDivs) {
+                        const style = window.getComputedStyle(div);
+                        if ((style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+                            div.scrollHeight > div.clientHeight) {
+                            div.scrollTop += div.clientHeight * 0.7;
+                            return true;
+                        }
+                    }
+                    return false;
+                }''')
+
+                if scroll_success:
+                    self.logger.debug("Scrolled comment section via dialog container")
+                    return
+        except Exception as e:
+            self.logger.debug(f"Dialog scroll strategy failed: {e}")
+
+        # Strategy 3: Scroll to last comment element to trigger lazy loading
+        try:
+            last_comment = self.page.locator('ul._a9ym').last
+            if last_comment.is_visible():
+                last_comment.scroll_into_view_if_needed()
+                self.logger.debug("Scrolled to last comment element")
+                return
+        except Exception as e:
+            self.logger.debug(f"Scroll to last comment failed: {e}")
+
+        # Strategy 4: Find any scrollable element with comments
+        try:
+            scroll_success = self.page.evaluate('''() => {
+                // Find all potentially scrollable containers
+                const allDivs = document.querySelectorAll('div');
+                for (const div of allDivs) {
+                    const style = window.getComputedStyle(div);
+                    // Check if scrollable and contains comments
+                    if ((style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+                        div.scrollHeight > div.clientHeight &&
+                        div.querySelector('ul._a9ym')) {
+                        div.scrollTop += div.clientHeight * 0.7;
+                        return true;
+                    }
+                }
+                return false;
+            }''')
+
+            if scroll_success:
+                self.logger.debug("Scrolled via generic scrollable container with comments")
+                return
+        except Exception as e:
+            self.logger.debug(f"Generic scrollable container strategy failed: {e}")
+
+        # Strategy 5: Keyboard scroll (Page Down)
+        try:
+            self.page.keyboard.press('PageDown')
+            self.logger.debug("Used keyboard PageDown for scroll")
+            return
+        except Exception as e:
+            self.logger.debug(f"Keyboard scroll failed: {e}")
+
+        # Strategy 6: Window scroll as last resort
+        try:
+            self.page.evaluate('window.scrollBy(0, window.innerHeight * 0.5)')
+            self.logger.debug("Used window scroll fallback")
+        except Exception as e:
+            self.logger.debug(f"Window scroll fallback failed: {e}")
 
     def _extract_comments_playwright(self, seen_ids: set) -> List[CommentData]:
         """
