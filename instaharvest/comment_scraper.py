@@ -363,93 +363,145 @@ class CommentScraper(BaseScraper):
         Parse a single comment container element
 
         Based on the HTML structure provided by user:
-        - Username: <a href="/username/">username</a>
-        - Profile pic: <img alt="username's profile picture" src="...">
-        - Comment text: <span class="_ap3a _aaco _aacu _aacx _aad7 _aade">text</span>
-        - Timestamp: <time datetime="..." title="...">1h</time>
-        - Likes: button with "X like" or "X likes"
-        - Comment link: /p/POST_ID/c/COMMENT_ID/
+        - Container: ul._a9ym > li._a9zj._a9zl
+        - Username: a[href="/username/"] inside h3
+        - Profile pic: img[alt="username's profile picture"]
+        - Comment text: span._ap3a._aaco._aacu._aacx._aad7._aade[dir="auto"]
+        - Timestamp: time._a9ze._a9zf[datetime][title]
+        - Likes: button._a9ze with "X like" or "X likes"
+        - Comment link: a[href="/p/POST_ID/c/COMMENT_ID/"]
         """
         try:
             # Find the li element (main comment container)
             li_element = container.find('li', class_='_a9zj')
             if not li_element:
-                return None
-
-            # Extract username
-            username = ''
-            username_link = li_element.find('a', href=re.compile(r'^/[^/]+/$'))
-            if username_link:
-                href = username_link.get('href', '')
-                username = href.strip('/').split('/')[-1]
-
-                # Filter out system paths
-                if username in self.config.instagram_system_paths:
+                # Try to find li with both classes
+                li_element = container.find('li', class_=re.compile(r'_a9zj'))
+                if not li_element:
                     return None
+
+            # Extract username from h3 > div > span > a
+            username = ''
+            # Method 1: Find in h3 tag
+            h3_tag = li_element.find('h3')
+            if h3_tag:
+                username_link = h3_tag.find('a', href=re.compile(r'^/[^/]+/$'))
+                if username_link:
+                    href = username_link.get('href', '')
+                    username = href.strip('/').split('/')[-1]
+
+            # Method 2: Fallback - find first a tag with username pattern
+            if not username:
+                all_links = li_element.find_all('a', href=re.compile(r'^/[^/]+/$'))
+                for link in all_links:
+                    href = link.get('href', '')
+                    potential_username = href.strip('/').split('/')[-1]
+                    # Filter out system paths and post/comment links
+                    if potential_username and potential_username not in self.config.instagram_system_paths:
+                        if not re.match(r'^\d+$', potential_username):  # Not just numbers
+                            username = potential_username
+                            break
+
+            # Filter out system paths
+            if username in self.config.instagram_system_paths:
+                return None
 
             if not username:
                 return None
 
             # Extract profile picture URL
             profile_pic_url = ''
-            img_tag = li_element.find('img', alt=re.compile(r"'s profile picture"))
+            img_tag = li_element.find('img', alt=re.compile(rf"{re.escape(username)}'s profile picture", re.IGNORECASE))
             if img_tag:
                 profile_pic_url = img_tag.get('src', '')
+            else:
+                # Fallback: any profile picture img
+                img_tag = li_element.find('img', alt=re.compile(r"'s profile picture"))
+                if img_tag:
+                    profile_pic_url = img_tag.get('src', '')
 
             # Check verified status
             is_verified = li_element.find('svg', {'aria-label': 'Verified'}) is not None
 
-            # Extract comment text
+            # Extract comment text - specific selector from HTML
             comment_text = ''
-            text_span = li_element.find('span', class_=re.compile(r'_ap3a.*_aade'))
+            # Method 1: Exact class match
+            text_span = li_element.find('span', class_='_ap3a _aaco _aacu _aacx _aad7 _aade')
             if text_span:
                 comment_text = text_span.get_text(strip=True)
 
+            # Method 2: Partial class match
             if not comment_text:
-                # Fallback: look for span with dir="auto"
+                text_span = li_element.find('span', class_=re.compile(r'_ap3a'))
+                if text_span and text_span.get('dir') == 'auto':
+                    comment_text = text_span.get_text(strip=True)
+
+            # Method 3: Look for div.xt0psk2 > span with dir="auto"
+            if not comment_text:
+                text_div = li_element.find('div', class_='xt0psk2')
+                if text_div:
+                    text_span = text_div.find('span', {'dir': 'auto'})
+                    if text_span:
+                        comment_text = text_span.get_text(strip=True)
+
+            # Method 4: Fallback - any span with dir="auto" that's not empty
+            if not comment_text:
                 auto_spans = li_element.find_all('span', {'dir': 'auto'})
                 for span in auto_spans:
                     text = span.get_text(strip=True)
-                    if text and len(text) > 1:
-                        comment_text = text
-                        break
+                    # Skip if it's just a username or timestamp
+                    if text and len(text) > 1 and text != username:
+                        # Check if this span doesn't contain a link (usernames have links)
+                        if not span.find('a'):
+                            comment_text = text
+                            break
 
-            # Extract timestamp
+            # Extract timestamp - time._a9ze._a9zf
             timestamp = ''
             timestamp_iso = ''
-            time_element = li_element.find('time')
+            time_element = li_element.find('time', class_=re.compile(r'_a9ze'))
             if time_element:
                 timestamp = time_element.get('title', '') or time_element.get_text(strip=True)
                 timestamp_iso = time_element.get('datetime', '')
+            else:
+                # Fallback: any time element
+                time_element = li_element.find('time')
+                if time_element:
+                    timestamp = time_element.get('title', '') or time_element.get_text(strip=True)
+                    timestamp_iso = time_element.get('datetime', '')
 
-            # Extract comment URL and ID
+            # Extract comment URL and ID from link like /p/POST_ID/c/COMMENT_ID/
             comment_url = ''
             comment_id = ''
             comment_link = li_element.find('a', href=re.compile(r'/p/[^/]+/c/\d+/'))
             if comment_link:
-                comment_url = 'https://www.instagram.com' + comment_link.get('href', '')
+                href = comment_link.get('href', '')
+                comment_url = 'https://www.instagram.com' + href
                 # Extract comment ID from URL
-                match = re.search(r'/c/(\d+)/', comment_url)
+                match = re.search(r'/c/(\d+)/', href)
                 if match:
                     comment_id = match.group(1)
 
             # Generate comment ID if not found
             if not comment_id:
-                comment_id = f"{username}_{hash(comment_text)}"
+                comment_id = f"{username}_{abs(hash(comment_text))}"
 
-            # Extract likes count
+            # Extract likes count from button._a9ze
             likes_count = 0
-            likes_button = li_element.find('button')
-            if likes_button:
-                likes_text = likes_button.get_text(strip=True)
-                likes_match = re.search(r'(\d+)\s*like', likes_text, re.IGNORECASE)
+            # Find all buttons with class _a9ze
+            buttons = li_element.find_all('button', class_='_a9ze')
+            for button in buttons:
+                button_text = button.get_text(strip=True)
+                # Match "1 like", "2 likes", etc.
+                likes_match = re.search(r'(\d+)\s*like', button_text, re.IGNORECASE)
                 if likes_match:
                     likes_count = int(likes_match.group(1))
+                    break
 
-            # Also check for span with like count
+            # Fallback: search all spans for like count
             if likes_count == 0:
-                like_spans = li_element.find_all('span')
-                for span in like_spans:
+                all_spans = li_element.find_all('span')
+                for span in all_spans:
                     text = span.get_text(strip=True)
                     if 'like' in text.lower():
                         match = re.search(r'(\d+)', text)
@@ -457,14 +509,17 @@ class CommentScraper(BaseScraper):
                             likes_count = int(match.group(1))
                             break
 
-            # Check if has translation option
-            has_translation = li_element.find(string=re.compile('translation', re.IGNORECASE)) is not None
+            # Check if has "See translation" option
+            has_translation = False
+            translation_div = li_element.find(string=re.compile(r'See\s*translation', re.IGNORECASE))
+            if translation_div:
+                has_translation = True
 
-            # Extract reply count (if shown)
+            # Extract reply count (if "View X replies" is shown)
             reply_count = 0
-            reply_text = li_element.find(string=re.compile(r'View.*repl', re.IGNORECASE))
-            if reply_text:
-                match = re.search(r'(\d+)', str(reply_text))
+            view_replies = li_element.find(string=re.compile(r'View.*repl', re.IGNORECASE))
+            if view_replies:
+                match = re.search(r'(\d+)', str(view_replies))
                 if match:
                     reply_count = int(match.group(1))
 
