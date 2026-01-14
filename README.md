@@ -26,6 +26,7 @@
 - 📝 **Complete Bio** - Extract full bio with links, emails, mentions, and contact info
 - 🔗 **Post & Reel Links** - Intelligent scrolling and link collection
 - 🏷️ **Tagged Accounts** - Extract tags from posts and reels
+- 💬 **Comment Scraping** - Full comment extraction with likes, replies, author info
 - 👥 **Followers/Following** - Collect lists with real-time output
 - 💬 **Direct Messaging** - Send DMs with smart rate limiting
 - 🤝 **Follow/Unfollow** - Manage following with rate limiting
@@ -290,6 +291,79 @@ with SharedBrowser(config=config) as browser:
 
 </details>
 
+<details>
+<summary><b>Example 5: Scrape Comments from Posts</b> - Click to expand</summary>
+
+```python
+from instaharvest import InstagramOrchestrator
+from instaharvest.config import ScraperConfig
+
+# Create config
+config = ScraperConfig()
+orchestrator = InstagramOrchestrator(config)
+
+# Option 1: Scrape profile with comments included
+results = orchestrator.scrape_complete_profile_advanced(
+    'username',
+    parallel=3,
+    save_excel=True,
+    scrape_comments=True,          # Enable comment scraping
+    max_comments_per_post=100,     # Limit per post (None = all)
+    include_replies=True           # Include reply threads
+)
+
+print(f"Total comments: {results['comments_data']}")
+```
+
+```python
+# Option 2: Scrape only comments (standalone)
+results = orchestrator.scrape_comments_only(
+    'username',
+    max_comments_per_post=50,
+    include_replies=True,
+    save_excel=True,
+    export_json=True
+)
+
+print(f"Comments: {results['total_comments']}")
+print(f"Replies: {results['total_replies']}")
+```
+
+```python
+# Option 3: Low-level comment scraping
+from instaharvest import CommentScraper
+
+scraper = CommentScraper()
+session_data = scraper.load_session()
+scraper.setup_browser(session_data)
+
+# Scrape comments from a single post
+post_url = 'https://www.instagram.com/p/ABC123/'
+comments = scraper.scrape(
+    post_url,
+    max_comments=100,
+    include_replies=True
+)
+
+# Access comment data
+print(f"Total comments: {comments.total_comments_scraped}")
+for comment in comments.comments:
+    print(f"@{comment.author.username}: {comment.text}")
+    print(f"  Likes: {comment.likes_count}, Replies: {len(comment.replies)}")
+
+scraper.close()
+```
+
+**Extracted Comment Data:**
+- Comment text
+- Author username, profile picture, verified status
+- Likes count
+- Timestamp (human readable + ISO format)
+- Reply threads (nested comments)
+- Comment URL
+
+</details>
+
 ---
 
 ## 📁 Example Scripts
@@ -487,6 +561,52 @@ print(f"Likes: {post.likes}")
 print(f"Date: {post.timestamp}")
 
 scraper.close()
+```
+
+### 8. Comment Scraping
+
+```python
+from instaharvest import CommentScraper
+from instaharvest.config import ScraperConfig
+
+config = ScraperConfig()
+scraper = CommentScraper(config=config)
+session_data = scraper.load_session()
+scraper.setup_browser(session_data)
+
+# Scrape comments from a post
+comments = scraper.scrape(
+    'https://www.instagram.com/p/POST_ID/',
+    max_comments=100,        # Limit (None = all)
+    include_replies=True     # Include reply threads
+)
+
+# Access data
+print(f"Total: {comments.total_comments_scraped} comments")
+print(f"Replies: {comments.total_replies_scraped}")
+
+for comment in comments.comments:
+    print(f"@{comment.author.username}: {comment.text}")
+    print(f"  Likes: {comment.likes_count}")
+    print(f"  Time: {comment.timestamp}")
+
+    # Access replies
+    for reply in comment.replies:
+        print(f"    ↳ @{reply.author.username}: {reply.text}")
+
+scraper.close()
+```
+
+**Export comments to files:**
+
+```python
+from instaharvest import export_comments_to_json, export_comments_to_excel
+
+# Export to JSON
+export_comments_to_json(comments, 'comments.json')
+
+# Export to Excel
+export_comments_to_excel(comments, 'comments.xlsx')
 ```
 
 </details>
