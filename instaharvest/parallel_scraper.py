@@ -169,7 +169,9 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
         error_recovery_delay_min=config_dict['error_recovery_delay_min'],
         error_recovery_delay_max=config_dict['error_recovery_delay_max'],
         post_open_delay=config_dict['post_open_delay'],
-        ui_element_load_delay=config_dict['ui_element_load_delay']
+        ui_element_load_delay=config_dict['ui_element_load_delay'],
+        browser_channel=config_dict.get('browser_channel', 'chromium'),
+        browser_args=config_dict.get('browser_args', ['--start-maximized'])
     )
 
     batch_results = []
@@ -177,8 +179,9 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     # Each worker gets its own Playwright instance
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            channel='chrome',
-            headless=config.headless
+            channel=config.browser_channel,
+            headless=config.headless,
+            args=config.browser_args
         )
 
         context = browser.new_context(
@@ -604,7 +607,9 @@ class ParallelPostDataScraper:
             'error_recovery_delay_min': self.config.error_recovery_delay_min,
             'error_recovery_delay_max': self.config.error_recovery_delay_max,
             'post_open_delay': self.config.post_open_delay,
-            'ui_element_load_delay': self.config.ui_element_load_delay
+            'ui_element_load_delay': self.config.ui_element_load_delay,
+            'browser_channel': self.config.browser_channel,
+            'browser_args': self.config.browser_args
         }
 
         # Create Manager Queue for real-time communication
