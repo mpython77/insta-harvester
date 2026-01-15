@@ -43,6 +43,85 @@ class CommentScraper(BaseScraper):
         self.parser = CommentParser()
         self.logger.info("Refactored CommentScraper Ready")
 
+    def scrape_stream(
+        self,
+        post_url: str,
+        *,
+        max_comments: Optional[int] = None,
+        include_replies: bool = True
+    ):
+        """
+        Generator that yields comments incrementally as they are scraped.
+        Fixes 'DOM Explosion' by allowing data to be processed/saved in real-time.
+        """
+        self.logger.info(f"Starting Stream Scrape: {post_url}")
+        
+        self.goto_url(post_url)
+        time.sleep(3) # Initial load
+
+        seen_ids = set()
+        last_height = 0
+        no_change_count = 0
+        max_retries = 20
+        total_yielded = 0
+
+        # Loop until max reached or no new content
+        while True:
+            # 1. Expand Replies & Load More
+            if include_replies:
+                self._expand_replies()
+
+            try:
+                load_more = self.page.locator('svg[aria-label="Load more comments"]')
+                if load_more.count() > 0 and load_more.first.is_visible():
+                    load_more.first.click()
+                    time.sleep(2)
+                    no_change_count = 0
+            except: pass
+
+            # 2. Scroll logic
+            self._smart_scroll()
+
+            # 3. Parse *current* DOM state
+            html = self.page.content()
+            current_batch = self.parser.parse_html(html)
+            
+            # 4. Filter and Yield New Comments
+            new_comments_in_batch = []
+            for comment in current_batch:
+                if comment.id not in seen_ids:
+                    seen_ids.add(comment.id)
+                    new_comments_in_batch.append(comment)
+                    
+                    # Also track replies
+                    for reply in comment.replies:
+                        seen_ids.add(reply.id)
+            
+            # Yield new comments
+            if new_comments_in_batch:
+                self.logger.info(f"Yielding {len(new_comments_in_batch)} new comments...")
+                for c in new_comments_in_batch:
+                    yield c
+                    total_yielded += 1
+                    
+                    if max_comments and total_yielded >= max_comments:
+                        self.logger.info("Reached max comments limit via stream.")
+                        return
+
+                no_change_count = 0
+            else:
+                no_change_count += 1
+                self.logger.debug(f"No new comments via stream. Attempt {no_change_count}/{max_retries}")
+                if no_change_count > max_retries:
+                    break
+
+            # Check total count for exit condition (HTML count vs Seen count)
+            current_dom_count = self.page.locator('a[href*="/c/"]').count()
+            if max_comments and current_dom_count >= max_comments:
+                 # Double check if we yielded everything
+                 if total_yielded >= max_comments:
+                     return
+
     def scrape(
         self, 
         post_url: str, 
@@ -52,22 +131,15 @@ class CommentScraper(BaseScraper):
         max_replies_per_comment: Optional[int] = None,
         progress_callback: Optional[callable] = None
     ) -> PostCommentsData:
+        """
+        Legacy method wrapper around scrape_stream for backward compatibility.
+        """
         start_time = time.time()
-        self.logger.info(f"Scraping: {post_url}")
+        comments = []
         
-        self.goto_url(post_url)
-        time.sleep(3) # Initial load
-        
-        # Scroll and Load
-        self._load_all_comments(max_comments, include_replies)
-        
-        # Parse
-        html = self.page.content()
-        comments = self.parser.parse_html(html)
-        
-        # Post-process (filtering/limiting if needed)
-        if max_comments:
-            comments = comments[:max_comments]
+        # Consume the stream
+        for comment in self.scrape_stream(post_url, max_comments=max_comments, include_replies=include_replies):
+            comments.append(comment)
             
         duration = time.time() - start_time
         
@@ -80,104 +152,45 @@ class CommentScraper(BaseScraper):
             scraping_duration_seconds=duration
         )
 
+    def _smart_scroll(self):
+        """Helper for scrolling logic"""
+        try:
+            # Try JS Scroll on dialog
+            scrolled = self.page.evaluate('''() => {
+                const dialog = document.querySelector('div[role="dialog"]');
+                if (!dialog) return false;
+                const list = dialog.querySelector('ul._a9z6, ul.x78zum5') || dialog.querySelector('div.x78zum5.xdt5ytf');
+                if (list) {
+                    list.scrollIntoView({ behavior: "smooth", block: "end" });
+                    return true;
+                }
+                const scrollables = dialog.querySelectorAll('div');
+                for (const s of scrollables) {
+                    if (s.scrollHeight > s.clientHeight && (getComputedStyle(s).overflowY === 'auto' || getComputedStyle(s).overflowY === 'scroll')) {
+                        s.scrollTop = s.scrollHeight;
+                        return true;
+                    }
+                }
+                return false;
+            }''')
+            
+            if not scrolled:
+                # Mouse fallback
+                dialog_box = self.page.locator('div[role="dialog"]').first
+                if dialog_box.is_visible():
+                    box = dialog_box.bounding_box()
+                    if box:
+                        self.page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+                        self.page.mouse.wheel(0, 1000)
+                else:
+                    self.page.keyboard.press("PageDown")
+                    
+            time.sleep(2.5)
+        except: pass
+
     def _extract_post_id(self, url: str) -> str:
         match = re.search(r'/(?:p|reel)/([A-Za-z0-9_-]+)/?', url)
         return match.group(1) if match else ''
-
-    def _load_all_comments(self, max_comments: Optional[int], include_replies: bool):
-        """
-        Robustly scrolls, clicks 'Load more', and expands replies.
-        Strategy: JS Scroll -> Mouse Wheel -> Keyboard -> Button Click
-        """
-        last_height = 0
-        no_change_count = 0
-        max_retries = 20
-        
-        while True:
-            # 1. Expand Replies if requested (Do this frequently to keep DOM fresh)
-            if include_replies:
-                self._expand_replies()
-
-            # 2. Check for "Load more comments" button (SVG with plus icon)
-            try:
-                load_more = self.page.locator('svg[aria-label="Load more comments"]')
-                if load_more.count() > 0 and load_more.first.is_visible():
-                    self.logger.info("Found 'Load more comments' button, clicking...")
-                    load_more.first.click()
-                    time.sleep(2)
-                    no_change_count = 0
-                    continue # Loop immediately to handle new content
-            except: pass
-
-            # 3. Scroll Strategy: Mixed Approach
-            try:
-                # A. Try JS Scroll on the dialog (Cleanest)
-                scrolled_via_js = self.page.evaluate('''() => {
-                    const dialog = document.querySelector('div[role="dialog"]');
-                    if (!dialog) return false;
-                    
-                    // Find the scrollable list container
-                    const list = dialog.querySelector('ul._a9z6, ul.x78zum5') || dialog.querySelector('div.x78zum5.xdt5ytf');
-                    if (list) {
-                        // Scroll that specific element
-                        list.scrollIntoView({ behavior: "smooth", block: "end" });
-                        return true;
-                    }
-                    
-                    // Fallback to scrolling the dialog 
-                    // (Often the dialog itself isn't scrollable, but a child div is)
-                    const scrollables = dialog.querySelectorAll('div');
-                    for (const s of scrollables) {
-                        if (s.scrollHeight > s.clientHeight && (getComputedStyle(s).overflowY === 'auto' || getComputedStyle(s).overflowY === 'scroll')) {
-                            s.scrollTop = s.scrollHeight;
-                            return true;
-                        }
-                    }
-                    return false;
-                }''')
-                
-                # B. Mouse Wheel Simulation (Robust for lazy-loading)
-                # Mouse over the center of the dialog and scroll down
-                if not scrolled_via_js or no_change_count > 1:
-                    dialog_box = self.page.locator('div[role="dialog"]').first
-                    if dialog_box.is_visible():
-                        box = dialog_box.bounding_box()
-                        if box:
-                            self.page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
-                            self.page.mouse.wheel(0, 1000) # Big scroll down
-                            time.sleep(0.5)
-            
-                # C. Keyboard fallback (Last resort)
-                if no_change_count > 3:
-                    self.page.keyboard.press("PageDown")
-
-            except Exception as e:
-                self.logger.debug(f"Scroll error: {e}")
-                pass
-
-            time.sleep(2.5) # Wait for network
-
-            # 4. Check Progress
-            current_comment_count = self.page.locator('a[href*="/c/"]').count()
-            self.logger.info(f"Comments found: {current_comment_count} (Previous: {last_height})")
-            
-            if current_comment_count == last_height:
-                no_change_count += 1
-                self.logger.debug(f"No new comments. Attempt {no_change_count}/{max_retries}")
-                
-                if no_change_count > max_retries:
-                    self.logger.info("No new comments found after many attempts. Stopping scroll.")
-                    break
-            else:
-                if current_comment_count > last_height:
-                    self.logger.info(f"Loaded {current_comment_count - last_height} new comments.")
-                no_change_count = 0
-                last_height = current_comment_count
-                
-            # 5. Max Check
-            if max_comments and current_comment_count >= max_comments:
-                self.logger.info(f"Reached max comments limit ({max_comments}).")
-                break
 
     def _expand_replies(self):
         """
