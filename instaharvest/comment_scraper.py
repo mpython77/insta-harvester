@@ -1082,13 +1082,33 @@ class CommentScraper(BaseScraper):
         """
         Extract replies for a specific comment
 
+        Instagram HTML structure for replies:
+        =====================================
+        Main comment container
+        └── div.xpdvgm7 (View/Hide all replies button)
+        └── ul.x2lah0s.xh8yej3 (replies list)
+            ├── div > div (reply 1 container)
+            ├── div > div (reply 2 container)
+            └── ...
+
         Replies are loaded dynamically when "View all X replies" is clicked.
-        They appear in nested containers below the parent comment.
+        They appear inside a <ul> element as sibling to the replies button.
         """
         replies = []
 
         try:
             from bs4 import BeautifulSoup
+
+            # Helper function to check class
+            def has_class(element, class_name):
+                if not element:
+                    return False
+                classes = element.get('class', [])
+                if isinstance(classes, list):
+                    return class_name in classes
+                elif isinstance(classes, str):
+                    return class_name in classes.split()
+                return False
 
             # Click "View replies" button if exists
             self._expand_replies(parent_comment_id)
@@ -1100,39 +1120,68 @@ class CommentScraper(BaseScraper):
             html = self.page.content()
             soup = BeautifulSoup(html, 'lxml')
 
-            # Find reply containers using the improved container finding logic
+            # Strategy 1: Find replies inside <ul> element near the parent comment
+            # The <ul> with class x2lah0s contains replies
             reply_containers = []
             seen_container_ids = set()
 
-            # Find all comment permalinks and their containers
-            all_reply_links = soup.find_all('a', href=re.compile(r'/p/[^/]+/c/\d+/?'))
+            # Find the xpdvgm7 div (view/hide replies button) and look for sibling <ul>
+            replies_button = None
+            for div in soup.find_all('div'):
+                if has_class(div, 'xpdvgm7'):
+                    # Check if this contains "Hide all replies" or "View all X replies"
+                    div_text = div.get_text(strip=True).lower()
+                    if 'replies' in div_text or 'reply' in div_text:
+                        replies_button = div
+                        break
 
-            for link in all_reply_links:
-                try:
-                    # Get comment ID from this link
-                    href = link.get('href', '')
-                    match = re.search(r'/c/(\d+)/?', href)
-                    if not match:
+            if replies_button:
+                # Find the <ul> sibling that contains replies
+                # It's usually the next sibling with class x2lah0s
+                ul_element = replies_button.find_next_sibling('ul')
+                if ul_element:
+                    # Find all comment containers inside the <ul>
+                    # Each reply is inside a div > div structure
+                    for reply_link in ul_element.find_all('a', href=re.compile(r'/p/[^/]+/c/\d+/?')):
+                        container = self._find_comment_container(reply_link)
+                        if container:
+                            container_id = id(container)
+                            if container_id not in seen_container_ids:
+                                seen_container_ids.add(container_id)
+                                reply_containers.append(container)
+
+            # Strategy 2: Fallback - find all comment links in the page that are NOT the parent
+            if not reply_containers:
+                all_reply_links = soup.find_all('a', href=re.compile(r'/p/[^/]+/c/\d+/?'))
+
+                for link in all_reply_links:
+                    try:
+                        # Get comment ID from this link
+                        href = link.get('href', '')
+                        match = re.search(r'/c/(\d+)/?', href)
+                        if not match:
+                            continue
+
+                        link_comment_id = match.group(1)
+
+                        # Skip if this is the parent comment
+                        if link_comment_id == parent_comment_id:
+                            continue
+
+                        # Check if this link is inside a <ul> (reply container)
+                        parent_ul = link.find_parent('ul')
+                        if parent_ul:
+                            container = self._find_comment_container(link)
+                            if container:
+                                container_id = id(container)
+                                if container_id not in seen_container_ids:
+                                    seen_container_ids.add(container_id)
+                                    reply_containers.append(container)
+
+                    except Exception:
                         continue
 
-                    link_comment_id = match.group(1)
-
-                    # Skip if this is the parent comment
-                    if link_comment_id == parent_comment_id:
-                        continue
-
-                    # Find the container for this reply
-                    container = self._find_comment_container(link)
-                    if container:
-                        container_id = id(container)
-                        if container_id not in seen_container_ids:
-                            seen_container_ids.add(container_id)
-                            reply_containers.append(container)
-
-                except Exception:
-                    continue
-
-            self.logger.debug(f"Found {len(reply_containers)} potential reply containers for comment {parent_comment_id}")
+            self.logger.debug(f"Found {len(reply_containers)} reply containers for comment {parent_comment_id}")
 
             for container in reply_containers:
                 if max_replies and len(replies) >= max_replies:
