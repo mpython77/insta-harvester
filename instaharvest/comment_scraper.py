@@ -19,6 +19,7 @@ class PostCommentsData:
     comments: List[Comment]
     scraped_at: str = ''
     scraping_duration_seconds: float = 0.0
+    collaborators: List[Any] = field(default_factory=list)
 
     def to_dict(self):
         return {
