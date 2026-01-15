@@ -2,56 +2,28 @@ import sys
 import os
 sys.path.insert(0, os.getcwd())
 
-from instaharvest import CommentScraper
-from instaharvest.comments_export import export_comments_to_json, export_comments_to_excel
+from instaharvest import InstagramOrchestrator
+from instaharvest.config import ScraperConfig
 
-scraper = CommentScraper()
-session_data = scraper.load_session()
-scraper.setup_browser(session_data)
+def main():
+    # Create config
+    config = ScraperConfig()
+    orchestrator = InstagramOrchestrator(config)
 
-# Scrape comments from a single post
-post_url = 'https://www.instagram.com/p/DTLHDJpDAbO/'
-comments = scraper.scrape(
-    post_url,
-    max_comments=100,
-    include_replies=True
-)
+    print("Starting orchestrator...")
 
-# Access comment data
-print(f"Found {len(comments.comments)} top-level comments.")
-print("---")
+    # Option 1: Scrape profile with comments included
+    results = orchestrator.scrape_complete_profile_advanced(
+        'anoshka._.__',
+        parallel=3,
+        save_excel=True,
+        scrape_comments=True,          # Enable comment scraping
+        max_comments_per_post=100,     # Limit per post (None = all)
+        include_replies=True           # Include reply threads
+    )
 
-for comment in comments.comments:
-    print(f"ID: {comment.id}")
-    print(f"User: {comment.author.username}")
-    print(f"Text: '{comment.text}'")
-    print(f"Time: {comment.timestamp_iso}")
-    print(f"Likes: {comment.likes_count}")
-    print(f"Reply Count (Extracted): {comment.reply_count}")
-    print(f"Nested Replies: {len(comment.replies)}")
-    
-    if comment.replies:
-        for reply in comment.replies:
-             print(f"    > Reply ID: {reply.id} | User: {reply.author.username} | Text: '{reply.text}'")
-    print("-" * 20)
+    print(f"Total comments: {results.get('comments_data', 'N/A')}")
 
-# Export Options
-save_json = True
-save_excel = True
-
-print("\n--- Exporting Data ---")
-if save_json:
-    json_filename = f"comments_{comments.post_id}.json"
-    if export_comments_to_json(comments, json_filename):
-        print(f"[+] Saved JSON to {json_filename}")
-    else:
-        print(f"[-] Failed to save JSON")
-
-if save_excel:
-    xlsx_filename = f"comments_{comments.post_id}.xlsx"
-    if export_comments_to_excel(comments, xlsx_filename):
-        print(f"[+] Saved Excel to {xlsx_filename}")
-    else:
-        print(f"[-] Failed to save Excel")
-
-scraper.close()
+if __name__ == '__main__':
+    # On Windows, multiprocessing requires this protection
+    main()
