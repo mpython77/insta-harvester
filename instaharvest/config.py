@@ -356,19 +356,27 @@ class ScraperConfig:
     comment_post_delay_max: float = 5.0  # Max delay between posts (comment scraping)
 
     # Comment CSS Selectors for DIRECT URL VIEW (https://www.instagram.com/p/POST_ID/)
-    # NOTE: These are different from popup view selectors
-    selector_comment_section: str = 'div.x5yr21d'  # Comment section container
-    selector_comment_container: str = 'div.x5yr21d.xw2csxc'  # Comment container
-    selector_comment_item: str = 'li'  # Comment list item
+    # NOTE: updated based on 2026 HTML structure analysis (Reels/Universal)
+    # Using specific classes like x1iyjqo2 which represents a comment row
+    selector_comment_thread: str = 'div.x1iyjqo2:has(a[href*="/c/"])'  # Robust thread finder
+    selector_comment_main_body: str = 'div.x1iyjqo2'  # Fallback to the row itself if specific wrapper absent
+    selector_comment_replies_wrapper: str = 'div.x5yr21d.xw2csxc'  # Container for nested replies (legacy/post specific)
+    
+    selector_comment_item: str = 'div.x1iyjqo2'  # Generic comment content row (used in main and replies)
     selector_comment_username_link: str = 'a.notranslate._a6hd'  # Username link
-    selector_comment_username_text: str = 'span._ap3a._aaco._aacw._aacx._aad7._aade'  # Username text
+    selector_comment_username_text: str = 'span._ap3a._aaco._aacw._aacx._aad7._aade'  # Username text container
     selector_comment_text: str = 'span[dir="auto"]'  # Comment text span
     selector_comment_time: str = 'time[datetime]'  # Comment timestamp
     selector_comment_permalink: str = 'a[href*="/c/"]'  # Comment permalink (/p/POST_ID/c/COMMENT_ID/)
-    selector_comment_likes_button: str = 'span:has-text("like")'  # Like count span
-    selector_comment_reply_button: str = 'span:has-text("Reply")'  # Reply button
-    selector_comment_view_replies: str = 'span:has-text("View all")'  # View replies button
-    selector_comment_load_more: str = 'span:has-text("View all")'  # Load more comments
+    selector_comment_likes_count: str = 'span.x193iq5w.x6ikm8r.x10wlt62'  # "X likes" text span
+    selector_comment_reply_button: str = 'div[role="button"] span:has-text("Reply")'  # Reply button
+    selector_comment_view_replies: str = 'span:has-text("View all")'  # Generic view replies text
+    selector_comment_load_more: str = 'svg[aria-label="Load more comments"]'  # Load more (if exists, usually handled by scroll)
+    
+    # Scrollable container (Reels often show comments in a sidebar/modal)
+    # x4h1yfo: User suggested specific container
+    # x5yr21d: Common comment section wrapper
+    selector_scrollable_container: str = 'div.x4h1yfo, div.x5yr21d, div[role="dialog"] > div > div > div'
 
     # Collaborator selectors (for post co-authors)
     selector_collaborator_container: str = 'header'  # Collaborator section in header

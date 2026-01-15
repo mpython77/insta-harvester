@@ -18,7 +18,8 @@ from typing import List, Dict, Any, Optional, Union
 import logging
 
 from .config import ScraperConfig
-from .comment_scraper import CommentData, PostCommentsData, CommentAuthor, Collaborator
+from .comment_scraper import PostCommentsData
+from .models import CommentData, CommentAuthor, Collaborator
 
 
 class CommentsExporter:

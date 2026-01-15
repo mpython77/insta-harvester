@@ -19,7 +19,8 @@ from .reel_links import ReelLinksScraper
 from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
 from .excel_export import ExcelExporter
-from .comment_scraper import CommentScraper, CommentData, PostCommentsData
+from .comment_scraper import CommentScraper, PostCommentsData
+from .models import CommentData
 from .comments_export import CommentsExporter, export_comments_to_json, export_comments_to_excel
 from .logger import setup_logger
 

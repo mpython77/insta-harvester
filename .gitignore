@@ -44,3 +44,7 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Debug files
+debug_snapshot_*.html
+full_comment_html_code.html

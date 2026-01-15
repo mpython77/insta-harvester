@@ -569,28 +569,31 @@ scraper.close()
 from instaharvest import CommentScraper
 from instaharvest.config import ScraperConfig
 
-config = ScraperConfig()
+# 1. Setup Config & Scraper
+config = ScraperConfig(headless=False)  # Set to True for background execution
 scraper = CommentScraper(config=config)
+
+# 2. Load Session (Required)
+# Ensure you have run 'python examples/save_session.py' first
 session_data = scraper.load_session()
 scraper.setup_browser(session_data)
 
-# Scrape comments from a post
-comments = scraper.scrape(
+# 3. Scrape Comments
+result = scraper.scrape(
     'https://www.instagram.com/p/POST_ID/',
-    max_comments=100,        # Limit (None = all)
-    include_replies=True     # Include reply threads
+    max_comments=100,       # Limit (None = all)
+    include_replies=True    # Important: Enable nested reply scraping
 )
 
-# Access data
-print(f"Total: {comments.total_comments_scraped} comments")
-print(f"Replies: {comments.total_replies_scraped}")
+# 4. Access Data
+print(f"Total Comments: {result.total_comments_scraped}")
+print(f"Total Replies: {result.total_replies_scraped}")
 
-for comment in comments.comments:
+for comment in result.comments:
     print(f"@{comment.author.username}: {comment.text}")
     print(f"  Likes: {comment.likes_count}")
-    print(f"  Time: {comment.timestamp}")
 
-    # Access replies
+    # Access Nested Replies
     for reply in comment.replies:
         print(f"    ↳ @{reply.author.username}: {reply.text}")
 
