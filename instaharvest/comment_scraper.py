@@ -26,7 +26,7 @@ class PostCommentsData:
             'post_url': self.post_url,
             'post_id': self.post_id,
             'total_comments': self.total_comments_scraped,
-            'comments': [c.to_dict() for c in self.comments],
+            'comments': [c.model_dump() for c in self.comments],
             'duration': self.scraping_duration_seconds
         }
 

@@ -11,22 +11,19 @@ from instaharvest.exporters import StreamingExcelExporter, StreamingJSONExporter
 def main():
     # Create config
     config = ScraperConfig()
+    
+    # 🛡️ SECURITY: PROXY TESTING
+    # Proxies disabled by user request
+    # config.proxies = [
+    #    "socks5://..."
+    # ]
+    
     orchestrator = InstagramOrchestrator(config)
 
     print("Starting orchestrator...")
 
-    # Option 1: Scrape profile with comments included
-    # The following block is replaced by the streaming comment scraper logic
-    # results = orchestrator.scrape_complete_profile_advanced(
-    #     'anoshka._.__',
-    #     parallel=3,
-    #     save_excel=True,
-    #     scrape_comments=True,          # Enable comment scraping
-    #     max_comments_per_post=100,     # Limit per post (None = all)
-    #     include_replies=True           # Include reply threads
-    # )
-
-    # print(f"Total comments: {results.get('comments_data', 'N/A')}")
+    # Option 1: Profile Scraper (Legacy)
+    # See documentation for usage.
 
     print("\n" + "="*50)
     print("🚀 STREAMING COMMENT SCRAPER (MEMORY SAFE)")
@@ -68,8 +65,12 @@ def main():
         print("⏳ Starting stream... (Press Ctrl+C to stop safely)")
         
         # Consume Generator
+        valid_photo_comment = None
+        
         for comment in scraper.scrape_stream(url, max_comments=limit, include_replies=True):
             count += 1
+            if comment.author.profile_picture_url:
+                valid_photo_comment = comment
             
             # Prepare Row
             row = [
@@ -80,12 +81,42 @@ def main():
             
             # Write Immediately
             excel.append_row(row)
-            json_export.append_item(comment.to_dict())
+            json_export.append_item(comment.model_dump())
             
             # Print Progress
             print(f"\r[{count}] {comment.author.username}: {comment.text[:30]}...", end="", flush=True)
         
         print(f"\n\n✅ Done! Scraped {count} comments.")
+        
+        # --- HYBRID MODE DEMO ---
+        print("\n" + "="*50)
+        print("⚡ HYBRID MODE: Fast Media Download (curl_cffi)")
+        print("="*50)
+        
+        if count > 0 and 'valid_photo_comment' in locals() and valid_photo_comment:
+            target_url = valid_photo_comment.author.profile_picture_url
+            print(f"🎯 Target Media: {valid_photo_comment.author.username}'s Profile Pic")
+            print(f"🔗 URL: {target_url[:60]}...")
+            
+            # 1. Sync Cookies
+            scraper.sync_network_client()
+            
+            # 2. Download
+            filename = f"profile_pic_{valid_photo_comment.author.username}.jpg"
+            print(f"⬇️ Downloading to {filename}...")
+            
+            start_t = time.time()
+            success = scraper.network_client.download_media(target_url, filename)
+            duration = time.time() - start_t
+            
+            if success:
+                print(f"✅ Downloaded in {duration:.2f}s using Hybrid Client!")
+            else:
+                print("❌ Download failed.")
+        else:
+             print("⚠️ No comments with profile pictures found to test download.")
+             
+        # ------------------------
         
     except KeyboardInterrupt:
         print("\n\n🛑 Stopped by user. Data is verified safe on disk.")

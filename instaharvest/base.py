@@ -22,19 +22,14 @@ from .exceptions import (
     LoginRequiredError
 )
 from .security import SecurityManager
+from .network_client import NetworkClient  # [NEW]
 from .logger import setup_logger
 
 
 class BaseScraper(ABC):
     """
     Base scraper class with common functionality
-
-    Features:
-    - Session management
-    - Browser automation
-    - Error handling with retries
-    - Professional logging
-    - HTML structure change detection
+    Handles Browser Management, Auth, and Hybrid Networking.
     """
 
     def __init__(self, config: Optional[ScraperConfig] = None):
@@ -57,6 +52,19 @@ class BaseScraper(ABC):
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
+        
+        # Hybrid Network Client (curl_cffi)
+        self.network_client = NetworkClient()  # [NEW]
+
+    def sync_network_client(self):
+        """
+        Synchronization: Browser Cookies -> Network Client
+        Allows making high-speed requests using the authenticated session.
+        """
+        if self.context:
+            cookies = self.context.cookies()
+            self.network_client.set_cookies(cookies)
+            self.logger.info("⚡ Synced Browser Cookies to Network Client")
 
         self.logger.info(f"{self.__class__.__name__} initialized")
 
@@ -134,16 +142,33 @@ class BaseScraper(ABC):
             # 'chrome' = use system Chrome (may have compatibility issues with new versions)
             launch_options = {'headless': self.config.headless}
 
-            # SECURITY: Proxy Selection
+            # SECURITY: Proxy Selection (Moved to Context level for better Auth support)
             selected_proxy = None
+            use_firefox_for_socks5 = False
+            
             if self.config.proxies:
                 selected_proxy = SecurityManager.get_random_proxy(self.config.proxies)
                 if selected_proxy:
-                    self.logger.info(f"🛡️ Using Proxy: {selected_proxy['server']}")
-                    launch_options['proxy'] = selected_proxy
+                    self.logger.info(f"🛡️ Selected Proxy: {selected_proxy['server']}")
+                    # Note: We do NOT pass proxy to launch() to support SOCKS5 auth better
+                    # We pass it to new_context() instead.
+                    
+                    # DETECTION: Check for SOCKS5 with Auth (Chromium doesn't support it)
+                    if 'socks5' in selected_proxy['server'] and 'username' in selected_proxy:
+                        self.logger.warning("⚠️ SOCKS5 with Auth detected. Chromium does not support this.")
+                        self.logger.warning("🔄 Automatically switching to FIREFOX engine for SOCKS5 support.")
+                        use_firefox_for_socks5 = True
 
             try:
-                self.browser = self.playwright.chromium.launch(**launch_options)
+                if use_firefox_for_socks5:
+                    # SOCKS5 Auth workaround: Use Firefox with GLOBAL Proxy (Launch Option)
+                    # Context-level SOCKS5 auth is often not supported, but Global is.
+                    launch_options['proxy'] = selected_proxy
+                    self.browser = self.playwright.firefox.launch(**launch_options)
+                else:
+                    # Standard Chromium launch (Proxy will be applied at Context level)
+                    self.browser = self.playwright.chromium.launch(**launch_options)
+                    
             except Exception as launch_error:
                 error_msg = str(launch_error)
                 
@@ -160,7 +185,7 @@ class BaseScraper(ABC):
                          self.browser = self.playwright.chromium.launch(**launch_options)
                 
                 # Specific handling for missing Chrome when channel='chrome'
-                elif self.config.browser_channel == 'chrome':
+                elif self.config.browser_channel == 'chrome' and not use_firefox_for_socks5:
                     self.logger.critical("\n\n" + "!"*60)
                     self.logger.critical("FAILED TO LAUNCH SYSTEM CHROME!")
                     self.logger.critical("!"*60)
@@ -172,6 +197,7 @@ class BaseScraper(ABC):
                     self.logger.critical("!"*60 + "\n")
                     raise launch_error
                 else:
+                     # General launch error (including SOCKS5 not supported)
                      raise launch_error
 
             browser_type = self.config.browser_channel or 'chromium'
@@ -191,6 +217,14 @@ class BaseScraper(ABC):
                 },
                 'user_agent': final_user_agent
             }
+            
+            # Apply Proxy at Context Level (Vital for SOCKS5 Auth)
+            # Only apply if NOT already applied globally (Firefox SOCKS5 case)
+            if selected_proxy and not use_firefox_for_socks5:
+                context_options['proxy'] = selected_proxy
+                self.logger.info(f"🛡️ Applied Proxy to Context: {selected_proxy['server']}")
+            elif use_firefox_for_socks5:
+                self.logger.info(f"🛡️ Applied Proxy Globally (Firefox): {selected_proxy['server']}")
 
             if session_data:
                 context_options['storage_state'] = session_data

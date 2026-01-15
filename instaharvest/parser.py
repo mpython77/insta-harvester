@@ -152,13 +152,33 @@ class CommentParser:
                 
                 # Robust Profile Picture Extraction
                 # 1. Try finding img with alt containing "profile picture" (Standard Instagram)
-                img_tag = node.find('img', alt=re.compile(r'profile picture', re.IGNORECASE))
+                img_tag = node.find('img', alt=re.compile(r'profile picture|change profile', re.IGNORECASE))
                 
                 # 2. Fallback: Check inside user link
                 if not img_tag and user_link:
                     img_tag = user_link.find('img')
                 
-                pic_url = img_tag.get('src', '') if img_tag else ""
+                # 3. Extract best URL from tag
+                if img_tag:
+                    # Prefer standard src
+                    pic_url = img_tag.get('src', '')
+                    
+                    # If empty or data-uri, try srcset (often contains high-res)
+                    if not pic_url or pic_url.startswith('data:'):
+                        srcset = img_tag.get('srcset', '')
+                        if srcset:
+                            # srcset format: "url 150w, url 300w"
+                            # We take the last one (highest res)
+                            parts = srcset.split(',')
+                            if parts:
+                                last_part = parts[-1].strip().split(' ')[0]
+                                pic_url = last_part
+                else:
+                    pic_url = ""
+                    
+                # Clean URL
+                if pic_url:
+                    pic_url = pic_url.replace('&amp;', '&')
 
             is_verified = bool(node.find('svg', attrs={'aria-label': 'Verified'}))
 

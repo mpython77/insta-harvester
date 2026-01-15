@@ -1,64 +1,42 @@
-from dataclasses import dataclass, field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 
-@dataclass
-class CommentAuthor:
+class CommentAuthor(BaseModel):
     username: str
-    profile_url: str = ''
-    profile_picture_url: str = ''
-    is_verified: bool = False
+    profile_url: str = Field(default='')
+    profile_picture_url: str = Field(default='')
+    is_verified: bool = Field(default=False)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'username': self.username,
-            'profile_url': self.profile_url,
-            'profile_picture_url': self.profile_picture_url,
-            'is_verified': self.is_verified
-        }
-
-@dataclass
-class Comment:
+class Comment(BaseModel):
     id: str
-    text: str
+    text: str = Field(default="")
     author: CommentAuthor
     timestamp: str  # Original string e.g., "1w"
     timestamp_iso: str  # ISO 8601 string
-    likes_count: int
-    reply_count: int
-    permalink: str  # URL to the comment
-    replies: List['Comment'] = field(default_factory=list)
-    is_reply: bool = False
+    likes_count: int = Field(default=0, ge=0)
+    reply_count: int = Field(default=0, ge=0)
+    permalink: str = Field(default="")
+    replies: List['Comment'] = Field(default_factory=list)
+    is_reply: bool = Field(default=False)
     parent_id: Optional[str] = None
+    
+    @field_validator('likes_count', 'reply_count', mode='before')
+    @classmethod
+    def validate_counts(cls, v):
+        """Handle '1,234' string format or simple parse errors"""
+        if isinstance(v, str):
+            try:
+                return int(v.replace(',', '').replace('.', ''))
+            except ValueError:
+                return 0
+        return v
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'id': self.id,
-            'text': self.text,
-            'author': self.author.to_dict(),
-            'timestamp': self.timestamp,
-            'timestamp_iso': self.timestamp_iso,
-            'likes_count': self.likes_count,
-            'reply_count': self.reply_count,
-            'permalink': self.permalink,
-            'is_reply': self.is_reply,
-            'parent_id': self.parent_id,
-            'replies': [r.to_dict() for r in self.replies]
-        }
-
-@dataclass
-class Collaborator:
+class Collaborator(BaseModel):
     username: str
-    profile_url: str = ''
-    profile_picture_url: str = ''
-    is_verified: bool = False
+    profile_url: str = Field(default='')
+    profile_picture_url: str = Field(default='')
+    is_verified: bool = Field(default=False)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'username': self.username,
-            'profile_url': self.profile_url,
-            'profile_picture_url': self.profile_picture_url,
-            'is_verified': self.is_verified
-        }
-
-# Backward compatibility
+# Backward compatibility aliases
 CommentData = Comment
+

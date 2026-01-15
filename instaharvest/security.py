@@ -32,15 +32,26 @@ class SecurityManager:
     @staticmethod
     def get_random_user_agent(custom_list: Optional[List[str]] = None) -> str:
         """Returns a random User-Agent from built-in or custom list"""
-        agents = custom_list if custom_list else SecurityManager.USER_AGENTS
-        return random.choice(agents)
+        if custom_list:
+            return random.choice(custom_list)
+            
+        # Use fake_useragent for real-world agents
+        try:
+            from fake_useragent import UserAgent
+            ua = UserAgent()
+            # Randomly pick between Chrome, Firefox, Safari to vary fingerprint
+            browser_type = random.choice(['chrome', 'firefox', 'safari', 'edge'])
+            return ua.getattr(browser_type)
+        except Exception:
+            # Fallback to hardcoded list if library fails
+            return random.choice(SecurityManager.USER_AGENTS)
 
     @staticmethod
     def format_proxy(proxy_url: str) -> Dict[str, str]:
         """
         Formats proxy string into Playwright dictionary format.
-        Input: http://user:pass@ip:port OR ip:port
-        Output: {'server': 'http://ip:port', 'username': 'user', 'password': 'pass'}
+        Input: protocol://user:pass@ip:port OR ip:port
+        Output: {'server': 'protocol://ip:port', 'username': 'user', 'password': 'pass'}
         """
         if not proxy_url:
             return None
@@ -49,28 +60,26 @@ class SecurityManager:
         if isinstance(proxy_url, dict):
             return proxy_url
 
-        # Basic parsing logic
-        # 1. Check for authentication
-        if '@' in proxy_url:
-            # Format: protocol://user:pass@host:port
-            try:
-                # Remove protocol if present
-                clean_url = proxy_url.replace('http://', '').replace('https://', '')
-                auth, server = clean_url.split('@')
-                username, password = auth.split(':')
+        try:
+            # Ensure protocol is present for parsing
+            if '://' not in proxy_url:
+                proxy_url = f'http://{proxy_url}'
+            
+            from urllib.parse import urlparse
+            parsed = urlparse(proxy_url)
+            
+            server = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"
+            
+            proxy_dict = {'server': server}
+            
+            if parsed.username and parsed.password:
+                proxy_dict['username'] = parsed.username
+                proxy_dict['password'] = parsed.password
                 
-                return {
-                    'server': f'http://{server}',
-                    'username': username,
-                    'password': password
-                }
-            except:
-                # Fallback if parsing fails
-                return {'server': proxy_url}
-        else:
-            # Format: protocol://host:port or host:port
-            server = proxy_url if '://' in proxy_url else f'http://{proxy_url}'
-            return {'server': server}
+            return proxy_dict
+        except Exception:
+            # Fallback if parsing completely fails
+            return {'server': proxy_url}
 
     @staticmethod
     def get_random_proxy(proxy_list: List[str]) -> Optional[Dict[str, str]]:
