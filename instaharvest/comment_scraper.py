@@ -29,6 +29,13 @@ class PostCommentsData:
             'duration': self.scraping_duration_seconds
         }
 
+    def get_all_comments_flat(self):
+        """Yields all comments and replies in a flat sequence (Parent -> Replies)"""
+        for comment in self.comments:
+            yield comment
+            for reply in comment.replies:
+                yield reply
+
 class CommentScraper(BaseScraper):
     def __init__(self, config: Optional[ScraperConfig] = None, enable_diagnostics: bool = True):
         super().__init__(config)
