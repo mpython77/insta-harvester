@@ -482,6 +482,60 @@ class BaseScraper(ABC):
 
             return default
 
+    def parse_number(self, text: str) -> Optional[int]:
+        """
+        Parse number string with localization support (K, M, etc.)
+        Uses config.number_suffixes and config.number_separators.
+
+        Args:
+            text: Raw text containing number (e.g. "1.5M", "10,5тыс.", "1 000")
+
+        Returns:
+            Parsed integer or None if parsing failed
+        """
+        if not text:
+            return None
+
+        clean_text = text.strip().upper()
+        
+        # 1. Check for suffixes
+        multiplier = 1
+        for suffix, mult in self.config.number_suffixes.items():
+            if clean_text.endswith(suffix.upper()):
+                multiplier = mult
+                clean_text = clean_text[:-len(suffix)].strip()
+                break
+        
+        # 2. Clean up separators
+        # Replace all separators with dot if it looks like a decimal
+        # Or remove them if they are thousands separators
+        # Heuristic: If we have a multiplier, any separator is likely a decimal point
+        # If no multiplier, it might be thousands separator or decimal
+        
+        try:
+            # Remove spaces (always safe)
+            clean_text = clean_text.replace(' ', '')
+            
+            # Handle comma vs dot
+            if ',' in clean_text and '.' in clean_text:
+                 # Both present? e.g. 1,000.50 -> remove comma
+                 clean_text = clean_text.replace(',', '')
+            elif ',' in clean_text:
+                 # Only comma. If multiplier > 1, treat as decimal (1,5K -> 1.5K)
+                 # If no multiplier, it's ambiguous, but usually thousands separator in 1,000
+                 if multiplier > 1:
+                     clean_text = clean_text.replace(',', '.')
+                 else:
+                     clean_text = clean_text.replace(',', '') # Assume 1,000 -> 1000
+            
+            # Parse
+            value = float(clean_text)
+            return int(value * multiplier)
+            
+        except ValueError:
+            self.logger.warning(f"Failed to parse number: '{text}'")
+            return None
+
     def close(self, update_session_before_close: bool = True) -> None:
         """
         Close browser and cleanup

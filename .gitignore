@@ -2,8 +2,11 @@
 instagram_session.json
 post_links.txt
 reel_links.txt
+reel_links_*.txt
 *.xlsx
+*.json
 *.log
+instagram_session.json
 
 # Environment
 .env

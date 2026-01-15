@@ -20,7 +20,7 @@ class ReelData:
     """Reel data structure"""
     url: str
     tagged_accounts: List[str]
-    likes: str
+    likes: Optional[int] # Changed to Optional[int]
     timestamp: str
     content_type: str = 'Reel'  # Always 'Reel'
 
@@ -80,7 +80,7 @@ class ReelDataScraper(BaseScraper):
 
         # Extract data
         tagged_accounts = self.get_tagged_accounts() if get_tags else []
-        likes = self.get_likes_count() if get_likes else 'N/A'
+        likes = self.get_likes_count() if get_likes else 0
         timestamp = self.get_timestamp() if get_timestamp else 'N/A'
 
         data = ReelData(
@@ -186,23 +186,21 @@ class ReelDataScraper(BaseScraper):
 
     # ==================== REEL-SPECIFIC EXTRACTION METHODS ====================
 
-    def get_likes_count(self) -> str:
+    def get_likes_count(self) -> int:
         """
         Extract likes count from REEL
 
-        Reel likes location:
-        <span class="x1ypdohk x1s688f x2fvf9 xe9ewy2" role="button" tabindex="0">3</span>
-
         Returns:
-            Likes count as string
+            Likes count as int
         """
         # Method 1: Reel-specific selector
         try:
             likes_span = self.page.locator(self.config.selector_reel_likes + '[role="button"]').first
             likes_text = likes_span.inner_text(timeout=self.config.reel_likes_timeout).strip()
-            if likes_text:
-                self.logger.debug(f"✓ Found reel likes: {likes_text}")
-                return likes_text.replace(',', '')
+            val = self.parse_number(likes_text)
+            if val is not None:
+                self.logger.debug(f"✓ Found reel likes: {val}")
+                return val
         except Exception as e:
             self.logger.debug(f"Reel likes method 1 failed: {e}")
 
@@ -212,10 +210,10 @@ class ReelDataScraper(BaseScraper):
             for span in spans[:3]:  # Check first 3
                 try:
                     text = span.inner_text(timeout=self.config.visibility_timeout).strip()
-                    # Check if it looks like a number
-                    if text and (text.replace(',', '').replace('.', '').replace('K', '').replace('M', '').isdigit() or 'K' in text or 'M' in text):
-                        self.logger.debug(f"✓ Found reel likes (method 2): {text}")
-                        return text.replace(',', '')
+                    val = self.parse_number(text)
+                    if val is not None:
+                         self.logger.debug(f"✓ Found reel likes (method 2): {val}")
+                         return val
                 except:
                     continue
         except Exception as e:
@@ -230,17 +228,17 @@ class ReelDataScraper(BaseScraper):
                     text = span.inner_text(timeout=self.config.attribute_timeout).strip()
                     # Check if it's purely numeric or has K/M notation
                     if text and len(text) < 20:  # Reasonable length for likes
-                        clean_text = text.replace(',', '').replace('.', '')
-                        if clean_text.replace('K', '').replace('M', '').isdigit():
-                            self.logger.debug(f"✓ Found reel likes (method 3): {text}")
-                            return text.replace(',', '')
+                        val = self.parse_number(text)
+                        if val is not None:
+                            self.logger.debug(f"✓ Found reel likes (method 3): {val}")
+                            return val
                 except:
                     continue
         except Exception as e:
             self.logger.debug(f"Reel likes method 3 failed: {e}")
 
         self.logger.warning("Failed to extract reel likes count")
-        return 'N/A'
+        return 0
 
     def get_timestamp(self) -> str:
         """
@@ -328,6 +326,8 @@ class ReelDataScraper(BaseScraper):
             # Check if button exists
             if tag_button.count() == 0:
                 self.logger.debug("No tag button found - reel has no tags")
+                if self.config.return_empty_list_for_no_tags:
+                    return []
                 return [self.config.default_no_tags_text]
 
             # Click the tag button
@@ -428,4 +428,6 @@ class ReelDataScraper(BaseScraper):
             self.logger.debug(f"Fallback tag extraction failed: {e}")
 
         self.logger.warning("No tags found in reel")
+        if self.config.return_empty_list_for_no_tags:
+            return []
         return [self.config.default_no_tags_text]

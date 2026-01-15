@@ -121,6 +121,10 @@ def main():
                     print(f"  Verified: {'✓ Yes' if data.get('is_verified', False) else '✗ No'}")
                     print(f"  Category: {data.get('category') or 'Not set'}")
                     print(f"  Bio: {data.get('bio') or 'No bio'}")
+                    if data.get('external_links'):
+                        print(f"  External Links: {', '.join(data.get('external_links'))}")
+                    if data.get('threads_profile'):
+                        print(f"  Threads: {data.get('threads_profile')}")
                 except Exception as e:
                     print(f"❌ Error: {e}")
 

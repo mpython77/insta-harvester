@@ -433,6 +433,8 @@ print(f"Following: {profile.following}")
 print(f"Verified: {'✓ Yes' if profile.is_verified else '✗ No'}")
 print(f"Category: {profile.category or 'Not set'}")
 print(f"Bio: {profile.bio or 'No bio'}")
+print(f"External Links: {profile.external_links}")
+print(f"Threads: {profile.threads_profile}")
 
 scraper.close()
 ```
@@ -538,8 +540,7 @@ orchestrator = InstagramOrchestrator(config)
 results = orchestrator.scrape_complete_profile_advanced(
     'username',
     parallel=3,        # 3 parallel browser tabs
-    save_excel=True,   # Real-time Excel export
-    max_posts=100
+    save_excel=True    # Real-time Excel export
 )
 
 print(f"Scraped {len(results['posts_data'])} posts")

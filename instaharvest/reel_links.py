@@ -7,7 +7,7 @@ ALOHIDA FAYL - FAQAT REELS UCHUN!
 
 import time
 import random
-from typing import List, Set, Optional
+from typing import List, Set, Optional, Dict
 from pathlib import Path
 
 from .base import BaseScraper
@@ -100,16 +100,18 @@ class ReelLinksScraper(BaseScraper):
         except Exception:
             return False
 
-    def _extract_current_reel_links(self) -> List[str]:
+    def _extract_current_reel_links(self) -> List[Dict[str, str]]:
         """
-        Extract REEL links from div._ac7v containers (NEW INSTAGRAM STRUCTURE)
+        Extract REEL links and metadata from div._ac7v containers (NEW INSTAGRAM STRUCTURE)
 
         Instagram structure on /reels/ page:
         - div._ac7v.x1ty9z65.xzboxd6 contains 3 reels
         - Each container has 3x <a href="/username/reel/XYZ/">
+        - Thumbnail in style="background-image..."
+        - Views count in span.html-span
 
         Returns:
-            List of reel URLs
+            List of dicts with 'url', 'thumbnail', 'stats'
         """
         try:
             results = []
@@ -137,13 +139,41 @@ class ReelLinksScraper(BaseScraper):
                             if href.startswith('/'):
                                 href = f'https://www.instagram.com{href}'
 
-                            # Skip duplicates
+                            # Skip duplicates within this batch
                             if href in seen_urls:
                                 continue
                             seen_urls.add(href)
 
-                            # Add reel
-                            results.append(href)
+                            # Extract metadata
+                            thumbnail = ""
+                            stats = ""
+
+                            # Try background image (standard for reels grid)
+                            bg_div = link.locator(self.config.selector_grid_thumbnail_bg).first
+                            if bg_div.count() > 0:
+                                style = bg_div.get_attribute('style') or ""
+                                if 'url("' in style:
+                                    thumbnail = style.split('url("')[1].split('")')[0]
+                                elif "url('" in style:
+                                    thumbnail = style.split("url('")[1].split("')")[0]
+                            
+                            # Fallback to img tag
+                            if not thumbnail:
+                                img = link.locator('img').first
+                                if img.count() > 0:
+                                    thumbnail = img.get_attribute('src') or ""
+
+                            # Try stats
+                            stat_span = link.locator(self.config.selector_grid_time).first
+                            if stat_span.count() > 0:
+                                stats = stat_span.inner_text()
+
+                            # Add reel data
+                            results.append({
+                                'url': href,
+                                'thumbnail': thumbnail,
+                                'stats': stats
+                            })
                         except:
                             continue
                 except:
@@ -155,30 +185,32 @@ class ReelLinksScraper(BaseScraper):
             self.logger.error(f"Error extracting reel links: {e}")
             return []
 
-    def _scroll_and_collect(self) -> List[str]:
+    def _scroll_and_collect(self) -> List[Dict[str, str]]:
         """
         Scroll through reels page and collect all reel links (IMPROVED for Instagram lazy loading)
 
         Smart stopping: If 5 scrolls with NO new reels → DONE
 
         Returns:
-            List of unique reel URLs
+            List of dicts with 'url', 'thumbnail', 'stats'
         """
         self.logger.info(f"🎬 Starting reel link collection...")
 
-        all_reel_links: Set[str] = set()
+        all_reel_links = {}  # Dict[url, dict]
         scroll_attempts = 0
         no_new_reels_count = 0
         MAX_NO_NEW_REELS = self.config.scroll_max_no_new_attempts
 
         while True:
             # Extract current reel links
-            current_reels = self._extract_current_reel_links()
+            current_items = self._extract_current_reel_links()
             previous_count = len(all_reel_links)
 
             # Add new reel links
-            for reel_url in current_reels:
-                all_reel_links.add(reel_url)
+            for item in current_items:
+                url = item['url']
+                if url not in all_reel_links:
+                    all_reel_links[url] = item
 
             new_count = len(all_reel_links)
 
@@ -216,8 +248,10 @@ class ReelLinksScraper(BaseScraper):
 
             scroll_attempts += 1
 
-        # Convert set to sorted list
-        result = sorted(list(all_reel_links))
+        # Convert to list
+        result = [
+            all_reel_links[url] for url in sorted(all_reel_links.keys())
+        ]
         return result
 
     def _aggressive_scroll(self) -> None:
@@ -244,12 +278,12 @@ class ReelLinksScraper(BaseScraper):
             self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
             time.sleep(self.config.ui_stability_delay)
 
-    def _save_links(self, reel_links: List[str], username: str) -> None:
+    def _save_links(self, reel_links: List[Dict[str, str]], username: str) -> None:
         """
-        Save reel links to file
+        Save reel links to file (URL + Stats + Thumbnail)
 
         Args:
-            reel_links: List of reel URLs
+            reel_links: List of reel dicts
             username: Username for filename
         """
         # Use a separate file for reels
@@ -257,8 +291,11 @@ class ReelLinksScraper(BaseScraper):
 
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
-                for reel_url in reel_links:
-                    f.write(f"{reel_url}\n")
+                for item in reel_links:
+                    url = item.get('url', '')
+                    stats = item.get('stats', '').replace('\n', ' ')
+                    thumb = item.get('thumbnail', '')
+                    f.write(f"{url}\t{stats}\t{thumb}\n")
 
             self.logger.info(f"💾 Reel links saved to: {output_file}")
 

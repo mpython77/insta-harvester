@@ -119,7 +119,7 @@ class ScraperConfig:
     scroll_fallback_wait: float = 1.5  # Wait after fallback scroll
     scroll_max_no_new_attempts: int = 7  # Max attempts with no new links before stopping
     scroll_max_attempts_override: int = 150  # Override max_scroll_attempts for link collection
-    followers_max_no_new_scrolls: int = 3  # Max no new followers scrolls
+    followers_max_no_new_scrolls: int = 7  # Max no new followers scrolls (Updated by user request)
 
     # ==================== INPUT & TYPING DELAYS ====================
     input_focus_delay: float = 0.5  # Wait after clicking input field
@@ -229,6 +229,7 @@ class ScraperConfig:
 
     # ==================== CSS SELECTORS ====================
     # Profile selectors
+    # Profile selectors
     selector_posts_count: str = 'span:has-text("posts")'
     selector_html_span: str = 'span.html-span'
     selector_followers_link: str = 'a[href*="/followers/"]'
@@ -236,10 +237,28 @@ class ScraperConfig:
     selector_post_reel_links: str = 'a[href*="/p/"], a[href*="/reel/"]'
     selector_verified_badge: str = 'svg[aria-label="Verified"]'  # Verified account badge
     selector_profile_category: str = 'div._ap3a._aaco._aacu._aacy._aad6._aade'  # Profile category (Actor, Model, etc.)
-    selector_profile_bio_section: str = 'section.xqui205.x172qv1o'  # Complete bio section with all info (fallback)
-    selector_profile_bio_text: str = 'span._ap3a._aaco._aacu._aacx._aad7._aade[dir="auto"]'  # Bio text content
-    selector_profile_bio_links: str = 'div.html-div'  # Bio external links section
-    selector_profile_header: str = 'header'  # Profile header containing bio
+    
+    # Bio Text & Links
+    # Robust Structural Selectors:
+    # Bio is usually in a section inside the header.
+    # We select ALL spans with dir="auto" inside the header sections and rely on python filtering to pick the right one.
+    # We avoid specific class names like .xqui205 as they are dynamic.
+    selector_profile_bio_text: str = 'header section span[dir="auto"]'
+    
+    # Link container: Target the ICON, then traverse up in python.
+    # We remove 'section' to be safer as the link might be in a div sibling to the section.
+    # We also remove 'header' to be maximally robust (some mobile views or layouts might differ).
+    selector_bio_link_container: str = 'svg[aria-label="Link icon"]'
+    selector_examples_links: str = 'a[href*="threads"]' 
+    selector_threads_badge: str = 'svg[aria-label="Threads"]'
+    
+    # Private Account Detection
+    selector_private_text_indicators: List[str] = field(default_factory=lambda: [
+        "This account is private",
+        "Follow to see their photos and videos"
+    ])
+    selector_private_icon: str = 'svg[aria-label="Private"]'
+    selector_private_title: str = 'h2'  # Sometimes h2 contains the text
 
     # Popup and dialog selectors
     selector_popup_dialog: str = 'div[role="dialog"]'
@@ -258,6 +277,11 @@ class ScraperConfig:
     selector_reel_container: str = 'div._ac7v.x1ty9z65.xzboxd6'
     selector_reel_likes: str = 'span.x1ypdohk.xt0psk2.x1xlr1w8.xzsf02u'
     selector_reel_timestamp: str = 'time.x1p4m5qa'
+
+    # Grid/Feed Loop Selectors (for extracting metadata while scrolling)
+    selector_grid_time: str = 'span.html-span'  # For stats like "13.5K"
+    selector_grid_thumbnail_img: str = 'img'  # For PostPage.html
+    selector_grid_thumbnail_bg: str = 'div[style*="background-image"]'  # For ReelsPage.html
 
     # Message button selectors (multiple options)
     selector_message_buttons: List[str] = field(default_factory=lambda: [
@@ -302,9 +326,12 @@ class ScraperConfig:
 
     # Popup container selectors (multiple options)
     selector_popup_containers: List[str] = field(default_factory=lambda: [
-        'div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl.x10l6tqk.x13vifvy.x1n327nk.x1ug75am.x1ja2u2z.x1xp8e9x.xexx8yu.x18d9i69.x1e558r4.x150jy0e.x1yrsyyn.x1fcty0u',
         'div[role="dialog"]',
-        'div._aa1y'
+        'div.x1cy8zhl.x9f619.x78zum5.xl56j7k.x2lwn1j.xeuugli.x47corl.x10l6tqk.x13vifvy.x1n327nk.x1ug75am.x1ja2u2z.x1xp8e9x.xexx8yu.x18d9i69.x1e558r4.x150jy0e.x1yrsyyn.x1fcty0u',
+        'div._aa1y',
+        'div[style*="overflow: hidden auto"]',
+        'div[style*="overflow-y: auto"]',
+        'div[style*="max-height"][style*="overflow-y: auto"]'
     ])
 
     # Likes selectors (multiple options for different layouts)
@@ -420,3 +447,23 @@ class ScraperConfig:
         'Is Verified',
         'Scraped At'
     ])
+
+    # ==================== PRIVATE ACCOUNT DETECTORS ====================
+    selector_private_icon: str = 'svg[aria-label="Private"]'
+    selector_private_title: str = 'h2'  # Often inside h2
+    selector_private_text_indicators: List[str] = field(default_factory=lambda: [
+        'This Account is Private',
+        'Follow to see their photos and videos'
+    ])
+
+
+
+    # ==================== LOCALIZATION & PARSING ====================
+    number_suffixes: Dict[str, int] = field(default_factory=lambda: {
+        'K': 1000, 'M': 1000000, 'B': 1000000000,
+        'тыс.': 1000, 'млн.': 1000000,
+        'ming': 1000, 'mln': 1000000,
+        'k': 1000, 'm': 1000000
+    })
+    number_separators: List[str] = field(default_factory=lambda: [',', '.', ' '])
+    return_empty_list_for_no_tags: bool = True

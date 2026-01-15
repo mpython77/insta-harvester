@@ -7,6 +7,7 @@ import time
 import random
 import json
 import signal
+import logging
 from typing import List, Optional, Dict, Any
 from multiprocessing import Pool, cpu_count, Manager, Queue
 from bs4 import BeautifulSoup
@@ -26,9 +27,20 @@ def _worker_signal_handler(signum, frame):
     """Signal handler for worker processes"""
     global _shutdown_requested
     _shutdown_requested = True
-    print(f"\n[Worker] Shutdown signal received, finishing current post...")
+    # We use print here as logging might not be fully configured/safe in signal handler depending on platform
+    # But usually safe enough to just set the flag
+    pass 
 
-
+def _get_worker_logger(worker_id: int):
+    """Get logger for worker process"""
+    logger = logging.getLogger(f"Worker-{worker_id}")
+    if not logger.handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            force=True # Ensure we override any previous basicConfig
+        )
+    return logger
 
 def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int, config: ScraperConfig) -> List[str]:
     """
@@ -38,30 +50,31 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
     Comment class: x5yr21d xw2csxc x1odjw0f x1n2onr6 - MUST BE EXCLUDED!
     """
     tagged = []
+    logger = _get_worker_logger(worker_id)
 
     try:
         # METHOD 1: Click tag button to open popup
         tag_button = page.locator(config.selector_tag_button).first
         tag_button.click(timeout=config.tag_button_click_timeout)
-        print(f"[Worker {worker_id}] ✓ Clicked tag button, waiting for popup...")
+        logger.debug(f"✓ Clicked tag button, waiting for popup...")
         time.sleep(config.popup_animation_delay)
         time.sleep(config.popup_content_load_delay)
 
         # CRITICAL FIX: Extract usernames ONLY from popup container (NOT comment section!)
         # Popup class: x1cy8zhl x9f619 x78zum5 xl56j7k x2lwn1j xeuugli x47corl
-        print(f"[Worker {worker_id}] Looking for popup container...")
+        logger.debug(f"Looking for popup container...")
 
         # Find popup container
         popup_container = page.locator(config.selector_popup_containers[0]).first
 
         if popup_container.count() == 0:
-            print(f"[Worker {worker_id}] Popup container not found, trying alternative selectors...")
+            logger.debug(f"Popup container not found, trying alternative selectors...")
             # Alternative: role="dialog"
             popup_container = page.locator(config.selector_popup_dialog).first
 
         # Extract links ONLY from within popup container
         popup_links = popup_container.locator('a[href^="/"]').all()
-        print(f"[Worker {worker_id}] Found {len(popup_links)} links in popup")
+        logger.debug(f"Found {len(popup_links)} links in popup")
 
         for link in popup_links:
             try:
@@ -75,7 +88,7 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
 
                     if username not in tagged:
                         tagged.append(username)
-                        print(f"[Worker {worker_id}] ✓ Added tag: {username}")
+                        logger.debug(f"✓ Added tag: {username}")
             except:
                 continue
 
@@ -83,38 +96,107 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
         try:
             close_button = page.locator(config.selector_close_button).first
             close_button.click(timeout=config.popup_close_timeout)
-            print(f"[Worker {worker_id}] ✓ Closed tag popup")
+            logger.debug(f"✓ Closed tag popup")
         except:
             pass
 
         if tagged:
-            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} reel tags: {tagged}")
+            logger.info(f"✓ Found {len(tagged)} reel tags: {tagged}")
             return tagged
 
     except Exception as e:
-        print(f"[Worker {worker_id}] Reel tag extraction failed: {e}")
+        logger.debug(f"Reel tag extraction failed: {e}")
 
     # No tags found
-    print(f"[Worker {worker_id}] ⚠️ No tags in reel (or no tag button)")
-    return []
+    logger.debug(f"⚠️ No tags in reel (or no tag button)")
+    if config.return_empty_list_for_no_tags:
+        return []
+    return ['No tags']
 
 
-def _extract_reel_likes(soup: BeautifulSoup, page: Page, worker_id: int, config: ScraperConfig) -> str:
+def _parse_number(text: str, config: ScraperConfig) -> Optional[int]:
+    """Parse number with config settings"""
+    if not text:
+        return None
+    
+    clean_text = text.strip().upper()
+    multiplier = 1
+    
+    # Check suffixes
+    for suffix, mult in config.number_suffixes.items():
+        if clean_text.endswith(suffix.upper()):
+            multiplier = mult
+            clean_text = clean_text[:-len(suffix)].strip()
+            break
+            
+    try:
+        clean_text = clean_text.replace(' ', '')
+        if ',' in clean_text and '.' in clean_text:
+            clean_text = clean_text.replace(',', '')
+        elif ',' in clean_text:
+            if multiplier > 1:
+                clean_text = clean_text.replace(',', '.')
+            else:
+                clean_text = clean_text.replace(',', '')
+                
+        value = float(clean_text)
+        return int(value * multiplier)
+    except:
+        return None
+
+def _extract_reel_likes(soup: BeautifulSoup, page: Page, worker_id: int, config: ScraperConfig) -> int:
     """Extract likes from REEL using reel-specific selector"""
+    logger = _get_worker_logger(worker_id)
     try:
         # Reel likes selector
         likes_span = page.locator(config.selector_reel_likes + '[role="button"]').first
         likes_text = likes_span.inner_text(timeout=config.reel_likes_timeout).strip()
-        likes_clean = likes_text.replace(',', '')
-        print(f"[Worker {worker_id}] ✓ Reel likes: {likes_clean}")
-        return likes_clean
+        val = _parse_number(likes_text, config)
+        if val is not None:
+             logger.debug(f"✓ Reel likes: {val}")
+             return val
     except Exception as e:
-        print(f"[Worker {worker_id}] Reel likes extraction failed: {e}")
-        return 'N/A'
+        logger.debug(f"Reel likes extraction failed: {e}")
+    return 0
+
+
+
+def _extract_likes_bs4(soup: BeautifulSoup, page: Page, worker_id: int, config: ScraperConfig) -> int:
+    """Extract likes using BeautifulSoup + fallback to Playwright"""
+    logger = _get_worker_logger(worker_id)
+    
+    # Method 1: BS4 - span[role="button"]
+    try:
+        section = soup.find('section')
+        if section:
+            spans = section.find_all('span', role='button')
+            for span in spans[:2]:
+                text = span.get_text(strip=True)
+                val = _parse_number(text, config)
+                if val is not None:
+                    return val
+    except Exception:
+        pass
+
+    # Method 2: Playwright fallback
+    try:
+        section = page.locator('section').first
+        spans = section.locator('span[role="button"]').all()
+        for span in spans[:2]:
+            text = span.inner_text(timeout=config.visibility_timeout).strip()
+            val = _parse_number(text, config)
+            if val is not None:
+                return val
+    except Exception:
+        pass
+
+    return 0
+
 
 
 def _extract_reel_timestamp(soup: BeautifulSoup, page: Page, worker_id: int, config: ScraperConfig) -> str:
     """Extract timestamp from REEL"""
+    logger = _get_worker_logger(worker_id)
     try:
         # Method 1: time.x1p4m5qa element
         time_elem = page.locator(config.selector_reel_timestamp).first
@@ -122,17 +204,17 @@ def _extract_reel_timestamp(soup: BeautifulSoup, page: Page, worker_id: int, con
         # Try title attribute first
         title = time_elem.get_attribute('title', timeout=config.visibility_timeout)
         if title:
-            print(f"[Worker {worker_id}] ✓ Reel timestamp (title): {title}")
+            logger.debug(f"✓ Reel timestamp (title): {title}")
             return title
 
         # Fallback to datetime attribute
         datetime_attr = time_elem.get_attribute('datetime', timeout=config.visibility_timeout)
         if datetime_attr:
-            print(f"[Worker {worker_id}] ✓ Reel timestamp (datetime): {datetime_attr}")
+            logger.debug(f"✓ Reel timestamp (datetime): {datetime_attr}")
             return datetime_attr
 
     except Exception as e:
-        print(f"[Worker {worker_id}] Reel timestamp extraction failed: {e}")
+        logger.debug(f"Reel timestamp extraction failed: {e}")
 
     return 'N/A'
 
@@ -157,22 +239,31 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     config_dict = args['config_dict']
     result_queue = args.get('result_queue')  # Optional queue for real-time results
 
+    # Helper for logging
+    logger = _get_worker_logger(worker_id)
+    
     # Reconstruct config from dict
     config = ScraperConfig(
-        headless=config_dict['headless'],
-        viewport_width=config_dict['viewport_width'],
-        viewport_height=config_dict['viewport_height'],
-        user_agent=config_dict['user_agent'],
-        default_timeout=config_dict['default_timeout'],
-        popup_animation_delay=config_dict['popup_animation_delay'],
-        popup_content_load_delay=config_dict['popup_content_load_delay'],
-        error_recovery_delay_min=config_dict['error_recovery_delay_min'],
-        error_recovery_delay_max=config_dict['error_recovery_delay_max'],
-        post_open_delay=config_dict['post_open_delay'],
-        ui_element_load_delay=config_dict['ui_element_load_delay'],
-        browser_channel=config_dict.get('browser_channel', 'chromium'),
+        headless=config_dict.get('headless', True),
+        viewport_width=config_dict.get('viewport_width', 1280),
+        viewport_height=config_dict.get('viewport_height', 720),
+        user_agent=config_dict.get('user_agent', ''),
+        default_timeout=config_dict.get('default_timeout', 60000),
+        popup_animation_delay=config_dict.get('popup_animation_delay', 1.5),
+        popup_content_load_delay=config_dict.get('popup_content_load_delay', 0.5),
+        error_recovery_delay_min=config_dict.get('error_recovery_delay_min', 1.0),
+        error_recovery_delay_max=config_dict.get('error_recovery_delay_max', 2.0),
+        post_open_delay=config_dict.get('post_open_delay', 3.0),
+        ui_element_load_delay=config_dict.get('ui_element_load_delay', 0.1),
+        browser_channel=config_dict.get('browser_channel', 'chrome'),
         browser_args=config_dict.get('browser_args', ['--start-maximized'])
     )
+    
+    # Manually inject new fields if they exist in dict but config.__init__ doesn't capture them (it uses kwargs? No, explicit fields)
+    if 'selector_post_tag_container' in config_dict:
+        config.selector_post_tag_container = config_dict['selector_post_tag_container']
+    if 'return_empty_list_for_no_tags' in config_dict:
+        config.return_empty_list_for_no_tags = config_dict['return_empty_list_for_no_tags']
 
     batch_results = []
 
@@ -192,13 +283,11 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Handle Chrome launch failure
             if config.browser_channel == 'chrome':
                 error_msg = (
-                    f"[Worker {worker_id}] LIBRARY ERROR: System Google Chrome not found!\n"
+                    f"LIBRARY ERROR: System Google Chrome not found!\n"
                     f"Chrome is required to correctly load Videos and Reels.\n"
                     f"Solution: Install Chrome or set browser_channel='chromium' in config.py."
                 )
-                print("\n" + "!"*60)
-                print(error_msg)
-                print("!"*60 + "\n")
+                logger.error(error_msg)
             raise launch_error
 
         context = browser.new_context(
@@ -221,19 +310,18 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                 content_type = link_data.get('type', 'Post')  # 'Post' or 'Reel'
                 is_reel = (content_type == 'Reel')
 
-                # Check for shutdown request
                 global _shutdown_requested
                 if _shutdown_requested:
-                    print(f"[Worker {worker_id}] Shutdown requested, stopping...")
+                    logger.info("Shutdown requested, stopping...")
                     break
 
                 try:
                     # LOG: Starting scrape with type
-                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] 🔍 Scraping [{content_type}]: {url}")
+                    logger.info(f"[{idx}/{total_in_batch}] 🔍 Scraping [{content_type}]: {url}")
 
                     # Navigate to post/reel
                     page.goto(url, wait_until=config.page_load_wait_until, timeout=config.navigation_timeout)
-                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Page loaded")
+                    logger.debug(f"[{idx}/{total_in_batch}] ✓ Page loaded")
 
                     # CRITICAL: Wait longer for content to load
                     time.sleep(config.post_open_delay)
@@ -252,13 +340,14 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                         # POST extraction (original logic)
                         # Try to wait for tag elements specifically
                         try:
+                            # Use config selector for waiting
                             page.wait_for_selector(config.selector_post_tag_container, timeout=config.post_tag_wait_timeout, state='attached')
-                            print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✓ Tag elements detected")
+                            logger.debug(f"[{idx}/{total_in_batch}] ✓ Tag elements detected")
                         except:
-                            print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
+                            logger.debug(f"[{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
 
                         tagged_accounts = _extract_tags_robust(soup, page, url, worker_id, config)
-                        likes = _extract_likes_bs4(soup, page, config)
+                        likes = _extract_likes_bs4(soup, page, worker_id, config)
                         timestamp = _extract_timestamp_bs4(soup)
 
                     result = {
@@ -272,7 +361,7 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                     batch_results.append(result)
 
                     # LOG: Success
-                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ✅ DONE [{content_type}]: {len(tagged_accounts)} tags, {likes} likes")
+                    logger.info(f"[{idx}/{total_in_batch}] ✅ DONE [{content_type}]: {len(tagged_accounts)} tags, {likes} likes")
 
                     # REAL-TIME: Send to queue immediately for Excel writing
                     if result_queue is not None:
@@ -287,7 +376,7 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                     time.sleep(random.uniform(config.error_recovery_delay_min, config.error_recovery_delay_max))
 
                 except Exception as e:
-                    print(f"[Worker {worker_id}] [{idx}/{total_in_batch}] ❌ ERROR: {e}")
+                    logger.error(f"[{idx}/{total_in_batch}] ❌ ERROR: {e}")
                     error_result = {
                         'url': url,
                         'tagged_accounts': [],
@@ -329,6 +418,7 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
     - VIDEO posts: Tags in popup (click button, then extract from popup)
     """
     tagged = []
+    logger = _get_worker_logger(worker_id)
 
     # STEP 1: Detect if this is a VIDEO post or IMAGE post
     is_video_post = False
@@ -336,15 +426,15 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
         video_count = page.locator('video').count()
         if video_count > 0:
             is_video_post = True
-            print(f"[Worker {worker_id}] Detected VIDEO post")
+            logger.debug("Detected VIDEO post")
         else:
-            print(f"[Worker {worker_id}] Detected IMAGE post")
+            logger.debug("Detected IMAGE post")
     except:
         pass
 
     # STEP 2: If VIDEO post, use POPUP extraction (like reels)
     if is_video_post:
-        print(f"[Worker {worker_id}] Using VIDEO post tag extraction (popup method)...")
+        logger.debug("Using VIDEO post tag extraction (popup method)...")
         try:
             # Find and click tag button
             tag_button = page.locator(config.selector_tag_button).first
@@ -389,11 +479,15 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
                         page.keyboard.press('Escape')
 
         except Exception as e:
-            print(f"[Worker {worker_id}] VIDEO popup extraction failed: {e}")
+            logger.debug(f"VIDEO popup extraction failed: {e}")
 
-    # STEP 3: If IMAGE post (or video extraction failed), use div._aa1y extraction
+    # STEP 3: If IMAGE post (or video extraction failed), Use BS4 with Config Selector
     try:
-        tag_containers = soup.find_all('div', class_='_aa1y')
+        # Determine class from config selector (e.g. 'div._aa1y' -> '_aa1y')
+        tag_selector = config.selector_post_tag_container
+        tag_class = tag_selector.replace('div.', '').replace('.', '')
+        
+        tag_containers = soup.find_all('div', class_=tag_class)
         for container in tag_containers:
             link = container.find('a', href=True)
             if link and link.get('href'):
@@ -408,12 +502,12 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
                     tagged.append(username)
 
         if tagged:
-            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (BS4 Method 1): {tagged}")
+            logger.debug(f"✓ Found {len(tagged)} tags (BS4 Method 1): {tagged}")
             return tagged
     except Exception as e:
-        print(f"[Worker {worker_id}] Method 1 failed: {e}")
+        logger.debug(f"Method 1 failed: {e}")
 
-    # METHOD 2: Playwright - div._aa1y locator
+    # METHOD 2: Playwright - Config Locator
     try:
         tag_divs = page.locator(config.selector_post_tag_container).all()
         for tag_div in tag_divs:
@@ -433,44 +527,19 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
                 continue
 
         if tagged:
-            print(f"[Worker {worker_id}] ✓ Found {len(tagged)} tags (Playwright Method 2): {tagged}")
+            logger.debug(f"✓ Found {len(tagged)} tags (Playwright Method 2): {tagged}")
             return tagged
     except Exception as e:
-        print(f"[Worker {worker_id}] Method 2 failed: {e}")
+        logger.debug(f"Method 2 failed: {e}")
 
     # ALL METHODS FAILED - Log warning
-    print(f"[Worker {worker_id}] ⚠️ WARNING: No tags found in {url}")
+    logger.debug(f"⚠️ WARNING: No tags found in {url}")
+    if config.return_empty_list_for_no_tags:
+        return []
     return ['No tags']
 
 
-def _extract_likes_bs4(soup: BeautifulSoup, page: Page, config: ScraperConfig) -> str:
-    """Extract likes using BeautifulSoup + fallback to Playwright"""
-    # Method 1: BS4 - span[role="button"]
-    try:
-        section = soup.find('section')
-        if section:
-            spans = section.find_all('span', role='button')
-            for span in spans[:2]:
-                text = span.get_text(strip=True)
-                if text and text.replace(',', '').replace('.', '').replace('K', '').replace('M', '').isdigit():
-                    return text.replace(',', '')
-                if text and ('K' in text or 'M' in text):
-                    return text
-    except Exception:
-        pass
 
-    # Method 2: Playwright fallback
-    try:
-        section = page.locator('section').first
-        spans = section.locator('span[role="button"]').all()
-        for span in spans[:2]:
-            text = span.inner_text(timeout=config.visibility_timeout).strip()
-            if text and text.replace(',', '').isdigit():
-                return text.replace(',', '')
-    except Exception:
-        pass
-
-    return 'N/A'
 
 
 def _extract_timestamp_bs4(soup: BeautifulSoup) -> str:
@@ -561,18 +630,17 @@ class ParallelPostDataScraper:
 
     def _scrape_sequential(
         self,
-        post_links: List[Dict[str, str]],
+        post_links: List[str], # Original expects urls
         session_data: dict
     ) -> List[PostData]:
         """Sequential scraping (original method)"""
         from .post_data import PostDataScraper
 
-        # Extract URLs from dictionaries
-        post_urls = [link['url'] for link in post_links]
-
+        # Note: If called from scrape_multiple, post_links is actually list of urls
+        
         scraper = PostDataScraper(self.config)
         results = scraper.scrape_multiple(
-            post_urls,
+            post_links,
             delay_between_posts=True
         )
 
@@ -614,7 +682,10 @@ class ParallelPostDataScraper:
             'post_open_delay': self.config.post_open_delay,
             'ui_element_load_delay': self.config.ui_element_load_delay,
             'browser_channel': self.config.browser_channel,
-            'browser_args': self.config.browser_args
+            'browser_args': self.config.browser_args,
+            # Add dynamic fields
+            'selector_post_tag_container': self.config.selector_post_tag_container,
+            'return_empty_list_for_no_tags': self.config.return_empty_list_for_no_tags
         }
 
         # Create Manager Queue for real-time communication
@@ -720,7 +791,7 @@ class ParallelPostDataScraper:
                     content_type=link.get('type', 'Post')
                 )
             )
-            for link in post_links  # Changed: Now iterating over link dictionaries
+            for link in post_links
         ]
 
         self.logger.info(

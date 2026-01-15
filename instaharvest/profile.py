@@ -2,10 +2,12 @@
 Instagram Scraper - Profile data scraper
 Extract posts, followers, and following counts from Instagram profiles
 """
-
+import os
+import logging
+import re
 import time
-from typing import Dict, Optional, Any
-from dataclasses import dataclass, asdict
+from typing import Optional, Dict, List, Any
+from dataclasses import dataclass, field, asdict
 
 from .base import BaseScraper
 from .config import ScraperConfig
@@ -14,14 +16,31 @@ from .exceptions import ProfileNotFoundError, HTMLStructureChangedError
 
 @dataclass
 class ProfileData:
-    """Profile data structure"""
+    """
+    Profile data structure
+    
+    Attributes:
+        username: Instagram username
+        posts: Number of posts
+        followers: Number of followers
+        following: Number of following
+        is_verified: True if account is verified
+        is_private: True if account is private
+        category: Profile category (e.g. "Musician")
+        bio: Biography text
+        external_links: List of external links found in bio
+        threads_profile: Threads profile username/URL if available
+    """
     username: str
-    posts: str
-    followers: str
-    following: str
-    is_verified: bool = False  # Whether the account has verified badge
-    category: Optional[str] = None  # Profile category (Actor, Model, Photographer, etc.)
-    bio: Optional[str] = None  # Complete bio with all information (links, emails, mentions, text)
+    posts: int  # Changed to int for consistency
+    followers: int
+    following: int
+    is_verified: bool = False
+    is_private: bool = False  # New field
+    category: Optional[str] = None
+    bio: Optional[str] = None
+    external_links: List[str] = field(default_factory=list)
+    threads_profile: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -33,12 +52,11 @@ class ProfileScraper(BaseScraper):
     Instagram profile scraper
 
     Features:
-    - Extract posts count
-    - Extract followers count
-    - Extract following count
+    - Extract posts, followers, following counts (integers)
     - Check verified badge status
-    - Extract profile category (Actor, Model, Photographer, etc.)
-    - Extract complete bio (text, links, emails, mentions, contact info)
+    - Detect PRIVATE accounts
+    - Extract profile category
+    - Extract complete bio
     - HTML structure change detection
     - Parallel execution support
     """
@@ -61,16 +79,9 @@ class ProfileScraper(BaseScraper):
 
         Args:
             username: Instagram username (without @)
-            get_posts: Extract posts count
-            get_followers: Extract followers count
-            get_following: Extract following count
 
         Returns:
-            ProfileData object with verified status
-
-        Raises:
-            ProfileNotFoundError: If profile doesn't exist
-            HTMLStructureChangedError: If HTML structure changed
+            ProfileData object
         """
         username = username.strip().lstrip('@')
         self.logger.info(f"Starting profile scrape for: @{username}")
@@ -95,25 +106,43 @@ class ProfileScraper(BaseScraper):
             if not self._profile_exists():
                 raise ProfileNotFoundError(f"Profile @{username} not found")
 
+            # Check if Private
+            is_private = self._is_private_account()
+            if is_private:
+                self.logger.warning(f"⚠️ Account @{username} is PRIVATE")
+
             # Wait for profile stats to load
             self._wait_for_profile_stats()
 
             # Extract data
+            # Use safe_extract with parse_number directly
+            posts = self.get_posts_count() if get_posts else 0
+            followers = self.get_followers_count() if get_followers else 0
+            following = self.get_following_count() if get_following else 0
+
+            # Get complete bio data
+            bio_data = self._get_bio_data()
+
             data = ProfileData(
                 username=username,
-                posts=self.get_posts_count() if get_posts else 'N/A',
-                followers=self.get_followers_count() if get_followers else 'N/A',
-                following=self.get_following_count() if get_following else 'N/A',
+                posts=posts,
+                followers=followers,
+                following=following,
                 is_verified=self._check_verified(),
+                is_private=is_private,
                 category=self._get_category(),
-                bio=self._get_bio()
+                bio=bio_data['bio'],
+                external_links=bio_data['external_links'],
+                threads_profile=bio_data['threads_profile']
             )
 
             verified_status = "✓ Verified" if data.is_verified else "Not verified"
-            category_info = f", Category: {data.category}" if data.category else ""
+            private_status = "🔒 Private" if data.is_private else "🔓 Public"
+
             self.logger.info(
                 f"Profile scrape complete: {data.posts} posts, "
-                f"{data.followers} followers, {data.following} following, {verified_status}{category_info}"
+                f"{data.followers} followers, {data.following} following, "
+                f"{verified_status}, {private_status}"
             )
 
             return data
@@ -135,6 +164,50 @@ class ProfileScraper(BaseScraper):
             return True
         except Exception as e:
             self.logger.error(f"Error checking profile existence: {e}")
+            return False
+
+    def _is_private_account(self) -> bool:
+        """
+        Check if account is private
+        
+        Returns:
+            True if private, False otherwise
+        """
+        try:
+            # Method 1: Check for Private icon
+            private_icon = self.page.locator(self.config.selector_private_icon).first
+            if private_icon.count() > 0:
+                self.logger.debug("✓ Private account detected (icon)")
+                return True
+                
+            # Method 2: Check for text indicators
+            # Use body inner_text to normalize whitespace
+            try:
+                body_text = self.page.locator("body").inner_text()
+                for indicator in self.config.selector_private_text_indicators:
+                    if indicator in body_text:
+                        self.logger.debug(f"✓ Private account detected (text: '{indicator}')")
+                        return True
+            except Exception:
+                # Fallback to content check
+                content = self.page.content()
+                for indicator in self.config.selector_private_text_indicators:
+                    if indicator in content:
+                        self.logger.debug(f"✓ Private account detected (raw content: '{indicator}')")
+                        return True
+            
+            # Method 3: Check title
+            title_elem = self.page.locator(self.config.selector_private_title)
+            count = title_elem.count()
+            for i in range(count):
+                if "Private" in title_elem.nth(i).inner_text():
+                    self.logger.debug("✓ Private account detected (title)")
+                    return True
+                    
+            return False
+            
+        except Exception as e:
+            self.logger.debug(f"Private check error: {e}")
             return False
 
     def _wait_for_profile_stats(self) -> None:
@@ -189,162 +262,196 @@ class ProfileScraper(BaseScraper):
             self.logger.debug(f"Category extraction failed: {e}")
             return None
 
-    def _get_bio(self) -> Optional[str]:
+    def _get_bio_data(self) -> Dict[str, Any]:
         """
-        Extract complete bio information including text, links, emails, mentions, and contact info
-
-        Uses targeted extraction to avoid highlights and other non-bio content:
-        1. Bio text: Only from bio section (not highlights/other sections)
-        2. External links: From link containers with specific attributes
-        3. Fallback: Old bio section selector
-
+        Extract complete bio information including text, links, and threads profile
+        
         Returns:
-            Complete bio text with all information or None if empty
+            Dictionary with 'bio', 'external_links', 'threads_profile'
         """
+        result = {
+            'bio': None,
+            'external_links': [],
+            'threads_profile': None
+        }
+        
         try:
+            # 1. EXTRACT BIO TEXT
             bio_parts = []
+            bio_elements = self.page.locator(self.config.selector_profile_bio_text).all()
+            
+            for span in bio_elements:
+                try:
+                    text = span.inner_text().strip()
+                    if not text or len(text) < 2:
+                        continue
+                        
+                    # Skip if it is the link container ("Link icon") button itself or inside it
+                    # We used to check parentHTML, but that caught the section parent.
+                    # Now check if we are inside the specific link button.
+                    is_link_btn = span.evaluate('''el => {
+                        const btn = el.closest('button') || el.closest('[role="button"]');
+                        return btn && btn.querySelector('svg[aria-label="Link icon"]');
+                    }''')
+                    if is_link_btn:
+                        continue
 
-            # Strategy 1: Extract bio text ONLY from bio section
-            # Look for span._ap3a that is a direct child of bio section, not from highlights
-            # We need to be more selective - only get first few span._ap3a (bio is usually first 1-2)
-            bio_text_spans = self.page.locator(self.config.selector_profile_bio_text).all()
-
-            # Filter: Only take first 2-3 bio text spans (bio is always at the top)
-            # This avoids getting highlights names and other sections
-            bio_span_count = 0
-            max_bio_spans = 3  # Bio is usually within first 3 spans
-
-            if bio_text_spans:
-                for span in bio_text_spans:
-                    try:
-                        # Check if this span is inside a link container (skip if it is)
-                        parent_html = span.evaluate('el => el.parentElement?.outerHTML || ""')
-                        if 'svg' in parent_html or 'aria-label="Link icon"' in parent_html:
-                            continue  # Skip spans inside link containers
-
-                        # Check if this is inside a button/clickable area for bio (valid)
-                        # or if it's a highlight/other section (invalid)
-                        text = span.inner_text().strip()
-
-                        # Skip if empty or already added
-                        if not text or text in bio_parts:
+                    # Check if inside a link (anchor tag)
+                    closest_a_href = span.evaluate('el => el.closest("a")?.href || ""')
+                    if closest_a_href:
+                        href_lower = closest_a_href.lower()
+                        # Skip Threads, Followers, Following links
+                        if any(x in href_lower for x in ['threads.net', 'threads.com', '/followers/', '/following/']):
                             continue
+                    
+                    # Filter out stats like "100 posts" or "500 followers"
+                    # Simple regex to catch digits followed by posts/followers/following
+                    if re.match(r'^\d+(\.\d+)?[KkMm]?\s*(posts|followers|following)$', text, re.IGNORECASE):
+                        continue
+                        
+                    # Filter out Highlights (Storeee, About me, etc.)
+                    # These are typically in ul > li structures or specific highlight containers.
+                    # Simple heuristic: Check if any parent is an LI or UL
+                    is_list_item = span.evaluate('el => el.closest("li") !== null || el.closest("ul") !== null')
+                    if is_list_item:
+                        continue
 
-                        # Skip very short texts (likely not bio)
-                        if len(text) < 3:
-                            continue
-
-                        # Only take first few spans (bio is at the top)
-                        if bio_span_count >= max_bio_spans:
-                            break
-
+                    if text not in bio_parts:
                         bio_parts.append(text)
-                        bio_span_count += 1
-                        self.logger.debug(f"✓ Found bio text #{bio_span_count}: {text[:50]}...")
-
-                    except Exception as e:
-                        self.logger.debug(f"Error extracting bio span: {e}")
-                        continue
-
-            # Strategy 2: Extract external links from bio
-            # Look for div.html-div with Link icon (external links section)
-            try:
-                # Find divs with Link icon SVG (these are external link containers)
-                link_containers = self.page.locator('div.html-div:has(svg[aria-label="Link icon"])').all()
-
-                for container in link_containers:
-                    try:
-                        # Get link text from <a> tags inside this container
-                        links = container.locator('a div._ap3a._aaco._aacw._atqw._aada._aade').all()
-                        for link in links:
-                            try:
-                                link_text = link.inner_text().strip()
-                                if link_text and link_text not in bio_parts:
-                                    bio_parts.append(link_text)
-                                    self.logger.debug(f"✓ Found external link: {link_text}")
-                            except Exception:
-                                continue
-                    except Exception:
-                        continue
-
-                # Also get Threads links
-                threads_links = self.page.locator('a[href*="threads.com"] span.x1lliihq.x193iq5w.x6ikm8r.x10wlt62').all()
-                for link in threads_links:
-                    try:
-                        link_text = link.inner_text().strip()
-                        if link_text and link_text not in bio_parts:
-                            bio_parts.append(link_text)
-                            self.logger.debug(f"✓ Found Threads link: {link_text}")
-                    except Exception:
-                        continue
-
-            except Exception as e:
-                self.logger.debug(f"Error extracting links: {e}")
-
-            # Strategy 3: Fallback - try old bio section selector
-            if not bio_parts:
-                self.logger.debug("Trying fallback bio section selector...")
-                bio_section = self.page.locator(self.config.selector_profile_bio_section).first
-                if bio_section.count() > 0:
-                    bio_text = bio_section.inner_text().strip()
-                    if bio_text:
-                        bio_parts.append(bio_text)
-                        self.logger.debug(f"✓ Bio extracted via fallback ({len(bio_text)} characters)")
-
-            # Combine all bio parts
+                except Exception as e:
+                   continue
+            
             if bio_parts:
-                # Join parts with newline, remove duplicates
-                full_bio = '\n'.join(bio_parts)
-                # Clean up whitespace while preserving line breaks
-                full_bio = '\n'.join(line.strip() for line in full_bio.split('\n') if line.strip())
+                result['bio'] = "\n".join(bio_parts)
+                self.logger.debug(f"✓ Bio text found: {len(bio_parts)} parts")
 
-                if full_bio:
-                    self.logger.debug(f"✓ Complete bio extracted ({len(full_bio)} characters, {len(bio_parts)} parts)")
-                    return full_bio
+            # 2. EXTRACT EXTERNAL LINKS
+            # 2a. Look for embedded links in bio (e.g. @mentions)
+            try:
+                bio_links = self.page.locator('header section span[dir="auto"] a').all()
+                for link in bio_links:
+                    href = link.get_attribute('href')
+                    text = link.inner_text()
+                    if href and text and text not in result['external_links']:
+                        # Filter out internal Instagram nav links
+                        if any(x in href for x in ['/followers/', '/following/', 'threads.net']):
+                            continue
+                        result['external_links'].append(text)
+            except Exception as e:
+                self.logger.debug(f"Embedded link extraction error: {e}")
 
-            self.logger.debug("No bio found")
-            return None
+            # 2b. Look for button with Link icon
+            try:
+                # Find all Link Icons (universal anchor point)
+                link_icons = self.page.locator(self.config.selector_bio_link_container).all()
+                
+                for icon in link_icons:
+                    found_text = None
+                    ancestor = icon
+                    for i in range(4): # Check 4 levels up
+                        ancestor = ancestor.locator('xpath=..')
+                        
+                        # 1. Check if this ancestor IS an anchor or HAS an anchor
+                        # This is more reliable than text scraping
+                        href = ancestor.get_attribute('href')
+                        if href and href not in ['#', '', 'javascript:void(0);']:
+                            # Use text if available, else href
+                            text = ancestor.inner_text().strip() or href
+                            found_text = text
+                            break
+                            
+                        # Also check if it wraps an anchor (sometimes div > a > div > svg)
+                        nested_a = ancestor.locator('a[href]').first
+                        if nested_a.count() > 0:
+                            href = nested_a.get_attribute('href')
+                            if href and not 'facebook.com' in href: # Verify not a share button
+                                found_text = nested_a.inner_text().strip() or href
+                                break
 
+                        # 2. Text-based heuristic (Original fallback)
+                        text = ancestor.inner_text().strip()
+                        if len(text) > 3 and '.' in text:
+                            # Verify it's not just "Message" or "Follow"
+                            if any(x in text.lower() for x in ['message', 'follow', 'contact']):
+                                continue
+                            found_text = text
+                            break
+                    
+                    if found_text:
+                            # Split by newline and look for the link part
+                        parts = found_text.split('\n')
+                        for part in parts:
+                            clean_part = part.strip()
+                            clean_part = clean_part.split(' and ')[0] # "and 1 more" cleanup
+                            
+                            if '.' in clean_part and len(clean_part) > 3:
+                                # Exclude common non-link text
+                                if clean_part.lower() == 'link': continue
+                                
+                                if clean_part not in result['external_links']:
+                                        result['external_links'].append(clean_part)
+            except Exception as e:
+                self.logger.debug(f"Link extraction error: {e}")
+
+            # 3. EXTRACT THREADS PROFILE
+            try:
+                threads_badge = self.page.locator(self.config.selector_threads_badge).first
+                if threads_badge.count() > 0:
+                    # Get parent anchor
+                    anchor = threads_badge.locator('xpath=./ancestor::a').first
+                    if anchor.count() > 0:
+                        href = anchor.get_attribute('href')
+                        if href and ('threads.net' in href or 'threads.com' in href):
+                             # Extract username from URL
+                             parts = href.split('@')
+                             if len(parts) > 1:
+                                 # Remove query params
+                                 username = parts[1].split('?')[0]
+                                 result['threads_profile'] = f"@{username}"
+                                 self.logger.debug(f"✓ Threads profile found: {result['threads_profile']}")
+            except Exception as e:
+                 self.logger.debug(f"Threads extraction error: {e}")
+
+            return result
+            
         except Exception as e:
-            self.logger.debug(f"Bio extraction failed: {e}")
-            return None
+            self.logger.error(f"Bio extraction error: {e}")
+            return result
 
-    def get_posts_count(self) -> str:
+    def _get_bio(self) -> Optional[str]:
+        """Legacy wrapper - use _get_bio_data instead"""
+        data = self._get_bio_data()
+        return data['bio']
+
+    def get_posts_count(self) -> int:
         """
         Extract posts count
 
         Returns:
-            Posts count as string (e.g., "1870")
+            Posts count as integer
         """
         selector = self.config.selector_posts_count
 
         def extract():
             posts_element = self.page.locator(selector).first
             posts_text = posts_element.locator(self.config.selector_html_span).first.inner_text()
-            return posts_text.strip().replace(',', '')
+            return self.parse_number(posts_text)
 
         result = self.safe_extract(
             extract,
             element_name='posts_count',
             selector=selector,
-            default='N/A'
+            default=0
         )
-
-        if result == 'N/A':
-            raise HTMLStructureChangedError(
-                'posts_count',
-                selector,
-                "Cannot find posts count. Instagram may have changed their HTML structure."
-            )
 
         return result
 
-    def get_followers_count(self) -> str:
+    def get_followers_count(self) -> int:
         """
         Extract followers count
 
         Returns:
-            Followers count as string (e.g., "32757")
+            Followers count as integer
         """
         selector = self.config.selector_followers_link
 
@@ -352,52 +459,42 @@ class ProfileScraper(BaseScraper):
             followers_link = self.page.locator(selector).first
             # Try title attribute first (exact count)
             title_span = followers_link.locator('span[title]').first
-            if title_span:
-                return title_span.get_attribute('title').replace(',', '')
+            if title_span.count() > 0:
+                text = title_span.get_attribute('title')
+                return self.parse_number(text)
+            
             # Fallback to visible text
-            return followers_link.locator(self.config.selector_html_span).first.inner_text().replace(',', '')
+            text = followers_link.locator(self.config.selector_html_span).first.inner_text()
+            return self.parse_number(text)
 
         result = self.safe_extract(
             extract,
             element_name='followers_count',
             selector=selector,
-            default='N/A'
+            default=0
         )
-
-        if result == 'N/A':
-            raise HTMLStructureChangedError(
-                'followers_count',
-                selector,
-                "Cannot find followers count. Instagram may have changed their HTML structure."
-            )
 
         return result
 
-    def get_following_count(self) -> str:
+    def get_following_count(self) -> int:
         """
         Extract following count
 
         Returns:
-            Following count as string (e.g., "5447")
+            Following count as integer
         """
         selector = self.config.selector_following_link
 
         def extract():
             following_link = self.page.locator(selector).first
-            return following_link.locator(self.config.selector_html_span).first.inner_text().replace(',', '')
+            text = following_link.locator(self.config.selector_html_span).first.inner_text()
+            return self.parse_number(text)
 
         result = self.safe_extract(
             extract,
             element_name='following_count',
             selector=selector,
-            default='N/A'
+            default=0
         )
-
-        if result == 'N/A':
-            raise HTMLStructureChangedError(
-                'following_count',
-                selector,
-                "Cannot find following count. Instagram may have changed their HTML structure."
-            )
 
         return result

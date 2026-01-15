@@ -313,6 +313,55 @@ config = ScraperConfig(
 
 ---
 
+### 11. Number Parsing & Localization
+
+Controls how numbers (likes, followers) are parsed from different languages.
+
+```python
+config = ScraperConfig(
+    # Supported suffixes for thousands/millions
+    number_suffixes={
+        'K': 1_000,
+        'M': 1_000_000,
+        'тыс.': 1_000,    # Russian
+        'млн.': 1_000_000, # Russian
+    },
+    
+    # Separators (can be customized for locale)
+    number_separators={
+        'thousand': ',',
+        'decimal': '.'
+    }
+)
+```
+
+**When to change:**
+- **Different Language:** Add suffixes for your Instagram language (e.g. 'mil' for Spanish)
+- **Different Locale:** Adjust separators (e.g. '.' for thousand in some regions)
+
+---
+
+### 12. Private Account & Behavior Settings
+
+Controls detection of private accounts and data return formats.
+
+```python
+config = ScraperConfig(
+    # Private Account Indicators
+    selector_private_icon='svg[aria-label="Private"]',
+    selector_private_title='h2',
+    
+    # Behavior Flags
+    return_empty_list_for_no_tags=True  # Return [] instead of ["No tags"]
+)
+```
+
+**When to change:**
+- **Instagram updates UI:** Update selectors if private indicators change
+- **Data format preference:** Set `return_empty_list_for_no_tags=False` if you prefer ["No tags"] text
+
+---
+
 ## 🌍 Common Use Cases
 
 ### 1. Slow Internet Connection

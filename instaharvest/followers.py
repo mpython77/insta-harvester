@@ -299,56 +299,52 @@ class FollowersCollector(BaseScraper):
 
     def _extract_current_followers(self) -> List[str]:
         """
-        Extract currently visible followers from popup
-
-        Instagram structure:
-        - Each user: div with class containing "x1qnrgzn x1cek8b2 xb10e19..."
-        - Inside: span with class="xjp7ctv"
-        - Inside: a with href="/username/"
-
-        Returns:
-            List of usernames currently visible
+        Extract currently visible followers using robust selectors.
+        
+        Strategy:
+        1. Find all 'a' tags with role="link"
+        2. Filter structurally (must be a simple /username/ path)
+        3. Filter system paths
         """
         usernames = []
 
         try:
-            # Find all user containers
-            # Using the specific class combination for user rows
-            user_containers = self.page.locator(self.config.selector_follower_container).all()
+            # Execute JS to get potential profile links quickly
+            # This avoids transferring strict DOM elements back and forth
+            # Uses URL API to handle relative/absolute paths and query params securely
+            raw_usernames = self.page.evaluate('''() => {
+                const candidates = [];
+                const links = document.querySelectorAll('a[href]');
+                
+                for (const link of links) {
+                    const href = link.getAttribute('href');
+                    if (!href) continue;
+                    
+                    try {
+                        // Normalize URL (handles relative/absolute)
+                        const url = new URL(href, document.baseURI);
+                        
+                        // Get path segments
+                        const parts = url.pathname.split('/').filter(p => p.length > 0);
+                        
+                        // Profile usually has exactly 1 segment: /username/
+                        if (parts.length === 1) {
+                            candidates.push(parts[0]);
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
+                return candidates;
+            }''')
 
-            for container in user_containers:
-                try:
-                    # Find span.xjp7ctv inside this container
-                    span = container.locator(self.config.selector_follower_username_span).first
-
-                    if span.count() == 0:
-                        continue
-
-                    # Find link inside span
-                    link = span.locator('a[href]').first
-
-                    if link.count() == 0:
-                        continue
-
-                    # Get href attribute
-                    href = link.get_attribute('href', timeout=self.config.followers_attr_timeout)
-
-                    if not href:
-                        continue
-
-                    # Extract username from href="/username/"
-                    username = href.strip('/').split('/')[-1]
-
-                    # Filter out system paths
-                    if username in self.config.instagram_system_paths:
-                        continue
-
-                    if username and username not in usernames:
-                        usernames.append(username)
-
-                except Exception as e:
-                    # Skip this container if error
+            # Filter in Python
+            for username in raw_usernames:
+                if username in self.config.instagram_system_paths:
                     continue
+                
+                if username not in usernames:
+                    usernames.append(username)
 
         except Exception as e:
             self.logger.debug(f"Error extracting followers: {e}")
@@ -357,26 +353,106 @@ class FollowersCollector(BaseScraper):
 
     def _scroll_popup(self) -> None:
         """
-        Scroll the followers/following popup to load more users
-
-        The popup has a scrollable container
+        Scroll the followers/following popup to load more users.
+        Uses Context-Aware Scroll (Header Detection) to target the specific popup 
+        and avoid scrolling the background page.
         """
         try:
-            # Method 1: Find scrollable dialog and scroll it
-            # The dialog usually has overflow: auto
-            dialog = self.page.locator(self.config.selector_popup_dialog).first
+            # Execute JS to find and scroll the best candidate
+            # Strategy: Find "Followers" or "Following" header, then find adjacent scrollable area
+            scrolled = self.page.evaluate('''() => {
+                // Helper to check if element is scrollable
+                function isScrollable(el) {
+                    const style = window.getComputedStyle(el);
+                    // Explicitly check for scroll/auto overflow properties
+                    const isScrollableStyle = style.overflowY === 'auto' || style.overflowY === 'scroll' || style.overflow === 'auto' || style.overflow === 'hidden auto';
+                    const canScroll = el.scrollHeight > el.clientHeight;
+                    return (isScrollableStyle || canScroll) && el.clientHeight > 0;
+                }
 
-            if dialog.count() > 0:
-                # Scroll inside dialog
-                dialog.evaluate('(element) => element.scrollTop = element.scrollHeight')
+                // 1. Detect Modal Header
+                // Prioritize explicit headings to avoid matching buttons or other text
+                const headings = Array.from(document.querySelectorAll('div[role="heading"], h1'));
+                let targetHeading = headings.find(h => {
+                    const text = h.textContent.trim();
+                    return text.includes('Followers') || text.includes('Following') || text.includes('Likes');
+                });
+                
+                // Fallback to spans if no formal heading found (unlikely but possible)
+                if (!targetHeading) {
+                     const spans = Array.from(document.querySelectorAll('span'));
+                     targetHeading = spans.find(s => {
+                        const text = s.textContent.trim();
+                        // Strict check for spans to avoid matching "Following" buttons
+                        return text === 'Followers' || text === 'Following' || text === 'Likes';
+                     });
+                }
+
+                if (targetHeading) {
+                    // Traverse up to find the container holding both header and list
+                    let parent = targetHeading.parentElement;
+                    let attempts = 0;
+                    while (parent && attempts < 10) {
+                        
+                        // Look for a distinct scrollable container inside this parent
+                        // We filter for divs that look like the list container
+                        const candidates = Array.from(parent.querySelectorAll('div')).filter(div => {
+                           const style = window.getComputedStyle(div);
+                           // Must be strictly scrollable style
+                           const hasOverflow = style.overflowY === 'auto' || style.overflowY === 'scroll' || style.overflow === 'hidden auto';
+                           return hasOverflow && div.scrollHeight > div.clientHeight;
+                        });
+
+                        // If we found candidates, usually the one with the most content (largest scrollHeight) is the list
+                        if (candidates.length > 0) {
+                             candidates.sort((a, b) => b.scrollHeight - a.scrollHeight);
+                             const target = candidates[0];
+                             target.scrollTop = target.scrollHeight;
+                             target.dispatchEvent(new Event('scroll'));
+                             return true;
+                        }
+                        
+                        parent = parent.parentElement;
+                        attempts++;
+                    }
+                }
+
+                // 2. Fallback: Find ANY superimposed scrollable modal
+                // If header detection failed, look for scrollable divs with high Z-Index or specific modal-like properties
+                const divs = document.querySelectorAll('div[style*="overflow"]');
+                let bestCandidate = null;
+                let maxZ = -1;
+
+                for (const div of divs) {
+                     if (isScrollable(div)) {
+                         // Simple heuristic: Modals usually have specific styles or existing high z-index
+                         // Here we just pick the one that is NOT the body/main html (usually clientHeight < window.innerHeight)
+                         if (div.clientHeight < window.innerHeight - 50 && div.clientWidth > 200) {
+                             bestCandidate = div;
+                             break; // Found a likely modal
+                         }
+                     }
+                }
+
+                if (bestCandidate) {
+                    bestCandidate.scrollTop = bestCandidate.scrollHeight;
+                    bestCandidate.dispatchEvent(new Event('scroll'));
+                    return true;
+                }
+
+                return false;
+            }''')
+
+            if scrolled:
+                self.logger.debug("📜 Scrolled popup (targeted)")
             else:
-                # Method 2: Scroll the popup container
-                # Find div with overflow: auto
-                scrollable = self.page.locator('div[style*="overflow"]').first
-                if scrollable.count() > 0:
-                    scrollable.evaluate('(element) => element.scrollTop = element.scrollHeight')
-
-            self.logger.debug("✓ Scrolled popup")
+                self.logger.debug("📜 Could not target popup scroll, attempting mouse wheel")
+                # Last resort: hover center and scroll
+                # This works if the mouse is over the modal
+                vp = self.page.viewport_size
+                if vp:
+                    self.page.mouse.move(vp['width'] / 2, vp['height'] / 2)
+                    self.page.mouse.wheel(0, 500)
 
         except Exception as e:
             self.logger.debug(f"Error scrolling popup: {e}")

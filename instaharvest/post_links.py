@@ -322,31 +322,68 @@ if LIBRARY_AVAILABLE:
                 self.logger.warning(f"Could not get posts count: {e}")
                 return 9999  # Large number as fallback
 
-        def _extract_current_links_proven(self) -> Set[str]:
+        def _extract_current_links_proven(self) -> List[Dict[str, str]]:
             """
-            Extract links using USER'S PROVEN DIRECT SELECTOR METHOD
+            Extract links AND metadata using USER'S PROVEN DIRECT SELECTOR METHOD
 
             Returns:
-                Set of URLs
+                List of dicts with 'url', 'thumbnail', 'stats'
             """
             try:
                 # USER'S PROVEN METHOD: Direct selector for posts and reels
-                links = self.page.locator(self.config.selector_post_reel_links).all()
-
-                hrefs = set()
-                for link in links:
-                    href = link.get_attribute('href')
-                    if href:
+                elements = self.page.locator(self.config.selector_post_reel_links).all()
+                
+                results = []
+                for element in elements:
+                    try:
+                        href = element.get_attribute('href')
+                        if not href:
+                            continue
+                            
                         # Make full URL
                         if href.startswith('/'):
-                            href = self.config.instagram_base_url.rstrip('/') + href
-                        hrefs.add(href)
+                            full_url = self.config.instagram_base_url.rstrip('/') + href
+                        else:
+                            full_url = href
+                            
+                        # Extract Metadata
+                        thumbnail = ""
+                        stats = ""
+                        
+                        # Try Image (PostPage)
+                        img = element.locator(self.config.selector_grid_thumbnail_img).first
+                        if img.count() > 0:
+                            thumbnail = img.get_attribute('src') or ""
+                            
+                        # Try Background Image (ReelsPage)
+                        if not thumbnail:
+                            bg_div = element.locator(self.config.selector_grid_thumbnail_bg).first
+                            if bg_div.count() > 0:
+                                style = bg_div.get_attribute('style') or ""
+                                # Extract url('...')
+                                if 'url("' in style:
+                                    thumbnail = style.split('url("')[1].split('")')[0]
+                                elif "url('" in style:
+                                    thumbnail = style.split("url('")[1].split("')")[0]
 
-                return hrefs
+                        # Try Stats (Views/Likes)
+                        stat_span = element.locator(self.config.selector_grid_time).first
+                        if stat_span.count() > 0:
+                            stats = stat_span.inner_text()
+                            
+                        results.append({
+                            'url': full_url,
+                            'thumbnail': thumbnail,
+                            'stats': stats
+                        })
+                    except:
+                        continue
+
+                return results
 
             except Exception as e:
                 self.logger.error(f"Error extracting links: {e}")
-                return set()
+                return []
 
         def _scroll_and_collect_proven(self, target_count: int) -> List[Dict[str, str]]:
             """
@@ -356,20 +393,25 @@ if LIBRARY_AVAILABLE:
                 target_count: Target number of links
 
             Returns:
-                List of dictionaries with 'url' and 'type' keys
+                List of dictionaries with 'url', 'type', 'thumbnail', 'stats' keys
             """
             self.logger.info(f"Starting scroll collection (target: {target_count})...")
 
-            all_links = set()
+            all_links = {}  # Dict[url, dict]
             scroll_attempts = 0
             no_new_links_count = 0
             MAX_NO_NEW = self.config.scroll_max_no_new_attempts
 
             while True:
                 # Extract current links using proven method
-                current_links = self._extract_current_links_proven()
+                current_items = self._extract_current_links_proven()
                 previous_count = len(all_links)
-                all_links.update(current_links)
+                
+                for item in current_items:
+                    url = item['url']
+                    if url not in all_links:
+                        all_links[url] = item
+                
                 new_count = len(all_links)
 
                 # Log progress
@@ -408,14 +450,20 @@ if LIBRARY_AVAILABLE:
 
             # Convert to list of dicts with type detection
             result = []
-            for url in sorted(all_links):
+            for url, data in all_links.items():
                 if '/p/' in url:
                     content_type = 'Post'
                 elif '/reel/' in url:
                     content_type = 'Reel'
                 else:
                     content_type = 'Unknown'
-                result.append({'url': url, 'type': content_type})
+                
+                result.append({
+                    'url': url, 
+                    'type': content_type,
+                    'thumbnail': data.get('thumbnail', ''),
+                    'stats': data.get('stats', '')
+                })
 
             return result
 
