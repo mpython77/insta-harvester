@@ -112,11 +112,13 @@ class SharedBrowser:
         # Start Playwright
         self.playwright = sync_playwright().start()
 
+        # Prepare launch options
+        launch_options = {'headless': headless}
+        if self.config.browser_channel and self.config.browser_channel != 'chromium':
+            launch_options['channel'] = self.config.browser_channel
+
         # Launch browser
-        self.browser = self.playwright.chromium.launch(
-            channel=self.config.browser_channel,
-            headless=headless
-        )
+        self.browser = self.playwright.chromium.launch(**launch_options)
         self.logger.info(f"🌐 Browser launched (headless={headless})")
 
         # Create context with session
