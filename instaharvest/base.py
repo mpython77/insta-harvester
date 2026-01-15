@@ -134,7 +134,22 @@ class BaseScraper(ABC):
             if self.config.browser_channel and self.config.browser_channel != 'chromium':
                 launch_options['channel'] = self.config.browser_channel
 
-            self.browser = self.playwright.chromium.launch(**launch_options)
+            try:
+                self.browser = self.playwright.chromium.launch(**launch_options)
+            except Exception as launch_error:
+                # Specific handling for missing Chrome when channel='chrome'
+                if self.config.browser_channel == 'chrome':
+                    self.logger.critical("\n\n" + "!"*60)
+                    self.logger.critical("FAILED TO LAUNCH SYSTEM CHROME!")
+                    self.logger.critical("!"*60)
+                    self.logger.critical(f"Error: {launch_error}")
+                    self.logger.critical("Possible solutions:")
+                    self.logger.critical("1. Install Google Chrome on your system")
+                    self.logger.critical("2. Or change config to use bundled Chromium: config.browser_channel = 'chromium'")
+                    self.logger.critical("   (Note: Chromium may not play videos correctly due to missing codecs)")
+                    self.logger.critical("!"*60 + "\n")
+                raise launch_error
+
             browser_type = self.config.browser_channel or 'chromium'
             self.logger.debug(f"Browser launched ({browser_type}, headless={self.config.headless})")
 

@@ -178,11 +178,28 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     # Each worker gets its own Playwright instance
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            channel=config.browser_channel,
-            headless=config.headless,
-            args=config.browser_args
-        )
+        try:
+            # Prepare launch options
+            launch_options = {
+                'headless': config.headless,
+                'args': config.browser_args
+            }
+            if config.browser_channel and config.browser_channel != 'chromium':
+                launch_options['channel'] = config.browser_channel
+
+            browser = p.chromium.launch(**launch_options)
+        except Exception as launch_error:
+            # Handle Chrome launch failure
+            if config.browser_channel == 'chrome':
+                error_msg = (
+                    f"[Worker {worker_id}] KUTUBXONA XATOLIGI: Tizimda Google Chrome topilmadi!\n"
+                    f"Video va Reellarni to'g'ri yuklash uchun Chrome kerak.\n"
+                    f"Yechim: Chrome o'rnating yoki config.py da browser_channel='chromium' qiling."
+                )
+                print("\n" + "!"*60)
+                print(error_msg)
+                print("!"*60 + "\n")
+            raise launch_error
 
         context = browser.new_context(
             storage_state=session_data,
