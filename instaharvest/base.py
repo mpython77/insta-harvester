@@ -137,8 +137,22 @@ class BaseScraper(ABC):
             try:
                 self.browser = self.playwright.chromium.launch(**launch_options)
             except Exception as launch_error:
+                error_msg = str(launch_error)
+                
+                # RETRY LOGIC: If "Old Headless" error, try launching in NEW HEADLESS mode
+                if "Old Headless mode" in error_msg:
+                    self.logger.warning("System Chrome rejected 'Old Headless' mode. Retrying with 'new' Headless...")
+                    launch_options['headless'] = 'new'
+                    try:
+                         self.browser = self.playwright.chromium.launch(**launch_options)
+                    except Exception as retry_error:
+                         # If New Headless also fails, try HEADFUL as last resort
+                         self.logger.warning("New Headless also failed. Retrying in HEADFUL mode...")
+                         launch_options['headless'] = False
+                         self.browser = self.playwright.chromium.launch(**launch_options)
+                
                 # Specific handling for missing Chrome when channel='chrome'
-                if self.config.browser_channel == 'chrome':
+                elif self.config.browser_channel == 'chrome':
                     self.logger.critical("\n\n" + "!"*60)
                     self.logger.critical("FAILED TO LAUNCH SYSTEM CHROME!")
                     self.logger.critical("!"*60)
@@ -148,7 +162,9 @@ class BaseScraper(ABC):
                     self.logger.critical("2. Or change config to use bundled Chromium: config.browser_channel = 'chromium'")
                     self.logger.critical("   (Note: Chromium may not play videos correctly due to missing codecs)")
                     self.logger.critical("!"*60 + "\n")
-                raise launch_error
+                    raise launch_error
+                else:
+                     raise launch_error
 
             browser_type = self.config.browser_channel or 'chromium'
             self.logger.debug(f"Browser launched ({browser_type}, headless={self.config.headless})")

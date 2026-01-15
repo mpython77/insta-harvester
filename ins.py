@@ -1,9 +1,12 @@
 import sys
 import os
+import time
 sys.path.insert(0, os.getcwd())
 
 from instaharvest import InstagramOrchestrator
 from instaharvest.config import ScraperConfig
+from instaharvest.comment_scraper import CommentScraper
+from instaharvest.exporters import StreamingExcelExporter, StreamingJSONExporter
 
 def main():
     # Create config
@@ -56,6 +59,11 @@ def main():
     scraper = CommentScraper(config)
     
     try:
+        # Load Session & Setup Browser (CRITICAL FIX)
+        print("🌍 Setting up browser session...")
+        session_data = scraper.load_session()
+        scraper.setup_browser(session_data)
+        
         count = 0
         print("⏳ Starting stream... (Press Ctrl+C to stop safely)")
         

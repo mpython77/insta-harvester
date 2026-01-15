@@ -388,6 +388,10 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
                     except:
                         page.keyboard.press('Escape')
 
+        except Exception as e:
+            print(f"[Worker {worker_id}] VIDEO popup extraction failed: {e}")
+
+    # STEP 3: If IMAGE post (or video extraction failed), use div._aa1y extraction
     try:
         tag_containers = soup.find_all('div', class_='_aa1y')
         for container in tag_containers:
