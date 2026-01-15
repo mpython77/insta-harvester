@@ -149,8 +149,16 @@ class CommentParser:
                 if parts:
                     username = parts[0]
                 profile_url = f"https://www.instagram.com/{username}/"
-                img_tag = user_link.find('img')
-                pic_url = img_tag['src'] if img_tag else ""
+                
+                # Robust Profile Picture Extraction
+                # 1. Try finding img with alt containing "profile picture" (Standard Instagram)
+                img_tag = node.find('img', alt=re.compile(r'profile picture', re.IGNORECASE))
+                
+                # 2. Fallback: Check inside user link
+                if not img_tag and user_link:
+                    img_tag = user_link.find('img')
+                
+                pic_url = img_tag.get('src', '') if img_tag else ""
 
             is_verified = bool(node.find('svg', attrs={'aria-label': 'Verified'}))
 
