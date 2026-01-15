@@ -935,6 +935,6 @@ Built with:
 
 ---
 
-**Made with ❤️ by Doston**
+**Made with ❤️ by Muydinov Doston**
 
 *Happy Harvesting! 🌾*

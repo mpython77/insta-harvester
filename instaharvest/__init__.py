@@ -132,8 +132,8 @@ Quick Start:
     if not check_session_exists():
         save_session()
 
-Author: Doston
-Version: 2.7.0
+Author: Muydinov Doston
+Version: 2.6.0
 License: MIT
 """
 
@@ -165,8 +165,8 @@ from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
 from .session_utils import save_session, check_session_exists, load_session_data, get_default_session_path
 
-__version__ = '2.7.0'
-__author__ = 'Doston'
+__version__ = '2.6.0'
+__author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
 
