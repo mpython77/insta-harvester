@@ -295,50 +295,19 @@ with SharedBrowser(config=config) as browser:
 <summary><b>Example 5: Scrape Comments from Posts</b> - Click to expand</summary>
 
 ```python
-from instaharvest import InstagramOrchestrator
-from instaharvest.config import ScraperConfig
+import sys
+import os
+sys.path.insert(0, os.getcwd())
 
-# Create config
-config = ScraperConfig()
-orchestrator = InstagramOrchestrator(config)
-
-# Option 1: Scrape profile with comments included
-results = orchestrator.scrape_complete_profile_advanced(
-    'username',
-    parallel=3,
-    save_excel=True,
-    scrape_comments=True,          # Enable comment scraping
-    max_comments_per_post=100,     # Limit per post (None = all)
-    include_replies=True           # Include reply threads
-)
-
-print(f"Total comments: {results['comments_data']}")
-```
-
-```python
-# Option 2: Scrape only comments (standalone)
-results = orchestrator.scrape_comments_only(
-    'username',
-    max_comments_per_post=50,
-    include_replies=True,
-    save_excel=True,
-    export_json=True
-)
-
-print(f"Comments: {results['total_comments']}")
-print(f"Replies: {results['total_replies']}")
-```
-
-```python
-# Option 3: Low-level comment scraping
 from instaharvest import CommentScraper
+from instaharvest.comments_export import export_comments_to_json, export_comments_to_excel
 
 scraper = CommentScraper()
 session_data = scraper.load_session()
 scraper.setup_browser(session_data)
 
 # Scrape comments from a single post
-post_url = 'https://www.instagram.com/p/ABC123/'
+post_url = 'https://www.instagram.com/p/DTLHDJpDAbO/'
 comments = scraper.scrape(
     post_url,
     max_comments=100,
@@ -346,21 +315,39 @@ comments = scraper.scrape(
 )
 
 # Access comment data
-print(f"Total comments: {comments.total_comments_scraped}")
+print(f"Found {len(comments.comments)} top-level comments.")
+print("---")
+
 for comment in comments.comments:
-    print(f"@{comment.author.username}: {comment.text}")
-    print(f"  Likes: {comment.likes_count}, Replies: {len(comment.replies)}")
+    print(f"ID: {comment.id}")
+    print(f"User: {comment.author.username}")
+    print(f"Text: '{comment.text}'")
+    print(f"Time: {comment.timestamp_iso}")
+    print(f"Likes: {comment.likes_count}")
+    print(f"Reply Count (Extracted): {comment.reply_count}")
+    print(f"Nested Replies: {len(comment.replies)}")
+    
+    if comment.replies:
+        for reply in comment.replies:
+             print(f"    > Reply ID: {reply.id} | User: {reply.author.username} | Text: '{reply.text}'")
+    print("-" * 20)
+
+# Export Options
+save_json = True
+
+print("\n--- Exporting Data ---")
+if save_json:
+    json_filename = f"comments_{comments.post_id}.json"
+    if export_comments_to_json(comments, json_filename):
+        print(f"[+] Saved JSON to {json_filename}")
+    else:
+        print(f"[-] Failed to save JSON")
+
 
 scraper.close()
 ```
 
-**Extracted Comment Data:**
-- Comment text
-- Author username, profile picture, verified status
-- Likes count
-- Timestamp (human readable + ISO format)
-- Reply threads (nested comments)
-- Comment URL
+
 
 </details>
 
