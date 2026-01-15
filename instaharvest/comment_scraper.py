@@ -883,14 +883,55 @@ class CommentScraper(BaseScraper):
                 # Get the first span with dir="auto" inside - this is the comment text
                 text_span = text_container.find('span', attrs={'dir': 'auto'})
                 if text_span:
-                    # Get all text content from this span
-                    comment_text = text_span.get_text(strip=True)
+                    # IMPORTANT: The username span is INSIDE the comment text span
+                    # Structure: <span dir="auto">...<span class="_ap3a _aade">username</span>...comment text...</span>
+                    # We need to extract only the comment text, excluding the username
+
+                    # Find and remove the username span to get only comment text
+                    username_span_inside = text_span.find('span', class_=lambda x: x and (
+                        ('_ap3a' in ' '.join(x) and '_aade' in ' '.join(x)) if isinstance(x, list)
+                        else ('_ap3a' in x and '_aade' in x)
+                    ))
+
+                    if username_span_inside:
+                        # Clone the span and remove the username span from it
+                        from copy import copy
+                        text_span_copy = copy(text_span)
+                        # Get all text nodes that are NOT inside the username span
+                        # Method: Get full text, then subtract the username
+                        full_text = text_span.get_text(strip=True)
+                        username_text = username_span_inside.get_text(strip=True)
+                        if full_text.startswith(username_text):
+                            comment_text = full_text[len(username_text):].strip()
+                        else:
+                            # Username might be embedded differently, try removing it
+                            comment_text = full_text.replace(username_text, '', 1).strip()
+                    else:
+                        # No username span inside, get all text
+                        comment_text = text_span.get_text(strip=True)
 
             # Strategy 2: Find span with x5n08af class (comment text marker)
             if not comment_text:
                 for span in container.find_all('span'):
                     if has_class(span, 'x5n08af'):
-                        text = span.get_text(strip=True)
+                        # Check if this span contains the username span (username embedded in comment text)
+                        username_span_inside = span.find('span', class_=lambda x: x and (
+                            ('_ap3a' in ' '.join(x) and '_aade' in ' '.join(x)) if isinstance(x, list)
+                            else ('_ap3a' in x and '_aade' in x)
+                        ))
+
+                        full_text = span.get_text(strip=True)
+
+                        if username_span_inside:
+                            # Remove the username from the text
+                            username_text = username_span_inside.get_text(strip=True)
+                            if full_text.startswith(username_text):
+                                text = full_text[len(username_text):].strip()
+                            else:
+                                text = full_text.replace(username_text, '', 1).strip()
+                        else:
+                            text = full_text
+
                         # Validate it's actual comment text
                         if text and len(text) > 1:
                             text_lower = text.lower()
@@ -936,7 +977,23 @@ class CommentScraper(BaseScraper):
                         if '/c/' in href:
                             continue
 
-                    text = span.get_text(strip=True)
+                    # Check if this span contains the username span (username embedded in comment text)
+                    username_span_inside = span.find('span', class_=lambda x: x and (
+                        ('_ap3a' in ' '.join(x) and '_aade' in ' '.join(x)) if isinstance(x, list)
+                        else ('_ap3a' in x and '_aade' in x)
+                    ))
+
+                    full_text = span.get_text(strip=True)
+
+                    if username_span_inside:
+                        # Remove the username from the text
+                        username_text_inner = username_span_inside.get_text(strip=True)
+                        if full_text.startswith(username_text_inner):
+                            text = full_text[len(username_text_inner):].strip()
+                        else:
+                            text = full_text.replace(username_text_inner, '', 1).strip()
+                    else:
+                        text = full_text
 
                     # Skip empty or too short
                     if not text or len(text) <= 1:
@@ -1000,6 +1057,42 @@ class CommentScraper(BaseScraper):
                         likes_count = int(count_str)
                         break
 
+            # Strategy 4: Search in parent element (likes might be outside narrow container)
+            if likes_count == 0 and container.parent:
+                for span in container.parent.find_all('span'):
+                    if has_class(span, 'xuxw1ft'):
+                        span_text = span.get_text(strip=True)
+                        likes_match = re.match(r'^(\d+(?:,\d+)*)\s*likes?$', span_text, re.I)
+                        if likes_match:
+                            count_str = likes_match.group(1).replace(',', '')
+                            likes_count = int(count_str)
+                            break
+
+            # Strategy 5: Search in sibling elements
+            if likes_count == 0:
+                for sibling in container.find_next_siblings():
+                    for span in sibling.find_all('span') if hasattr(sibling, 'find_all') else []:
+                        span_text = span.get_text(strip=True) if hasattr(span, 'get_text') else ''
+                        likes_match = re.match(r'^(\d+(?:,\d+)*)\s*likes?$', span_text, re.I)
+                        if likes_match:
+                            count_str = likes_match.group(1).replace(',', '')
+                            likes_count = int(count_str)
+                            break
+                    if likes_count > 0:
+                        break
+
+            # Strategy 6: Search in grandparent element (for deeply nested containers)
+            if likes_count == 0 and container.parent and container.parent.parent:
+                grandparent = container.parent.parent
+                for span in grandparent.find_all('span'):
+                    if has_class(span, 'xuxw1ft'):
+                        span_text = span.get_text(strip=True)
+                        likes_match = re.match(r'^(\d+(?:,\d+)*)\s*likes?$', span_text, re.I)
+                        if likes_match:
+                            count_str = likes_match.group(1).replace(',', '')
+                            likes_count = int(count_str)
+                            break
+
             # ==================== CHECK TRANSLATION AVAILABLE ====================
             has_translation = False
             translation_span = container.find('span', string=re.compile(r'see\s+translation', re.I))
@@ -1046,6 +1139,59 @@ class CommentScraper(BaseScraper):
                         if reply_match:
                             reply_count = int(reply_match.group(1))
                             break
+
+            # Strategy 5: Search all sibling spans for "View all X replies" pattern
+            if reply_count == 0:
+                for sibling in container.find_next_siblings():
+                    if hasattr(sibling, 'find_all'):
+                        for span in sibling.find_all('span'):
+                            span_text = span.get_text(strip=True) if hasattr(span, 'get_text') else ''
+                            reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', span_text, re.I)
+                            if reply_match:
+                                reply_count = int(reply_match.group(1))
+                                break
+                    if reply_count > 0:
+                        break
+
+            # Strategy 6: Search parent's descendants for reply count
+            if reply_count == 0 and container.parent:
+                for span in container.parent.find_all('span'):
+                    span_text = span.get_text(strip=True)
+                    reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', span_text, re.I)
+                    if reply_match:
+                        reply_count = int(reply_match.group(1))
+                        break
+
+            # Strategy 7: Search grandparent's descendants
+            if reply_count == 0 and container.parent and container.parent.parent:
+                grandparent = container.parent.parent
+                for span in grandparent.find_all('span'):
+                    span_text = span.get_text(strip=True)
+                    reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', span_text, re.I)
+                    if reply_match:
+                        reply_count = int(reply_match.group(1))
+                        break
+
+            # Strategy 8: Alternative pattern "View replies (X)" or just count before "replies"
+            if reply_count == 0:
+                # Search in wider scope
+                search_areas = [container]
+                if container.parent:
+                    search_areas.append(container.parent)
+                if container.parent and container.parent.parent:
+                    search_areas.append(container.parent.parent)
+
+                for area in search_areas:
+                    for span in area.find_all('span'):
+                        span_text = span.get_text(strip=True)
+                        # Try "X replies" pattern
+                        reply_match = re.search(r'(\d+)\s+repl(?:y|ies)', span_text, re.I)
+                        if reply_match and 'view' not in span_text.lower()[:10]:
+                            # Make sure this is not "View all X replies" (already handled)
+                            reply_count = int(reply_match.group(1))
+                            break
+                    if reply_count > 0:
+                        break
 
             # ==================== CREATE RESULT ====================
             author = CommentAuthor(
