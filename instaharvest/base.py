@@ -8,16 +8,20 @@ import time
 from pathlib import Path
 from typing import Optional, Dict, Any
 from abc import ABC, abstractmethod
+from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page, Playwright
 
 from .config import ScraperConfig
 from .exceptions import (
+    InstagramScraperError,
     SessionNotFoundError,
     PageLoadError,
+    ProfileNotFoundError,
     HTMLStructureChangedError,
     LoginRequiredError
 )
+from .security import SecurityManager
 from .logger import setup_logger
 
 
@@ -130,9 +134,13 @@ class BaseScraper(ABC):
             # 'chrome' = use system Chrome (may have compatibility issues with new versions)
             launch_options = {'headless': self.config.headless}
 
-            # Only set channel if using system Chrome (not bundled Chromium)
-            if self.config.browser_channel and self.config.browser_channel != 'chromium':
-                launch_options['channel'] = self.config.browser_channel
+            # SECURITY: Proxy Selection
+            selected_proxy = None
+            if self.config.proxies:
+                selected_proxy = SecurityManager.get_random_proxy(self.config.proxies)
+                if selected_proxy:
+                    self.logger.info(f"🛡️ Using Proxy: {selected_proxy['server']}")
+                    launch_options['proxy'] = selected_proxy
 
             try:
                 self.browser = self.playwright.chromium.launch(**launch_options)
@@ -169,13 +177,19 @@ class BaseScraper(ABC):
             browser_type = self.config.browser_channel or 'chromium'
             self.logger.debug(f"Browser launched ({browser_type}, headless={self.config.headless})")
 
+            # SECURITY: User-Agent Rotation
+            final_user_agent = self.config.user_agent
+            if self.config.rotate_user_agent:
+                final_user_agent = SecurityManager.get_random_user_agent(self.config.user_agents)
+                self.logger.info(f"🎭 Rotated User-Agent: {final_user_agent[:30]}...")
+
             # Create context
             context_options = {
                 'viewport': {
                     'width': self.config.viewport_width,
                     'height': self.config.viewport_height
                 },
-                'user_agent': self.config.user_agent
+                'user_agent': final_user_agent
             }
 
             if session_data:

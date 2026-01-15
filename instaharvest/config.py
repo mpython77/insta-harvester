@@ -43,6 +43,11 @@ class ScraperConfig:
     user_agent: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     browser_channel: str = 'chrome'  # Browser channel: 'chrome' (system) or 'chromium' (bundled)
     browser_args: List[str] = field(default_factory=lambda: ['--start-maximized'])  # Browser launch arguments
+    
+    # ==================== SECURITY & ANTI-BAN ====================
+    proxies: List[str] = field(default_factory=list)  # List of proxy URLs
+    rotate_user_agent: bool = True  # Enable User-Agent rotation
+    user_agents: List[str] = field(default_factory=list)  # Custom User-Agents (overrides default)
 
     # ==================== INSTAGRAM URLS ====================
     instagram_base_url: str = 'https://www.instagram.com/'
