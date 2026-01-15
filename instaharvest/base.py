@@ -377,20 +377,9 @@ class BaseScraper(ABC):
         extractor_func,
         element_name: str,
         selector: str,
-        default: Any = None
+        default: Any = None,
+        snapshot_on_error: bool = True
     ) -> Any:
-        """
-        Safely extract data with error handling and logging
-
-        Args:
-            extractor_func: Function to extract data
-            element_name: Name of element being extracted (for logging)
-            selector: CSS selector used
-            default: Default value if extraction fails
-
-        Returns:
-            Extracted data or default value
-        """
         try:
             result = extractor_func()
             self.logger.debug(f"✓ Extracted {element_name}: {result}")
@@ -399,12 +388,34 @@ class BaseScraper(ABC):
             self.logger.warning(
                 f"✗ Failed to extract {element_name} using selector '{selector}': {e}"
             )
-            # Check if HTML structure changed
-            if "TimeoutError" in str(type(e).__name__) or "not found" in str(e).lower():
-                self.logger.error(
-                    f"HTML structure may have changed for '{element_name}'. "
-                    f"Selector '{selector}' no longer works."
-                )
+            
+            # Detailed diagnostics for HTML structure changes
+            if snapshot_on_error:
+                try:
+                    # check if page is available
+                    if self.page:
+                        timestamp = int(time.time())
+                        debug_dir = Path("debug_snapshots")
+                        debug_dir.mkdir(exist_ok=True)
+                        
+                        clean_name = element_name.lower().replace(" ", "_").replace("/", "_")
+                        filename = debug_dir / f"fail_{clean_name}_{timestamp}.html"
+                        
+                        # Save HTML snapshot
+                        with open(filename, "w", encoding="utf-8") as f:
+                            f.write(self.page.content())
+                            
+                        self.logger.error(
+                            f"\n{'!'*60}\n"
+                            f"HTML STRUCTURE CHANGED DETECTED!\n"
+                            f"Failed Element: {element_name}\n"
+                            f"Selector Used: {selector}\n"
+                            f"Snapshot Saved: {filename}\n"
+                            f"{'!'*60}\n"
+                        )
+                except Exception as diag_e:
+                    self.logger.error(f"Failed to save diagnostic snapshot: {diag_e}")
+
             return default
 
     def close(self, update_session_before_close: bool = True) -> None:
