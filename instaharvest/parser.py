@@ -103,18 +103,21 @@ class CommentParser:
 
     def _find_comment_container(self, link_node) -> Optional[Any]:
         current = link_node
-        candidate = None
-        for _ in range(20): 
+        for _ in range(15): 
             current = current.parent
             if not current: break
             if current.name == 'div':
-                # Must contain User and "Reply" action
-                has_user = current.find('a', href=re.compile(r'^/[\w\._]+/?$'))
-                has_reply = current.find(string=re.compile(r'^Reply$'))
+                # We need the full row container (User + Text + Actions).
+                # Timestamp alone is often just in the header, so it's NOT sufficient.
+                # The "Like" button (heart) or "Reply" action are effectively always present at the bottom of the row.
                 
-                if has_user and has_reply:
+                has_reply = current.find(string=re.compile(r'Reply', re.IGNORECASE))
+                has_like = current.find('svg', attrs={'aria-label': 'Like'}) or current.find('svg', attrs={'aria-label': 'Unlike'})
+                
+                # If we have the Like button or Reply text, we definitely have the full row.
+                if has_like or has_reply:
                     return current
-        return candidate
+        return None
 
     def _extract_data_from_node(self, node) -> Optional[Comment]:
         try:
