@@ -859,64 +859,82 @@ class CommentScraper(BaseScraper):
             # ==================== EXTRACT COMMENT TEXT ====================
             comment_text = ''
 
-            # Strategy 1: Find the comment text div (class containing x1cy8zhl)
-            # This div contains the actual comment text span
-            text_container = container.find('div', class_=lambda x: x and 'x1cy8zhl' in ' '.join(x) if isinstance(x, list) else (x and 'x1cy8zhl' in x))
+            # Helper function to check if class list contains a specific class
+            def has_class(element, class_name):
+                """Check if element has a specific class"""
+                if not element:
+                    return False
+                classes = element.get('class', [])
+                if isinstance(classes, list):
+                    return class_name in classes
+                elif isinstance(classes, str):
+                    return class_name in classes.split()
+                return False
+
+            # Strategy 1: Find div with x1cy8zhl class (comment text container)
+            # This is the most reliable - the comment text div
+            text_container = None
+            for div in container.find_all('div'):
+                if has_class(div, 'x1cy8zhl'):
+                    text_container = div
+                    break
+
             if text_container:
-                # Get text from span with dir="auto" inside this container
-                text_span = text_container.find('span', {'dir': 'auto'})
+                # Get the first span with dir="auto" inside - this is the comment text
+                text_span = text_container.find('span', attrs={'dir': 'auto'})
                 if text_span:
+                    # Get all text content from this span
                     comment_text = text_span.get_text(strip=True)
 
-            # Strategy 2: Find span with class containing x5n08af (comment text marker)
+            # Strategy 2: Find span with x5n08af class (comment text marker)
             if not comment_text:
-                text_spans = container.find_all('span', class_=lambda x: x and 'x5n08af' in ' '.join(x) if isinstance(x, list) else (x and 'x5n08af' in x))
-                for span in text_spans:
-                    text = span.get_text(strip=True)
-                    # Skip if it's the username
-                    if text and text.lower() != username.lower() and len(text) > 1:
-                        # Skip button-like texts
-                        text_lower = text.lower()
-                        if not re.match(r'^\d+\s*likes?$', text_lower):
-                            if 'reply' not in text_lower and 'translation' not in text_lower:
-                                if not re.match(r'^\d+[wdhms]$', text):
-                                    comment_text = text
-                                    break
+                for span in container.find_all('span'):
+                    if has_class(span, 'x5n08af'):
+                        text = span.get_text(strip=True)
+                        # Validate it's actual comment text
+                        if text and len(text) > 1:
+                            text_lower = text.lower()
+                            # Skip if it's username, timestamp, or button text
+                            if text_lower != username.lower():
+                                if not re.match(r'^\d+\s*likes?$', text_lower):
+                                    if not re.match(r'^\d+[wdhms]$', text):
+                                        if 'reply' not in text_lower and 'translation' not in text_lower:
+                                            comment_text = text
+                                            break
 
-            # Strategy 3: Fallback - find all spans with dir="auto" and filter
+            # Strategy 3: Fallback - find spans with dir="auto" and filter carefully
             if not comment_text:
-                auto_spans = container.find_all('span', {'dir': 'auto'})
-
                 # Known button/non-text patterns to skip
                 skip_patterns = [
-                    r'^\d+\s*likes?$',      # "10 likes", "1 like"
-                    r'^reply$',              # "Reply"
-                    r'^see\s+translation$',  # "See translation"
-                    r'^view\s+all',          # "View all X replies"
-                    r'^\d+[wdhms]$',         # "3w", "2d", "1h"
-                    r'^original\s+audio$',   # "Original audio"
-                    r'^follow$',             # "Follow"
+                    r'^\d+\s*likes?$',       # "10 likes", "1 like"
+                    r'^reply$',               # "Reply"
+                    r'^see\s+translation$',   # "See translation"
+                    r'^view\s+all',           # "View all X replies"
+                    r'^\d+[wdhms]$',          # "3w", "2d", "1h"
+                    r'^original\s+audio$',    # "Original audio"
+                    r'^follow$',              # "Follow"
+                    r'^hide\s+replies?$',     # "Hide replies"
                 ]
 
-                for span in auto_spans:
-                    # Skip if this is the username span (has _ap3a _aade classes)
-                    span_class = span.get('class', [])
-                    if isinstance(span_class, list):
-                        class_str = ' '.join(span_class)
-                    else:
-                        class_str = str(span_class) if span_class else ''
+                for span in container.find_all('span', attrs={'dir': 'auto'}):
+                    # Skip username span (has _ap3a and _aade classes)
+                    if has_class(span, '_ap3a') and has_class(span, '_aade'):
+                        continue
 
-                    if '_ap3a' in class_str and '_aade' in class_str:
+                    # Skip if has xuxw1ft class (this is for buttons like likes, reply)
+                    if has_class(span, 'xuxw1ft'):
                         continue
 
                     # Skip if inside a time element
                     if span.find_parent('time'):
                         continue
 
-                    # Skip if inside a link to comment (timestamp link)
+                    # Skip if inside a comment permalink (timestamp area)
                     parent_a = span.find_parent('a')
-                    if parent_a and parent_a.get('href', '').find('/c/') != -1:
-                        continue
+                    if parent_a:
+                        href = parent_a.get('href', '')
+                        if '/c/' in href:
+                            continue
 
                     text = span.get_text(strip=True)
 
@@ -924,12 +942,12 @@ class CommentScraper(BaseScraper):
                     if not text or len(text) <= 1:
                         continue
 
-                    # Skip if it's exactly the username
+                    # Skip if exactly username
                     if text.lower() == username.lower():
                         continue
 
                     # Skip if matches any skip pattern
-                    text_lower = text.lower()
+                    text_lower = text.lower().strip()
                     should_skip = False
                     for pattern in skip_patterns:
                         if re.match(pattern, text_lower, re.I):
@@ -939,7 +957,7 @@ class CommentScraper(BaseScraper):
                     if should_skip:
                         continue
 
-                    # Skip if it looks like username + timestamp combined
+                    # Skip if looks like "username timestamp" combined
                     if re.match(rf'^{re.escape(username)}\s*\d+[wdhms]$', text, re.I):
                         continue
 
@@ -950,20 +968,21 @@ class CommentScraper(BaseScraper):
             # ==================== EXTRACT LIKES COUNT ====================
             likes_count = 0
 
-            # Strategy 1: Find span with class containing xuxw1ft (likes indicator class)
-            likes_span = container.find('span', class_=lambda x: x and 'xuxw1ft' in ' '.join(x) if isinstance(x, list) else (x and 'xuxw1ft' in x))
-            if likes_span:
-                likes_text = likes_span.get_text(strip=True)
-                likes_match = re.match(r'^(\d+(?:,\d+)*)\s*likes?$', likes_text, re.I)
-                if likes_match:
-                    count_str = likes_match.group(1).replace(',', '')
-                    likes_count = int(count_str)
+            # Strategy 1: Find spans with xuxw1ft class and check for likes pattern
+            # The xuxw1ft class is used for "X likes", "Reply", "See translation" buttons
+            # We need to find the one that matches "X likes" pattern
+            for span in container.find_all('span'):
+                if has_class(span, 'xuxw1ft'):
+                    span_text = span.get_text(strip=True)
+                    likes_match = re.match(r'^(\d+(?:,\d+)*)\s*likes?$', span_text, re.I)
+                    if likes_match:
+                        count_str = likes_match.group(1).replace(',', '')
+                        likes_count = int(count_str)
+                        break
 
-            # Strategy 2: Find spans with exact "X likes" pattern inside role="button" divs
+            # Strategy 2: Find inside role="button" divs
             if likes_count == 0:
-                button_divs = container.find_all('div', {'role': 'button'})
-                for btn_div in button_divs:
-                    # Get just the direct text, not nested elements
+                for btn_div in container.find_all('div', attrs={'role': 'button'}):
                     btn_text = btn_div.get_text(strip=True)
                     likes_match = re.match(r'^(\d+(?:,\d+)*)\s*likes?$', btn_text, re.I)
                     if likes_match:
@@ -971,12 +990,10 @@ class CommentScraper(BaseScraper):
                         likes_count = int(count_str)
                         break
 
-            # Strategy 3: Search all spans for likes pattern
+            # Strategy 3: Search all spans for likes pattern (last resort)
             if likes_count == 0:
-                all_spans = container.find_all('span')
-                for span in all_spans:
+                for span in container.find_all('span'):
                     text = span.get_text(strip=True)
-                    # More permissive pattern: "X likes" or "X like"
                     likes_match = re.match(r'^(\d+(?:,\d+)*)\s*likes?$', text, re.I)
                     if likes_match:
                         count_str = likes_match.group(1).replace(',', '')
@@ -992,39 +1009,43 @@ class CommentScraper(BaseScraper):
             # ==================== EXTRACT REPLY COUNT ====================
             reply_count = 0
 
-            # Strategy 1: Find "View all X replies" in the container or sibling
-            # This is usually in a div with class xpdvgm7
-            reply_div = container.find('div', class_=lambda x: x and 'xpdvgm7' in ' '.join(x) if isinstance(x, list) else (x and 'xpdvgm7' in x))
-            if reply_div:
-                reply_text = reply_div.get_text(strip=True)
-                reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', reply_text, re.I)
-                if reply_match:
-                    reply_count = int(reply_match.group(1))
+            # Strategy 1: Find div with xpdvgm7 class (view replies container)
+            for div in container.find_all('div'):
+                if has_class(div, 'xpdvgm7'):
+                    reply_text = div.get_text(strip=True)
+                    reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', reply_text, re.I)
+                    if reply_match:
+                        reply_count = int(reply_match.group(1))
+                        break
 
-            # Strategy 2: Search for reply text in any span
+            # Strategy 2: Check sibling elements for xpdvgm7 class
+            # Reply button is often a sibling, not inside the container
             if reply_count == 0:
-                reply_span = container.find('span', string=re.compile(r'View\s+all\s+\d+\s+repl', re.I))
-                if reply_span:
-                    reply_text = reply_span.get_text(strip=True)
+                next_sib = container.find_next_sibling()
+                if next_sib and has_class(next_sib, 'xpdvgm7'):
+                    reply_text = next_sib.get_text(strip=True)
                     reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', reply_text, re.I)
                     if reply_match:
                         reply_count = int(reply_match.group(1))
 
-            # Strategy 3: Check next sibling for reply count
+            # Strategy 3: Search for "View all X replies" text in spans
             if reply_count == 0:
-                next_sib = container.find_next_sibling()
-                if next_sib:
-                    sib_class = next_sib.get('class', [])
-                    if isinstance(sib_class, list):
-                        sib_class_str = ' '.join(sib_class)
-                    else:
-                        sib_class_str = str(sib_class) if sib_class else ''
+                for span in container.find_all('span'):
+                    span_text = span.get_text(strip=True)
+                    reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', span_text, re.I)
+                    if reply_match:
+                        reply_count = int(reply_match.group(1))
+                        break
 
-                    if 'xpdvgm7' in sib_class_str:
-                        reply_text = next_sib.get_text(strip=True)
+            # Strategy 4: Check parent's siblings (reply div might be outside our container)
+            if reply_count == 0 and container.parent:
+                for sibling in container.parent.find_next_siblings():
+                    if has_class(sibling, 'xpdvgm7'):
+                        reply_text = sibling.get_text(strip=True)
                         reply_match = re.search(r'View\s+all\s+(\d+)\s+repl', reply_text, re.I)
                         if reply_match:
                             reply_count = int(reply_match.group(1))
+                            break
 
             # ==================== CREATE RESULT ====================
             author = CommentAuthor(
