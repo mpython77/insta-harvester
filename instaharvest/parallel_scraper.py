@@ -192,9 +192,9 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Handle Chrome launch failure
             if config.browser_channel == 'chrome':
                 error_msg = (
-                    f"[Worker {worker_id}] KUTUBXONA XATOLIGI: Tizimda Google Chrome topilmadi!\n"
-                    f"Video va Reellarni to'g'ri yuklash uchun Chrome kerak.\n"
-                    f"Yechim: Chrome o'rnating yoki config.py da browser_channel='chromium' qiling."
+                    f"[Worker {worker_id}] LIBRARY ERROR: System Google Chrome not found!\n"
+                    f"Chrome is required to correctly load Videos and Reels.\n"
+                    f"Solution: Install Chrome or set browser_channel='chromium' in config.py."
                 )
                 print("\n" + "!"*60)
                 print(error_msg)
