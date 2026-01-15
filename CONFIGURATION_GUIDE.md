@@ -57,6 +57,10 @@ config = ScraperConfig(
     headless=True,  # Run Chrome in background (no visible window)
     # headless=False  # Show browser window (useful for debugging)
 
+    # CRITICAL: Use 'chrome' for proper Video/Reel support (requires Google Chrome installed)
+    # Use 'chromium' only if you don't need video playback or don't have Chrome
+    browser_channel='chrome',  
+
     viewport_width=1920,
     viewport_height=1080,
     user_agent='Mozilla/5.0 ...'
@@ -228,7 +232,34 @@ config = ScraperConfig(
 
 ---
 
-### 8. Rate Limiting Delays
+### 8. Comment Scraping Settings
+
+Controls limits and behaviors for the Comment Scraper.
+
+```python
+config = ScraperConfig(
+    # Feature Flags
+    scrape_comments=True,          # Enable comment scraping
+    scrape_comment_replies=True,   # Include nested replies
+    scrape_collaborators=True,     # Extract post collaborators
+
+    # Limits
+    max_comments_per_post=100,     # Stop after 100 comments (None = unlimited)
+    max_replies_per_comment=50,    # Stop after 50 replies per thread
+    
+    # Delays
+    comment_scroll_delay_min=1.0,
+    comment_scroll_delay_max=2.0,
+)
+```
+
+**When to change:**
+- **Performance**: Set `max_comments_per_post` to limit deep scraping
+- **Speed**: Disable `scrape_comment_replies` if you only need top-level comments
+
+---
+
+### 9. Rate Limiting Delays
 
 **IMPORTANT**: These delays help avoid Instagram blocks and rate limiting.
 
@@ -262,7 +293,7 @@ config = ScraperConfig(
 
 ---
 
-### 9. UI Stability Delays
+### 10. UI Stability Delays
 
 Fine-grained delays for UI elements and animations.
 

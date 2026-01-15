@@ -387,6 +387,21 @@ Full automatic profile scraping:
 - Exports to Excel + JSON
 - Advanced diagnostics & error recovery
 
+### 🔧 Video & Reel Support (IMPORTANT)
+
+To download or view Videos/Reels correctly, the scraper defaults to using Google Chrome (`channel='chrome'`) instead of the bundled Chromium, as Chromium often lacks necessary video codecs.
+
+**Requirements:**
+- **Google Chrome** must be installed on your system.
+- If you see a "Library Error" regarding Chrome, please install it or switch to `channel='chromium'` in your config (note: videos might not play/download).
+
+```python
+config = ScraperConfig(
+    browser_channel='chrome',  # Default: Uses system Chrome for video support
+    # browser_channel='chromium' # Use this if you don't need videos
+)
+```
+
 ### ⚙️ Configuration Examples
 ```bash
 python examples/example_custom_config.py

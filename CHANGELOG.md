@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-01-15
+
+### Added
+- **Full Comment Scraping**: Comprehensive scraping of comments, nested replies, likes, and timestamps.
+- **Collaborator Extraction**: Support for extracting post co-authors.
+- **Video Support**: Fixed video/reel playback by defaulting to system Chrome (`channel='chrome'`).
+- **Robust Error Handling**: Improved error messages for browser launch failures.
+- **Localization**: Codebase fully standardized to English.
+
+### Changed
+- **Default Browser**: Changed from `chromium` to `chrome` to support video codecs.
+- **Author**: Updated author metadata to "Muydinov Doston".
+- **Documentation**: Significant updates to README and Configuration Guide.
+
+### Fixed
+- Fixed `TargetClosedError` in parallel scraping.
+- Fixed `AttributeError` in JSON export.
+- Fixed profile picture extraction in comments.
+
+---
+
 ## [2.5.5] - 2025-12-17
 
 ### Fixed

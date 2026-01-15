@@ -298,10 +298,10 @@ We use [Semantic Versioning](https://semver.org/):
 - **MINOR** version: New features (backwards compatible)
 - **PATCH** version: Bug fixes (backwards compatible)
 
-Example: `2.5.1`
+Example: `2.6.0`
 - `2` = Major version
-- `5` = Minor version
-- `1` = Patch version
+- `6` = Minor version
+- `0` = Patch version
 
 ---
 
