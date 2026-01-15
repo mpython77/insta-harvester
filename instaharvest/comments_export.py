@@ -164,7 +164,7 @@ class CommentsExporter:
         row = {
             'Post URL': post_data.post_url,
             'Post ID': post_data.post_id,
-            'Comment ID': comment.comment_id,
+            'Comment ID': comment.id,
             'Author Username': author.username,
             'Author Verified': author.is_verified,
             'Comment Text': comment.text,
@@ -173,9 +173,9 @@ class CommentsExporter:
             'Timestamp': comment.timestamp,
             'Timestamp ISO': comment.timestamp_iso,
             'Is Reply': comment.is_reply,
-            'Parent Comment ID': comment.parent_comment_id or '',
-            'Comment URL': comment.comment_url,
-            'Scraped At': comment.scraped_at
+            'Parent Comment ID': comment.parent_id or '',
+            'Comment URL': comment.permalink,
+            'Scraped At': post_data.scraped_at
         }
 
         self.excel_rows.append(row)
@@ -498,7 +498,7 @@ def export_comments_to_excel(
                 row = {
                     'Post URL': post_data.post_url,
                     'Post ID': post_data.post_id,
-                    'Comment ID': comment.comment_id,
+                    'Comment ID': comment.id,
                     'Author Username': author.username,
                     'Author Verified': author.is_verified,
                     'Comment Text': comment.text,
@@ -507,9 +507,9 @@ def export_comments_to_excel(
                     'Timestamp': comment.timestamp,
                     'Timestamp ISO': comment.timestamp_iso,
                     'Is Reply': comment.is_reply,
-                    'Parent Comment ID': comment.parent_comment_id or '',
-                    'Comment URL': comment.comment_url,
-                    'Scraped At': comment.scraped_at
+                    'Parent Comment ID': comment.parent_id or '',
+                    'Comment URL': comment.permalink,
+                    'Scraped At': post_data.scraped_at
                 }
                 rows.append(row)
 
