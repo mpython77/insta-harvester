@@ -448,16 +448,6 @@ class ScraperConfig:
         'Scraped At'
     ])
 
-    # ==================== PRIVATE ACCOUNT DETECTORS ====================
-    selector_private_icon: str = 'svg[aria-label="Private"]'
-    selector_private_title: str = 'h2'  # Often inside h2
-    selector_private_text_indicators: List[str] = field(default_factory=lambda: [
-        'This Account is Private',
-        'Follow to see their photos and videos'
-    ])
-
-
-
     # ==================== LOCALIZATION & PARSING ====================
     number_suffixes: Dict[str, int] = field(default_factory=lambda: {
         'K': 1000, 'M': 1000000, 'B': 1000000000,

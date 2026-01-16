@@ -38,6 +38,11 @@ setup(
         "openpyxl>=3.1.0",
         "beautifulsoup4>=4.12.0",
         "lxml>=4.9.0",
+        "psutil>=5.9.0",
+        "curl_cffi>=0.7.4",
+        "pydantic>=2.0.0",
+        "fake-useragent>=1.5.0",
+        "httpx>=0.27.0",
     ],
     extras_require={
         "dev": [

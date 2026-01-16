@@ -11,7 +11,7 @@ class CommentParser:
         """
         soup = BeautifulSoup(html_content, 'lxml')
         all_nodes: List[Tuple[Comment, Any]] = []
-        processsed_ids: Set[str] = set()
+        processed_ids: Set[str] = set()
 
         # 1. Broad Search for Comments
         # We rely on permanent links (/c/ID/) as the most reliable anchor
@@ -22,9 +22,9 @@ class CommentParser:
             container = self._find_comment_container(link)
             if container:
                 data = self._extract_data_from_node(container)
-                if data and data.id not in processsed_ids:
+                if data and data.id not in processed_ids:
                     all_nodes.append((data, container))
-                    processsed_ids.add(data.id)
+                    processed_ids.add(data.id)
 
         # 2. Reconstruct Hierarchy
         # Map ID -> Comment object
