@@ -1,7 +1,7 @@
 import time
 import random
 import re
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Callable
 from dataclasses import dataclass, field
 
 from .base import BaseScraper
@@ -129,7 +129,7 @@ class CommentScraper(BaseScraper):
         max_comments: Optional[int] = None,
         include_replies: bool = True,
         max_replies_per_comment: Optional[int] = None,
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[Callable] = None
     ) -> PostCommentsData:
         """
         Legacy method wrapper around scrape_stream for backward compatibility.

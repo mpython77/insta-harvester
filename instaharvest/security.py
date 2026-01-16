@@ -41,7 +41,7 @@ class SecurityManager:
             ua = UserAgent()
             # Randomly pick between Chrome, Firefox, Safari to vary fingerprint
             browser_type = random.choice(['chrome', 'firefox', 'safari', 'edge'])
-            return ua.getattr(browser_type)
+            return getattr(ua, browser_type)
         except Exception:
             # Fallback to hardcoded list if library fails
             return random.choice(SecurityManager.USER_AGENTS)
