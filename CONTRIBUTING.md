@@ -24,7 +24,7 @@ It's people like you that make InstaHarvest such a great tool. We welcome contri
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by common sense and respect. By participating, you are expected to uphold this code. Please report unacceptable behavior to kelajak054@gmail.com.
+This project and everyone participating in it is governed by common sense and respect. By participating, you are expected to uphold this code. Please report unacceptable behavior to <kelajak054@gmail.com>.
 
 ---
 
@@ -32,12 +32,14 @@ This project and everyone participating in it is governed by common sense and re
 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
+
    ```bash
    git clone https://github.com/YOUR-USERNAME/insta-harvester.git
    cd insta-harvester
    ```
 
 3. **Create a branch** for your changes:
+
    ```bash
    git checkout -b feature/your-feature-name
    # or
@@ -51,6 +53,7 @@ This project and everyone participating in it is governed by common sense and re
 ### 🐛 Reporting Bugs
 
 **Before submitting a bug report:**
+
 - Check the [existing issues](https://github.com/mpython77/insta-harvester/issues) to avoid duplicates
 - Collect information about the bug:
   - Stack trace / error message
@@ -60,6 +63,7 @@ This project and everyone participating in it is governed by common sense and re
   - Steps to reproduce
 
 **Submit a bug report:**
+
 1. Go to [Issues](https://github.com/mpython77/insta-harvester/issues/new)
 2. Use the bug report template
 3. Provide as much detail as possible
@@ -68,11 +72,13 @@ This project and everyone participating in it is governed by common sense and re
 ### 💡 Suggesting Features
 
 **Before submitting a feature request:**
+
 - Check if the feature already exists
 - Check [existing feature requests](https://github.com/mpython77/insta-harvester/issues?q=is%3Aissue+label%3Aenhancement)
 - Clearly describe the use case
 
 **Submit a feature request:**
+
 1. Go to [Issues](https://github.com/mpython77/insta-harvester/issues/new)
 2. Use the feature request template
 3. Describe the problem you're trying to solve
@@ -82,6 +88,7 @@ This project and everyone participating in it is governed by common sense and re
 ### 📝 Documentation Improvements
 
 Documentation improvements are always welcome! This includes:
+
 - README.md updates
 - Code comments
 - Configuration guides
@@ -248,6 +255,7 @@ Use popup_open_delay and button_click_delay instead."
 ### Submitting a Pull Request
 
 1. **Push to your fork:**
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -298,7 +306,8 @@ We use [Semantic Versioning](https://semver.org/):
 - **MINOR** version: New features (backwards compatible)
 - **PATCH** version: Bug fixes (backwards compatible)
 
-Example: `2.6.0`
+Example: `2.7.0`
+
 - `2` = Major version
 - `6` = Minor version
 - `0` = Patch version
@@ -308,8 +317,9 @@ Example: `2.6.0`
 ## Questions?
 
 Feel free to ask questions by:
+
 - Opening an issue
-- Emailing: kelajak054@gmail.com
+- Emailing: <kelajak054@gmail.com>
 - Checking existing documentation
 
 ---
@@ -317,6 +327,7 @@ Feel free to ask questions by:
 ## Recognition
 
 Contributors will be recognized in:
+
 - GitHub contributors list
 - Release notes (if significant contribution)
 - CHANGELOG.md

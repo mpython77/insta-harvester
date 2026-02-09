@@ -178,7 +178,7 @@ from .logging_config import SmartLogger, get_logger
 from .core import InstaHarvest
 
 
-__version__ = '2.6.0'
+__version__ = '2.7.0'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
