@@ -23,7 +23,8 @@ from .exceptions import (
 )
 from .security import SecurityManager
 from .network_client import NetworkClient  # [NEW]
-from .logger import setup_logger
+from .logging_config import get_logger
+from .proxy import ProxyManager, create_proxy_manager_from_config
 
 
 class BaseScraper(ABC):
@@ -40,12 +41,7 @@ class BaseScraper(ABC):
             config: Scraper configuration (uses defaults if None)
         """
         self.config = config or ScraperConfig()
-        self.logger = setup_logger(
-            name=self.__class__.__name__,
-            log_file=self.config.log_file,
-            level=self.config.log_level,
-            log_to_console=self.config.log_to_console
-        )
+        self.logger = get_logger(self.__class__.__name__)
 
         # Browser state
         self.playwright: Optional[Playwright] = None
@@ -53,8 +49,15 @@ class BaseScraper(ABC):
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
         
-        # Hybrid Network Client (curl_cffi)
-        self.network_client = NetworkClient()  # [NEW]
+        # Proxy Manager
+        self.proxy_manager = create_proxy_manager_from_config(self.config, self.logger)
+        
+        # Hybrid Network Client (curl_cffi) - with proxy support
+        proxy_for_client = self.proxy_manager.get_for_curl() if self.proxy_manager.has_proxies else None
+        self.network_client = NetworkClient(proxy=proxy_for_client)
+        
+        # Interruption tracking
+        self.interrupted = False
 
     def sync_network_client(self):
         """
@@ -142,32 +145,16 @@ class BaseScraper(ABC):
             # 'chrome' = use system Chrome (may have compatibility issues with new versions)
             launch_options = {'headless': self.config.headless}
 
-            # SECURITY: Proxy Selection (Moved to Context level for better Auth support)
+            # PROXY: Get proxy for Playwright from ProxyManager
             selected_proxy = None
-            use_firefox_for_socks5 = False
-            
-            if self.config.proxies:
-                selected_proxy = SecurityManager.get_random_proxy(self.config.proxies)
+            if self.proxy_manager.has_proxies:
+                selected_proxy = self.proxy_manager.get_for_playwright()
                 if selected_proxy:
-                    self.logger.info(f"🛡️ Selected Proxy: {selected_proxy['server']}")
-                    # Note: We do NOT pass proxy to launch() to support SOCKS5 auth better
-                    # We pass it to new_context() instead.
-                    
-                    # DETECTION: Check for SOCKS5 with Auth (Chromium doesn't support it)
-                    if 'socks5' in selected_proxy['server'] and 'username' in selected_proxy:
-                        self.logger.warning("⚠️ SOCKS5 with Auth detected. Chromium does not support this.")
-                        self.logger.warning("🔄 Automatically switching to FIREFOX engine for SOCKS5 support.")
-                        use_firefox_for_socks5 = True
+                    self.logger.info(f"Using Proxy: {selected_proxy['server']}")
 
             try:
-                if use_firefox_for_socks5:
-                    # SOCKS5 Auth workaround: Use Firefox with GLOBAL Proxy (Launch Option)
-                    # Context-level SOCKS5 auth is often not supported, but Global is.
-                    launch_options['proxy'] = selected_proxy
-                    self.browser = self.playwright.firefox.launch(**launch_options)
-                else:
-                    # Standard Chromium launch (Proxy will be applied at Context level)
-                    self.browser = self.playwright.chromium.launch(**launch_options)
+                # Standard Chromium launch (Proxy applied at Context level)
+                self.browser = self.playwright.chromium.launch(**launch_options)
                     
             except Exception as launch_error:
                 error_msg = str(launch_error)
@@ -185,7 +172,7 @@ class BaseScraper(ABC):
                          self.browser = self.playwright.chromium.launch(**launch_options)
                 
                 # Specific handling for missing Chrome when channel='chrome'
-                elif self.config.browser_channel == 'chrome' and not use_firefox_for_socks5:
+                elif self.config.browser_channel == 'chrome':
                     self.logger.critical("\n\n" + "!"*60)
                     self.logger.critical("FAILED TO LAUNCH SYSTEM CHROME!")
                     self.logger.critical("!"*60)
@@ -197,7 +184,6 @@ class BaseScraper(ABC):
                     self.logger.critical("!"*60 + "\n")
                     raise launch_error
                 else:
-                     # General launch error (including SOCKS5 not supported)
                      raise launch_error
 
             browser_type = self.config.browser_channel or 'chromium'
@@ -207,7 +193,7 @@ class BaseScraper(ABC):
             final_user_agent = self.config.user_agent
             if self.config.rotate_user_agent:
                 final_user_agent = SecurityManager.get_random_user_agent(self.config.user_agents)
-                self.logger.info(f"🎭 Rotated User-Agent: {final_user_agent[:30]}...")
+                self.logger.info(f"Rotated User-Agent: {final_user_agent[:30]}...")
 
             # Create context
             context_options = {
@@ -218,13 +204,10 @@ class BaseScraper(ABC):
                 'user_agent': final_user_agent
             }
             
-            # Apply Proxy at Context Level (Vital for SOCKS5 Auth)
-            # Only apply if NOT already applied globally (Firefox SOCKS5 case)
-            if selected_proxy and not use_firefox_for_socks5:
+            # Apply Proxy at Context Level
+            if selected_proxy:
                 context_options['proxy'] = selected_proxy
-                self.logger.info(f"🛡️ Applied Proxy to Context: {selected_proxy['server']}")
-            elif use_firefox_for_socks5:
-                self.logger.info(f"🛡️ Applied Proxy Globally (Firefox): {selected_proxy['server']}")
+                self.logger.info(f"Applied Proxy to Context: {selected_proxy['server']}")
 
             if session_data:
                 context_options['storage_state'] = session_data
@@ -232,9 +215,27 @@ class BaseScraper(ABC):
 
             self.context = self.browser.new_context(**context_options)
 
+            # Apply Stealth Mode at Context Level (BEFORE page creation)
+            self.stealth_manager = None
+            if self.config.enable_stealth:
+                try:
+                    from .stealth import StealthManager
+                    self.stealth_manager = StealthManager(self.config, self.logger)
+                    self.stealth_manager.apply_context_stealth(self.context)
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Stealth context setup failed: {e}")
+
             # Create page
             self.page = self.context.new_page()
             self.page.set_default_timeout(self.config.default_timeout)
+            
+            # Apply Stealth Mode at Page Level
+            if self.stealth_manager:
+                try:
+                    self.stealth_manager.apply_page_stealth(self.page)
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Stealth page setup failed: {e}")
+            
             self.logger.info("Browser setup complete")
 
             # Auto-update session to keep it fresh
@@ -261,18 +262,15 @@ class BaseScraper(ABC):
             if self.context:
                 try:
                     self.context.close()
-                except:
-                    pass
+                except Exception: pass
             if self.browser:
                 try:
                     self.browser.close()
-                except:
-                    pass
+                except Exception: pass
             if self.playwright:
                 try:
                     self.playwright.stop()
-                except:
-                    pass
+                except Exception: pass
             # Reset all to None
             self.page = None
             self.context = None

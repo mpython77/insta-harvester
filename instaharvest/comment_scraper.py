@@ -72,12 +72,12 @@ class CommentScraper(BaseScraper):
                 self._expand_replies()
 
             try:
-                load_more = self.page.locator('svg[aria-label="Load more comments"]')
+                load_more = self.page.locator(self.config.comment_ui_text['load_more'])
                 if load_more.count() > 0 and load_more.first.is_visible():
                     load_more.first.click()
                     time.sleep(2)
                     no_change_count = 0
-            except: pass
+            except Exception: pass
 
             # 2. Scroll logic
             self._smart_scroll()
@@ -186,7 +186,7 @@ class CommentScraper(BaseScraper):
                     self.page.keyboard.press("PageDown")
                     
             time.sleep(2.5)
-        except: pass
+        except Exception: pass
 
     def _extract_post_id(self, url: str) -> str:
         match = re.search(r'/(?:p|reel)/([A-Za-z0-9_-]+)/?', url)
@@ -200,13 +200,17 @@ class CommentScraper(BaseScraper):
         try:
             # XPath: Div role=button containing 'View' and 'replies' in text descendants
             # This handles "View all 8\n replies" correctly.
-            xpath = '//div[@role="button"][contains(., "View") and contains(., "replies")]'
+            # Constructed dynamically from config for localization
+            view_text = self.config.comment_ui_text['view_replies'][0]
+            replies_text = self.config.comment_ui_text['view_replies'][1]
+            
+            xpath = f'//div[@role="button"][contains(., "{view_text}") and contains(., "{replies_text}")]'
             
             buttons = self.page.locator(xpath).all()
             
             # Fallback to Span if no Divs found
             if not buttons:
-                 xpath_span = '//span[contains(., "View") and contains(., "replies")]'
+                 xpath_span = f'//span[contains(., "{view_text}") and contains(., "{replies_text}")]'
                  buttons = self.page.locator(xpath_span).all()
 
             if buttons:

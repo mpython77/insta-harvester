@@ -1,13 +1,32 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Instagram Session Save Utility
 Uses Playwright to manually login to Instagram and save the session.
+
+This script opens a browser, lets you login manually, then saves
+the session for later use by other scripts.
 """
 
 import json
-from playwright.sync_api import sync_playwright
-from instaharvest.config import ScraperConfig
+import os
 
-SESSION_FILE = 'instagram_session.json'
+# Robust import - works whether installed via pip or run from source
+import sys
+
+# ALWAYS prioritize local development version if available
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if os.path.exists(os.path.join(parent_dir, 'instaharvest')):
+    sys.path.insert(0, parent_dir)
+
+from instaharvest.config import ScraperConfig
+from instaharvest.session_utils import get_session_save_path, SESSION_FILENAME
+
+from playwright.sync_api import sync_playwright
+
+# Get the save path using new intelligent system
+SESSION_FILE = get_session_save_path()
 
 
 def save_session():

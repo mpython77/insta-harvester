@@ -1,7 +1,18 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Example: Custom Configuration for InstaHarvest
 Shows how to configure delays and headless mode
 """
+
+import sys
+import os
+
+# ALWAYS prioritize local development version if available
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if os.path.exists(os.path.join(parent_dir, 'instaharvest')):
+    sys.path.insert(0, parent_dir)
 
 from instaharvest import FollowManager, MessageManager, FollowersCollector
 from instaharvest.config import ScraperConfig
@@ -23,8 +34,12 @@ def example_custom_delays():
         action_delay_max=5.0,  # Maximum delay before actions: 5 seconds (default: 3.5)
 
         # Scroll delays
+        # Scroll delays
         scroll_delay_min=2.0,  # Minimum delay between scrolls (default: 1.5)
         scroll_delay_max=4.0,  # Maximum delay between scrolls (default: 2.5)
+
+        # Output Management
+        base_output_dir="data_collection_v1",  # Save all files to this folder
     )
 
     # Use the custom config
@@ -52,6 +67,7 @@ def example_fast_internet():
         button_click_delay=1.5,  # Faster button click wait
         action_delay_min=1.0,  # Faster minimum delay
         action_delay_max=2.0,  # Faster maximum delay
+        base_output_dir="./output_data", # Optional: Save all data to a specific folder
     )
 
     manager = MessageManager(config=config)
@@ -70,9 +86,10 @@ def example_fast_internet():
 def example_headless_mode():
     """Example: Running with visible browser (for debugging)"""
 
-    # Show browser window (not headless)
+    # Show browser window
     config = ScraperConfig(
-        headless=False  # Show the browser window
+        headless=False,  # Show the browser window
+        base_output_dir="my_downloads",  # Optional: Save files to a specific folder
     )
 
     collector = FollowersCollector(config=config)

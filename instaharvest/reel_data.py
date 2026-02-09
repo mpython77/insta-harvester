@@ -2,7 +2,7 @@
 Instagram Scraper - Reel data extractor
 Extract tags, likes, and timestamps from individual reels
 
-ALOHIDA FAYL - FAQAT REELS UCHUN!
+SEPARATE FILE - FOR REELS ONLY!
 """
 
 import time
@@ -31,7 +31,7 @@ class ReelData:
 
 class ReelDataScraper(BaseScraper):
     """
-    Instagram REEL data scraper - FAQAT REELS!
+    Instagram REEL data scraper - REELS ONLY!
 
     Features:
     - Extract tagged accounts from reels (via popup button)
@@ -178,7 +178,25 @@ class ReelDataScraper(BaseScraper):
                 f"Average time per reel: {total_time/len(reel_urls):.2f}s\n"
                 f"{'='*70}"
             )
+            return results
 
+        except KeyboardInterrupt:
+            self.logger.warning("\n✋ Scraping interrupted by user! Saving extracted data...")
+            self.interrupted = True
+            
+            # Print partial statistics
+            total_time = time.time() - start_time
+            success_count = sum(1 for r in results if r.likes != 'ERROR')
+            
+            self.logger.info(
+                f"\n{'='*70}\n"
+                f"⚠️  PARTIAL SCRAPING RESULTS (INTERRUPTED)\n"
+                f"{'='*70}\n"
+                f"Total Processed: {len(results)}/{len(reel_urls)}\n"
+                f"Successfully scraped: {success_count}\n"
+                f"{'='*70}"
+            )
+            
             return results
 
         finally:
@@ -214,7 +232,7 @@ class ReelDataScraper(BaseScraper):
                     if val is not None:
                          self.logger.debug(f"✓ Found reel likes (method 2): {val}")
                          return val
-                except:
+                except Exception:
                     continue
         except Exception as e:
             self.logger.debug(f"Reel likes method 2 failed: {e}")
@@ -232,7 +250,7 @@ class ReelDataScraper(BaseScraper):
                         if val is not None:
                             self.logger.debug(f"✓ Found reel likes (method 3): {val}")
                             return val
-                except:
+                except Exception:
                     continue
         except Exception as e:
             self.logger.debug(f"Reel likes method 3 failed: {e}")
@@ -374,7 +392,7 @@ class ReelDataScraper(BaseScraper):
                             if username not in tagged:
                                 tagged.append(username)
                                 self.logger.debug(f"✓ Added tag: {username}")
-                    except:
+                    except Exception:
                         continue
 
                 if tagged:
@@ -385,12 +403,12 @@ class ReelDataScraper(BaseScraper):
                         close_button = self.page.locator(self.config.selector_close_button).first
                         close_button.click(timeout=self.config.popup_close_timeout)
                         time.sleep(self.config.popup_close_delay)
-                    except:
+                    except Exception:
                         # Try pressing Escape
                         try:
                             self.page.keyboard.press('Escape')
                             time.sleep(self.config.popup_close_delay)
-                        except:
+                        except Exception:
                             pass
 
                     return tagged
@@ -400,7 +418,7 @@ class ReelDataScraper(BaseScraper):
             # If no tags found but popup opened, close it
             try:
                 self.page.keyboard.press('Escape')
-            except:
+            except Exception:
                 pass
 
         except Exception as e:
@@ -418,7 +436,7 @@ class ReelDataScraper(BaseScraper):
                         username = href.strip('/').split('/')[-1]
                         if username and username not in tagged:
                             tagged.append(username)
-                except:
+                except Exception:
                     continue
 
             if tagged:

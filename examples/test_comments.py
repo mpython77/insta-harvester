@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Comment Scraping Test Script
 Run this to test the comment scraping functionality
@@ -10,8 +12,18 @@ Requirements:
     - playwright must be installed (pip install playwright && playwright install chrome)
 """
 
+import sys
+import os
+
+# ALWAYS prioritize local development version if available
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if os.path.exists(os.path.join(parent_dir, 'instaharvest')):
+    sys.path.insert(0, parent_dir)
+
 from instaharvest import InstagramOrchestrator, CommentScraper
 from instaharvest.config import ScraperConfig
+from instaharvest.session_utils import find_session_file
 
 
 def test_comment_scraping_basic():
@@ -22,7 +34,13 @@ def test_comment_scraping_basic():
     print("TEST 1: Basic Comment Scraping")
     print("="*60)
 
-    config = ScraperConfig(headless=False)  # Set True for headless mode
+    session_file = find_session_file()
+    if session_file:
+         print(f"✅ Found session: {session_file}")
+         config = ScraperConfig(headless=False, session_file=session_file)
+    else:
+         print("⚠️  No session file found, using default...")
+         config = ScraperConfig(headless=False)
     scraper = CommentScraper(config=config)
 
     try:
@@ -88,7 +106,13 @@ def test_orchestrator_comments():
     print("TEST 2: Orchestrator Comment Scraping")
     print("="*60)
 
-    config = ScraperConfig(headless=False)
+    session_file = find_session_file()
+    if session_file:
+         print(f"✅ Found session: {session_file}")
+         config = ScraperConfig(headless=False, session_file=session_file)
+    else:
+         print("⚠️  No session file found, using default...")
+         config = ScraperConfig(headless=False)
     orchestrator = InstagramOrchestrator(config)
 
     try:

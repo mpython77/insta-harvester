@@ -2,7 +2,7 @@
 Instagram Scraper - Reel links collector
 Scroll through reels page and collect all reel links
 
-ALOHIDA FAYL - FAQAT REELS UCHUN!
+SEPARATE FILE - FOR REELS ONLY!
 """
 
 import time
@@ -17,7 +17,7 @@ from .exceptions import ProfileNotFoundError
 
 class ReelLinksScraper(BaseScraper):
     """
-    Instagram REEL links scraper - FAQAT REELS!
+    Instagram REEL links scraper - REELS ONLY!
 
     Features:
     - Scrapes from {username}/reels/ page
@@ -36,7 +36,8 @@ class ReelLinksScraper(BaseScraper):
     def scrape(
         self,
         username: str,
-        save_to_file: bool = True
+        save_to_file: bool = True,
+        output_file: Optional[str] = None
     ) -> List[str]:
         """
         Scrape all REEL links from {username}/reels/ page
@@ -44,6 +45,7 @@ class ReelLinksScraper(BaseScraper):
         Args:
             username: Instagram username
             save_to_file: Save links to file
+            output_file: Optional path to save file (overrides default)
 
         Returns:
             List of reel URLs (e.g., ['https://instagram.com/user/reel/ABC/', ...])
@@ -78,12 +80,14 @@ class ReelLinksScraper(BaseScraper):
             # Scroll and collect reel links
             reel_links = self._scroll_and_collect()
 
-            # Save to file
+            # Save to file (uses full dict with metadata)
             if save_to_file:
-                self._save_links(reel_links, username)
+                self._save_links(reel_links, username, output_file)
 
-            self.logger.info(f"✅ Collected {len(reel_links)} REEL links")
-            return reel_links
+            # Return only URL strings (as declared in return type)
+            urls = [item['url'] for item in reel_links]
+            self.logger.info(f"✅ Collected {len(urls)} REEL links")
+            return urls
 
         finally:
             # Only close browser if not in SharedBrowser mode
@@ -174,9 +178,9 @@ class ReelLinksScraper(BaseScraper):
                                 'thumbnail': thumbnail,
                                 'stats': stats
                             })
-                        except:
+                        except Exception:
                             continue
-                except:
+                except Exception:
                     continue
 
             return results
@@ -201,52 +205,56 @@ class ReelLinksScraper(BaseScraper):
         no_new_reels_count = 0
         MAX_NO_NEW_REELS = self.config.scroll_max_no_new_attempts
 
-        while True:
-            # Extract current reel links
-            current_items = self._extract_current_reel_links()
-            previous_count = len(all_reel_links)
+        try:
+            while True:
+                # Extract current reel links
+                current_items = self._extract_current_reel_links()
+                previous_count = len(all_reel_links)
 
-            # Add new reel links
-            for item in current_items:
-                url = item['url']
-                if url not in all_reel_links:
-                    all_reel_links[url] = item
+                # Add new reel links
+                for item in current_items:
+                    url = item['url']
+                    if url not in all_reel_links:
+                        all_reel_links[url] = item
 
-            new_count = len(all_reel_links)
+                new_count = len(all_reel_links)
 
-            # Log progress
-            self.logger.info(
-                f"Progress: {new_count} reel links "
-                f"(+{new_count - previous_count} new)"
-            )
-
-            # Check if no new reels found
-            if new_count == previous_count:
-                no_new_reels_count += 1
-                self.logger.info(f"⚠️ No new reels found ({no_new_reels_count}/{MAX_NO_NEW_REELS})")
-            else:
-                # Reset counter if new reels found
-                no_new_reels_count = 0
-
-            # Stopping condition: 5 scrolls with no new reels
-            if no_new_reels_count >= MAX_NO_NEW_REELS:
+                # Log progress
                 self.logger.info(
-                    f"✓ Finished! No new reels after {MAX_NO_NEW_REELS} scroll attempts. "
-                    f"Total collected: {new_count}"
+                    f"Progress: {new_count} reel links "
+                    f"(+{new_count - previous_count} new)"
                 )
-                break
 
-            # Safety: Max scroll attempts
-            if scroll_attempts >= self.config.scroll_max_attempts_override:
-                self.logger.warning(
-                    f"Max scroll attempts ({self.config.scroll_max_attempts_override}) reached"
-                )
-                break
+                # Check if no new reels found
+                if new_count == previous_count:
+                    no_new_reels_count += 1
+                    self.logger.info(f"⚠️ No new reels found ({no_new_reels_count}/{MAX_NO_NEW_REELS})")
+                else:
+                    # Reset counter if new reels found
+                    no_new_reels_count = 0
 
-            # IMPROVED: Scroll to bottom and wait for lazy loading
-            self._aggressive_scroll()
+                # Stopping condition: 5 scrolls with no new reels
+                if no_new_reels_count >= MAX_NO_NEW_REELS:
+                    self.logger.info(
+                        f"✓ Finished! No new reels after {MAX_NO_NEW_REELS} scroll attempts. "
+                        f"Total collected: {new_count}"
+                    )
+                    break
 
-            scroll_attempts += 1
+                # Safety: Max scroll attempts
+                if scroll_attempts >= self.config.scroll_max_attempts_override:
+                    self.logger.warning(
+                        f"Max scroll attempts ({self.config.scroll_max_attempts_override}) reached"
+                    )
+                    break
+
+                # IMPROVED: Scroll to bottom and wait for lazy loading
+                self._aggressive_scroll()
+
+                scroll_attempts += 1
+        except KeyboardInterrupt:
+             self.logger.warning("\n✋ Scraping interrupted by user! Saving collected data...")
+             self.interrupted = True
 
         # Convert to list
         result = [
@@ -273,31 +281,38 @@ class ReelLinksScraper(BaseScraper):
                 # Fallback: scroll to bottom
                 self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
                 time.sleep(self.config.ui_stability_delay)
-        except:
+        except Exception:
             # Fallback: scroll to bottom
             self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
             time.sleep(self.config.ui_stability_delay)
 
-    def _save_links(self, reel_links: List[Dict[str, str]], username: str) -> None:
+    def _save_links(self, reel_links: List[Dict[str, str]], username: str, output_file: Optional[str] = None) -> None:
         """
         Save reel links to file (URL + Stats + Thumbnail)
 
         Args:
             reel_links: List of reel dicts
             username: Username for filename
+            output_file: Optional custom path
         """
         # Use a separate file for reels
-        output_file = Path(self.config.reel_links_filename_pattern.format(username=username))
+        if output_file:
+            path = Path(output_file)
+        else:
+            path = Path(self.config.base_output_dir) / self.config.reel_links_filename_pattern.format(username=username)
+        
+        # Ensure directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            with open(output_file, 'w', encoding='utf-8') as f:
+            with open(path, 'w', encoding='utf-8') as f:
                 for item in reel_links:
                     url = item.get('url', '')
                     stats = item.get('stats', '').replace('\n', ' ')
                     thumb = item.get('thumbnail', '')
                     f.write(f"{url}\t{stats}\t{thumb}\n")
 
-            self.logger.info(f"💾 Reel links saved to: {output_file}")
+            self.logger.info(f"💾 Reel links saved to: {path}")
 
         except Exception as e:
             self.logger.error(f"Failed to save reel links: {e}")

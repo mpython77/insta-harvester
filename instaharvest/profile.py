@@ -276,14 +276,71 @@ class ProfileScraper(BaseScraper):
         }
         
         try:
+            # 0. CLICK "MORE" BUTTON IF EXISTS (to expand full bio)
+            # Language-agnostic approach: find button after "..." text
+            try:
+                clicked = self.page.evaluate('''() => {
+                    // Strategy 1: Find span containing "..." followed by inline button
+                    const spans = document.querySelectorAll('span');
+                    for (const span of spans) {
+                        // Check if this span's text ends with "..."
+                        const text = span.textContent || '';
+                        if (text.includes('...')) {
+                            // Look for role="button" sibling or descendant
+                            const buttons = span.querySelectorAll('[role="button"]');
+                            for (const btn of buttons) {
+                                // Must be visible and inline (part of bio expansion)
+                                const style = window.getComputedStyle(btn);
+                                if (style.display.includes('inline') && btn.offsetParent !== null) {
+                                    btn.click();
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Strategy 2: Find inline button with common "more" translations
+                    const moreTexts = ['more', 'ещё', 'еще', 'ko\'proq', 'devamı', 'mehr', 'plus', 'más', 'altro', '更多', '続きを読む'];
+                    const allButtons = document.querySelectorAll('[role="button"]');
+                    for (const btn of allButtons) {
+                        const btnText = (btn.textContent || '').trim().toLowerCase();
+                        const style = window.getComputedStyle(btn);
+                        if (style.display.includes('inline') && moreTexts.includes(btnText)) {
+                            btn.click();
+                            return true;
+                        }
+                    }
+                    
+                    return false;
+                }''')
+                
+                if clicked:
+                    self.logger.debug("📖 Found and clicked 'more' button to expand bio")
+                    time.sleep(0.5)  # Wait for expansion animation
+                    self.logger.debug("✓ Bio expanded")
+            except Exception as e:
+                self.logger.debug(f"More button not found or click failed (normal for short bios): {e}")
+            
             # 1. EXTRACT BIO TEXT
             bio_parts = []
+            seen_text = set()  # Track seen content to avoid duplicates
             bio_elements = self.page.locator(self.config.selector_profile_bio_text).all()
+            
+            # Common "more" button texts across languages
+            more_button_texts = {'more', 'ещё', 'еще', "ko'proq", 'devamı', 'mehr', 'plus', 'más', 'altro', '更多', '続きを読む', '...'}
             
             for span in bio_elements:
                 try:
                     text = span.inner_text().strip()
                     if not text or len(text) < 2:
+                        continue
+                    
+                    # Skip "more" button text
+                    if text.lower() in more_button_texts:
+                        continue
+                    
+                    # Skip text ending with "..." followed by "more" (truncated text)
+                    if text.endswith('...') or '... ' in text:
                         continue
                         
                     # Skip if it is the link container ("Link icon") button itself or inside it
@@ -295,13 +352,22 @@ class ProfileScraper(BaseScraper):
                     }''')
                     if is_link_btn:
                         continue
+                    
+                    # Skip if inside a role="button" element (e.g., the "more" button container)
+                    is_inside_button = span.evaluate('el => el.closest(\'[role="button"]\') !== null')
+                    if is_inside_button:
+                        # But allow if it's the main bio container which might have role="button" for expand
+                        parent_classes = span.evaluate('el => el.closest(\'[role="button"]\')?.className || ""')
+                        if 'inline' in parent_classes.lower() or len(text) < 10:
+                            continue
 
                     # Check if inside a link (anchor tag)
                     closest_a_href = span.evaluate('el => el.closest("a")?.href || ""')
                     if closest_a_href:
                         href_lower = closest_a_href.lower()
                         # Skip Threads, Followers, Following links
-                        if any(x in href_lower for x in ['threads.net', 'threads.com', '/followers/', '/following/']):
+                        # Uses config ignore list
+                        if any(x in href_lower for x in self.config.bio_extraction_ignore_list):
                             continue
                     
                     # Filter out stats like "100 posts" or "500 followers"
@@ -316,8 +382,18 @@ class ProfileScraper(BaseScraper):
                     if is_list_item:
                         continue
 
-                    if text not in bio_parts:
-                        bio_parts.append(text)
+                    # Skip if text is a substring of already added content (or vice versa)
+                    text_lower = text.lower()
+                    is_duplicate = False
+                    for seen in seen_text:
+                        if text_lower in seen or seen in text_lower:
+                            is_duplicate = True
+                            break
+                    if is_duplicate:
+                        continue
+                    
+                    seen_text.add(text_lower)
+                    bio_parts.append(text)
                 except Exception as e:
                    continue
             

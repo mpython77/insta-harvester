@@ -5,9 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-01-28
+
+### Added
+
+- **Robust Graceful Shutdown**: Implemented a "Strong Architecture" for handling interruptions (`Ctrl+C`).
+  - **Component Level**: Scrapers now catch interruptions, save partial data immediately, and return safely.
+  - **Workflow Level**: Orchestrator detects interruptions and stops the pipeline gracefully.
+  - **Parallel Level**: Worker processes are terminated safely, preserving collected data.
+- **Intelligent Session Discovery**: All example scripts now use `find_session_file()` to locate `instagram_session.json` automatically (root, examples, or .gemini folders).
+
+### Fixed
+
+- **"Posts: 0" Bug**: Fixed case sensitivity issue in `all_in_one.py` where `Post` VS `post` mismatch caused zero counts.
+- **Example Imports**: Unified import patterns in `examples/` to prioritize local development version.
+- **Indentation Errors**: Fixed indentation flaws in `post_links.py` and `reel_links.py` responsible for potential syntax errors.
+
+### Changed
+
+- **Architecture**: Removed global signal handlers in Orchestrator in favor of component-level exception handling for better control.
+- **Cleanup**: Removed empty `core/` directory and deprecated files.
+
 ## [2.6.0] - 2026-01-15
 
 ### Added
+
 - **Full Comment Scraping**: Comprehensive scraping of comments, nested replies, likes, and timestamps.
 - **Collaborator Extraction**: Support for extracting post co-authors.
 - **Video Support**: Fixed video/reel playback by defaulting to system Chrome (`channel='chrome'`).
@@ -15,11 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Localization**: Codebase fully standardized to English.
 
 ### Changed
+
 - **Default Browser**: Changed from `chromium` to `chrome` to support video codecs.
 - **Author**: Updated author metadata to "Muydinov Doston".
 - **Documentation**: Significant updates to README and Configuration Guide.
 
 ### Fixed
+
 - Fixed `TargetClosedError` in parallel scraping.
 - Fixed `AttributeError` in JSON export.
 - Fixed profile picture extraction in comments.
@@ -29,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.5] - 2025-12-17
 
 ### Fixed
+
 - **CRITICAL**: Fixed ProfileScraper opening new browser instead of using SharedBrowser session
 - **CRITICAL**: Fixed PostLinksScraper and ReelLinksScraper not working with SharedBrowser
 - **CRITICAL**: Fixed bio extraction not working with Instagram's new HTML structure
@@ -37,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bio extraction now uses 3 strategies for maximum reliability (new span structure, external links, fallback)
 
 ### Added
+
 - SharedBrowser support for PostLinksScraper and ReelLinksScraper
 - `scrape_post_links()` method to SharedBrowser
 - `scrape_reel_links()` method to SharedBrowser
@@ -45,12 +71,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-strategy bio extraction (bio text + external links + fallback)
 
 ### Changed
+
 - All scrapers now detect SharedBrowser mode and reuse existing browser session
 - Login detection now checks navigation UI elements before concluding session expired
 - ProfileScraper, PostLinksScraper, and ReelLinksScraper only close browser in standalone mode
 - Bio extraction completely rewritten to support Instagram's updated HTML structure
 
 ### Technical Details
+
 - **Browser session handling**: All scrapers check `self.page is not None and self.browser is not None` to detect SharedBrowser mode
 - **Login detection improvements**:
   - Method 1: URL check (`/accounts/login/`)
@@ -67,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.4] - 2025-11-23
 
 ### Fixed
+
 - **CRITICAL**: Fixed post link extraction stopping at ~46 posts (was collecting only 46/90 posts)
 - **CRITICAL**: Added intelligent waiting for Instagram's lazy-loaded containers
 - **CRITICAL**: Removed ALL hardcoded values - now fully configurable via config.py
@@ -74,6 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simplified 3-stage scroll to single-stage fast scroll for better Instagram container loading
 
 ### Changed
+
 - `_aggressive_scroll()` now monitors container count and waits up to 5 seconds for new containers to load
 - **ULTRA GRADUAL SCROLL**: Adaptive scrolling - 5 containers from end (or 2 if < 10 containers)
 - Scroll waits intelligently: checks every 0.5s if new containers appeared (instead of fixed 0.8s delay)
@@ -83,6 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ALL values now in config.py**: No more hardcoded numbers in code!
 
 ### Technical Details
+
 - PostLinksScraper now uses same scrolling strategy as ReelLinksScraper (which collects all reels successfully)
 - Removed over-engineered 3-stage scroll that caused Instagram to miss containers
 - **NEW**: Intelligent waiting loop - checks `div._ac7v.x1ty9z65.xzboxd6` count before/after scroll
@@ -90,16 +121,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **NEW**: Adaptive gradual scrolling - offset = 5 for >10 containers, offset = 2 for ≤10 containers
 - **NEW**: Larger fallback scroll - 600px instead of 300px for better unsticking
 - **NEW**: 10 new config parameters added to config.py (scroll behavior section):
-  * `scroll_container_wait_timeout` (5.0s)
-  * `scroll_container_check_interval` (0.5s)
-  * `scroll_container_stability_wait` (0.5s)
-  * `scroll_adaptive_offset_small` (2)
-  * `scroll_adaptive_offset_large` (5)
-  * `scroll_adaptive_threshold` (10)
-  * `scroll_fallback_pixels` (600)
-  * `scroll_fallback_wait` (1.5s)
-  * `scroll_max_no_new_attempts` (7)
-  * `scroll_max_attempts_override` (150)
+  - `scroll_container_wait_timeout` (5.0s)
+  - `scroll_container_check_interval` (0.5s)
+  - `scroll_container_stability_wait` (0.5s)
+  - `scroll_adaptive_offset_small` (2)
+  - `scroll_adaptive_offset_large` (5)
+  - `scroll_adaptive_threshold` (10)
+  - `scroll_fallback_pixels` (600)
+  - `scroll_fallback_wait` (1.5s)
+  - `scroll_max_no_new_attempts` (7)
+  - `scroll_max_attempts_override` (150)
 - Prevents overshooting: Even smaller scroll distances help Instagram load ALL content
 - More patient waiting for slow network/lazy loading (7 attempts vs 5)
 - Enhanced logging: Container positions and scroll actions visible in INFO level
@@ -117,6 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Parallel scraping now works correctly without runtime errors
 
 ### Technical Details
+
 - Worker functions in multiprocessing pool cannot access `self` since they run in separate processes
 - All helper functions now properly receive and use `config` parameter instead of `self.config`
 - This fix affects `parallel_scraper.py` lines 47, 48, 261, 329, 330
@@ -124,6 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.3] - 2024-11-23
 
 ### Added
+
 - **Session utilities module** (`instaharvest/session_utils.py`)
 - `save_session()` function - Create Instagram session from anywhere after pip install
 - `check_session_exists()` function - Check if session file exists
@@ -132,12 +165,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session management now built into the library (no need for external scripts)
 
 ### Changed
+
 - Session saving is now part of the main library API
 - Users can now create sessions with: `from instaharvest import save_session; save_session()`
 - Session file defaults to current working directory for portability
 - Improved session setup documentation
 
 ### Fixed
+
 - **CRITICAL**: Users installing via `pip install instaharvest` can now create sessions without cloning repository
 - Resolved issue where session creation required access to examples directory
 - Session utilities now accessible from any Python environment
@@ -145,16 +180,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.2] - 2024-11-23
 
 ### Added
+
 - Collapsible sections in README.md using HTML `<details>` tags
 - Improved documentation navigation with expandable/collapsible content sections
 - Better user experience for PyPI package page
 
 ### Changed
+
 - README.md restructured with dropdown sections for Installation, Setup Guide, Examples, Documentation
 - All major documentation sections now collapsible for compact viewing
 - Enhanced README readability and organization
 
 ### Fixed
+
 - PyPI documentation links changed from relative to absolute GitHub URLs
 - CONTRIBUTING.md, CHANGELOG.md, and CONFIGURATION_GUIDE.md links now work on PyPI
 - Documentation accessibility improved for PyPI users
@@ -162,6 +200,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.1] - 2024-11-23
 
 ### Added
+
 - CHANGELOG.md with complete version history
 - CONTRIBUTING.md with contribution guidelines
 - SECURITY.md with proper vulnerability reporting process
@@ -170,12 +209,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Git tag v2.5.1 for version tracking
 
 ### Changed
+
 - **BREAKING**: Updated author name from "Artem" to "Doston"
 - Improved all README.md examples to consistently use ScraperConfig
 - Enhanced markdown formatting across all documentation files
 - Consolidated configuration documentation into single CONFIGURATION_GUIDE.md
 
 ### Fixed
+
 - **CRITICAL**: Fixed unfollow popup timing issue in all_in_one.py
   - Added ScraperConfig with popup_open_delay=3.0 seconds
   - Added button_click_delay=3.0 seconds
@@ -186,6 +227,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed markdown code block formatting in examples/README.md
 
 ### Removed
+
 - INSTALL_UZ.md (contained outdated paths and wrong repository names)
 - PYPI_UPLOAD_GUIDE.md (maintainer-only documentation)
 - CONFIGURATION_EXPLAINED.md (consolidated into CONFIGURATION_GUIDE.md)
@@ -194,6 +236,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trailing whitespace from documentation files
 
 ### Documentation
+
 - Added ScraperConfig to all 18+ code examples across documentation
 - Updated SECURITY.md with actual project information and contact details
 - Improved examples/README.md with proper ScraperConfig usage patterns
@@ -203,6 +246,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.0] - 2024-11-22
 
 ### Added
+
 - Session management utilities
 - Comprehensive configuration system with ScraperConfig
 - Excel export functionality with real-time writing
@@ -215,12 +259,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTML structure change detection
 
 ### Changed
+
 - Refactored entire codebase for better modularity
 - Improved error handling and recovery
 - Enhanced rate limiting to prevent Instagram blocks
 - Better session management and auto-refresh
 
 ### Fixed
+
 - Multiple timing and synchronization issues
 - Instagram popup handling
 - Rate limiting edge cases

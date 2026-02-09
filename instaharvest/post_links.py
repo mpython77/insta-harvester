@@ -7,8 +7,10 @@ import json
 import os
 import time
 import random
+import signal  # [NEW]
 from typing import List, Set, Optional, Dict
 from pathlib import Path
+
 
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
 
@@ -17,19 +19,20 @@ try:
     from .base import BaseScraper
     from .config import ScraperConfig
     from .exceptions import ProfileNotFoundError
+    from .session_utils import find_session_file
     LIBRARY_AVAILABLE = True
 except ImportError:
     LIBRARY_AVAILABLE = False
 
 
 class InstagramPostLinksScraper:
-    """Instagram postlar linklarini scraping qilish - 100% ACCURATE"""
+    """Instagram post links scraper - 100% ACCURATE"""
 
     def __init__(self, username: str, session_file: str = None):
         """
         Args:
-            username: Instagram username (@ belgisisiz)
-            session_file: Session fayl nomi (default: instagram_session.json)
+            username: Instagram username (without @)
+            session_file: Session file name (default: instagram_session.json)
         """
         # Import here to avoid circular dependency
         from .config import ScraperConfig
@@ -37,33 +40,40 @@ class InstagramPostLinksScraper:
 
         self.username = username.strip().lstrip('@')
         self.profile_url = self.config.profile_url_pattern.format(username=self.username)
-        self.session_file = session_file or self.config.session_file
+        
+        # Use intelligent session discovery if session_file not provided
+        if session_file:
+             self.session_file = session_file
+        else:
+             from .session_utils import find_session_file, get_default_session_path
+             self.session_file = find_session_file() or get_default_session_path()
+
         self.page: Optional[Page] = None
         self.context: Optional[BrowserContext] = None
         self.browser: Optional[Browser] = None
 
     def check_session(self):
-        """Session faylni tekshirish"""
+        """Check session file"""
         if not os.path.exists(self.session_file):
             raise FileNotFoundError(
-                f'❌ {self.session_file} topilmadi!\n'
-                f'Avval "python save_session.py" ni ishga tushiring.'
+                f'❌ {self.session_file} not found!\n'
+                f'Please run "python save_session.py" first.'
             )
 
     def load_session(self, p):
-        """Session bilan browser ochish"""
-        print('📂 Session yuklanmoqda...')
+        """Open browser with session"""
+        print('📂 Loading session...')
 
         with open(self.session_file, 'r', encoding='utf-8') as f:
             session_data = json.load(f)
 
-        # Browser ochish
+        # Open browser
         self.browser = p.chromium.launch(
             headless=self.config.headless,
             args=self.config.browser_args
         )
 
-        # Session bilan context yaratish
+        # Create context with session
         self.context = self.browser.new_context(
             storage_state=session_data,
             viewport={'width': self.config.viewport_width, 'height': self.config.viewport_height},
@@ -73,124 +83,133 @@ class InstagramPostLinksScraper:
         self.page = self.context.new_page()
         self.page.set_default_timeout(self.config.link_scraper_timeout)
 
-        print('✅ Session yuklandi!')
+        print('✅ Session loaded!')
 
     def goto_profile(self):
-        """Profile sahifasiga o'tish"""
-        print(f'🔍 Profile ochilmoqda: {self.username}')
+        """Go to profile page"""
+        print(f'🔍 Opening profile: {self.username}')
 
         self.page.goto(self.profile_url, wait_until=self.config.page_load_wait_until, timeout=self.config.link_scraper_timeout)
 
-        print('⏳ Sahifa yuklanishi kutilmoqda...')
+        print('⏳ Waiting for page load...')
         time.sleep(self.config.page_load_delay)
 
-        # Profile mavjudligini tekshirish
+        # Check profile existence
         page_content = self.page.content()
         if any(text in page_content for text in self.config.profile_not_found_strings):
-            raise ValueError(f'❌ Profile topilmadi: {self.username}')
+            raise ValueError(f'❌ Profile not found: {self.username}')
 
-        print('✅ Profile ochildi!')
+        print('✅ Profile opened!')
 
     def get_posts_count(self):
-        """Posts sonini olish"""
+        """Get posts count"""
         try:
             self.page.wait_for_selector(self.config.selector_posts_count, timeout=self.config.posts_count_timeout)
             posts_element = self.page.locator(self.config.selector_posts_count).first
             if posts_element:
                 posts_text = posts_element.locator(self.config.selector_html_span).first.inner_text()
-                # Virgullarni olib tashlash va int ga o'girish
+                # Remove commas and convert to int
                 posts_count = int(posts_text.strip().replace(',', ''))
                 return posts_count
         except Exception as e:
-            print(f'⚠️  Posts sonini olishda xatolik: {e}')
+            print(f'⚠️  Error getting posts count: {e}')
             return 0
 
     def extract_post_links(self):
-        """Barcha post va reel linklarini topish (scroll qilmasdan)"""
+        """Find all post and reel links (without scrolling)"""
         try:
-            # Post va reel linklarini topish
-            # /p/ yoki /reel/ pattern
+            # Find post and reel links
+            # /p/ or /reel/ pattern
             links = self.page.locator(self.config.selector_post_reel_links).all()
 
-            # Href larni olish
+            # Get Hrefs
             hrefs = set()
             for link in links:
                 href = link.get_attribute('href')
                 if href:
-                    # To'liq URL yaratish
+                    # Create full URL
                     if href.startswith('/'):
                         href = self.config.instagram_base_url.rstrip('/') + href
                     hrefs.add(href)
 
             return hrefs
         except Exception as e:
-            print(f'⚠️  Linklar olishda xatolik: {e}')
+            print(f'⚠️  Error getting links: {e}')
             return set()
 
     def scroll_and_collect_links(self, target_posts_count):
-        """Scroll qilib barcha post linklarini yig'ish - USER'S PROVEN METHOD"""
-        print(f'\n📜 Scroll qilib {target_posts_count} ta post linkini yig\'ish boshlandi...\n')
+        """Scroll and collect all post links - USER'S PROVEN METHOD"""
+        print(f'\n📜 Started collecting {target_posts_count} post links via scrolling...\n')
 
         all_links = set()
         scroll_attempts = 0
         no_new_links_count = 0
         max_no_new_attempts = self.config.scroll_max_no_new_attempts
 
-        while True:
-            # Hozirgi linklarni olish
-            current_links = self.extract_post_links()
-            previous_count = len(all_links)
-            all_links.update(current_links)
-            new_count = len(all_links)
+        max_no_new_attempts = self.config.scroll_max_no_new_attempts
+        
+        try:  # [NEW] Graceful Exit Wrapper
+            while True:
+                # Get current links
+                current_links = self.extract_post_links()
+                previous_count = len(all_links)
+                all_links.update(current_links)
+                new_count = len(all_links)
 
-            # Progress ko'rsatish
-            print(f'📊 To\'plangan linklar: {new_count}/{target_posts_count}', end='\r')
+                # Show progress
+                print(f'📊 Collected links: {new_count}/{target_posts_count}', end='\r')
 
-            # Yangi link topilmasa counter oshirish
-            if new_count == previous_count:
-                no_new_links_count += 1
-            else:
-                no_new_links_count = 0  # Yangi link topilsa reset qilish
+                # Increment counter if no new links found
+                if new_count == previous_count:
+                    no_new_links_count += 1
+                else:
+                    no_new_links_count = 0  # Reset if new links found
 
-            # To'xtatish shartlari
-            if new_count >= target_posts_count:
-                print(f'\n✅ Barcha postlar to\'plandi: {new_count} ta link')
-                break
+                # Stopping conditions
+                if new_count >= target_posts_count:
+                    print(f'\n✅ All posts collected: {new_count} links')
+                    break
 
-            if no_new_links_count >= max_no_new_attempts:
-                print(f'\n⚠️  Yangi linklar yuklanmayapti. To\'plangan: {new_count} ta')
-                break
+                if no_new_links_count >= max_no_new_attempts:
+                    print(f'\n⚠️  No new links loading. Collected: {new_count}')
+                    break
 
-            # Scroll qilish (odamga o'xshab) - USER'S PROVEN METHOD
-            self.page.evaluate(f'window.scrollBy(0, window.innerHeight * {self.config.scroll_viewport_percentage})')
+                # Scroll (human-like) - USER'S PROVEN METHOD
+                self.page.evaluate(f'window.scrollBy(0, window.innerHeight * {self.config.scroll_viewport_percentage})')
 
-            # 1.5-2.5 sekund kutish (random) - ANTI-DETECTION
-            wait_time = random.uniform(self.config.scroll_wait_range[0], self.config.scroll_wait_range[1])
-            time.sleep(wait_time)
+                # Wait 1.5-2.5 seconds (random) - ANTI-DETECTION
+                wait_time = random.uniform(self.config.scroll_wait_range[0], self.config.scroll_wait_range[1])
+                time.sleep(wait_time)
 
-            scroll_attempts += 1
+                scroll_attempts += 1
 
-            # Juda ko'p scroll qilinsa to'xtatish (xavfsizlik uchun)
-            if scroll_attempts > 1000:
-                print(f'\n⚠️  Maksimal scroll limitiga yetildi. To\'plangan: {new_count} ta')
-                break
+                # Stop if too many scrolls (for safety)
+                if scroll_attempts > 1000:
+                    print(f'\n⚠️  Max scroll limit reached. Collected: {new_count}')
+                    break
+        except KeyboardInterrupt:  # [NEW]
+             print('\n⚠️  Scraping interrupted (Ctrl+C). Saving partial results based on logic...')
+             # For standalone script, we might NOT want to raise if we want to save file right after?
+             # The caller 'scrape' has logic to save to file.
+             pass
+
 
         return list(all_links)
 
     def save_links_to_file(self, links, filename='post_links.txt'):
-        """Linklarni faylga saqlash"""
+        """Save links to file"""
         with open(filename, 'w', encoding='utf-8') as f:
             for link in sorted(links):
                 f.write(link + '\n')
-        print(f'\n💾 Linklar saqlandi: {filename}')
+        print(f'\n💾 Links saved: {filename}')
 
     def close(self):
-        """Browser yopish"""
+        """Close browser"""
         if self.browser:
             self.browser.close()
 
     def scrape(self):
-        """Asosiy scraping funksiyasi"""
+        """Main scraping function"""
         self.check_session()
 
         with sync_playwright() as p:
@@ -198,25 +217,25 @@ class InstagramPostLinksScraper:
                 self.load_session(p)
                 self.goto_profile()
 
-                # Posts sonini olish
+                # Get posts count
                 posts_count = self.get_posts_count()
-                print(f'📸 Jami postlar: {posts_count}\n')
+                print(f'📸 Total posts: {posts_count}\n')
 
                 if posts_count == 0:
-                    print('❌ Posts topilmadi yoki olishda xatolik!')
+                    print('❌ Posts not found or error getting them!')
                     return []
 
-                # Scroll qilib linklar yig'ish
+                # Scroll and collect links
                 links = self.scroll_and_collect_links(posts_count)
 
-                # Faylga saqlash
+                # Save to file
                 if links:
                     self.save_links_to_file(links)
 
                 return links
 
             finally:
-                time.sleep(2)  # Ko'rish uchun
+                time.sleep(2)  # For viewing
                 self.close()
 
 
@@ -244,7 +263,8 @@ if LIBRARY_AVAILABLE:
             self,
             username: str,
             target_count: Optional[int] = None,
-            save_to_file: bool = True
+            save_to_file: bool = True,
+            output_file: Optional[str] = None
         ) -> List[Dict[str, str]]:
             """
             Scrape all POST and REEL links from profile using USER'S PROVEN METHOD
@@ -252,7 +272,9 @@ if LIBRARY_AVAILABLE:
             Args:
                 username: Instagram username
                 target_count: Target number of links (None = scrape all)
+                target_count: Target number of links (None = scrape all)
                 save_to_file: Save links to file
+                output_file: Optional path to save file (overrides default)
 
             Returns:
                 List of dictionaries with 'url' and 'type' keys
@@ -290,7 +312,7 @@ if LIBRARY_AVAILABLE:
 
                 # Save to file
                 if save_to_file:
-                    self._save_links(links)
+                    self._save_links(links, output_file)
 
                 self.logger.info(f"Collected {len(links)} post links")
                 return links
@@ -376,7 +398,7 @@ if LIBRARY_AVAILABLE:
                             'thumbnail': thumbnail,
                             'stats': stats
                         })
-                    except:
+                    except Exception:
                         continue
 
                 return results
@@ -402,51 +424,58 @@ if LIBRARY_AVAILABLE:
             no_new_links_count = 0
             MAX_NO_NEW = self.config.scroll_max_no_new_attempts
 
-            while True:
-                # Extract current links using proven method
-                current_items = self._extract_current_links_proven()
-                previous_count = len(all_links)
-                
-                for item in current_items:
-                    url = item['url']
-                    if url not in all_links:
-                        all_links[url] = item
-                
-                new_count = len(all_links)
+            MAX_NO_NEW = self.config.scroll_max_no_new_attempts
 
-                # Log progress
-                self.logger.info(
-                    f"Progress: {new_count}/{target_count} links "
-                    f"(+{new_count - previous_count} new)"
-                )
+            try:  # [NEW] Graceful Exit Wrapper
+                while True:
+                    # Extract current links using proven method
+                    current_items = self._extract_current_links_proven()
+                    previous_count = len(all_links)
+                    
+                    for item in current_items:
+                        url = item['url']
+                        if url not in all_links:
+                            all_links[url] = item
+                    
+                    new_count = len(all_links)
 
-                # Check if no new links found
-                if new_count == previous_count:
-                    no_new_links_count += 1
-                    self.logger.info(f"⚠️ No new links found ({no_new_links_count}/{MAX_NO_NEW})")
-                else:
-                    # Reset counter if new links found
-                    no_new_links_count = 0
-
-                # Stopping conditions
-                if new_count >= target_count:
-                    self.logger.info("✓ Target reached!")
-                    break
-
-                if no_new_links_count >= MAX_NO_NEW:
-                    self.logger.warning(
-                        f"No new links after {MAX_NO_NEW} attempts. "
-                        f"Collected: {new_count}/{target_count}"
+                    # Log progress
+                    self.logger.info(
+                        f"Progress: {new_count}/{target_count} links "
+                        f"(+{new_count - previous_count} new)"
                     )
-                    break
 
-                if scroll_attempts >= self.config.max_scroll_attempts:
-                    self.logger.warning(f"Max scroll attempts ({self.config.max_scroll_attempts}) reached")
-                    break
+                    # Check if no new links found
+                    if new_count == previous_count:
+                        no_new_links_count += 1
+                        self.logger.info(f"⚠️ No new links found ({no_new_links_count}/{MAX_NO_NEW})")
+                    else:
+                        # Reset counter if new links found
+                        no_new_links_count = 0
 
-                # USER'S PROVEN METHOD: Human-like scroll
-                self._human_like_scroll_proven()
-                scroll_attempts += 1
+                    # Stopping conditions
+                    if new_count >= target_count:
+                        self.logger.info("✓ Target reached!")
+                        break
+
+                    if no_new_links_count >= MAX_NO_NEW:
+                        self.logger.warning(
+                            f"No new links after {MAX_NO_NEW} attempts. "
+                            f"Collected: {new_count}/{target_count}"
+                        )
+                        break
+
+                    if scroll_attempts >= self.config.max_scroll_attempts:
+                        self.logger.warning(f"Max scroll attempts ({self.config.max_scroll_attempts}) reached")
+                        break
+
+                    # USER'S PROVEN METHOD: Human-like scroll
+                    self._human_like_scroll_proven()
+                    scroll_attempts += 1
+            except KeyboardInterrupt:
+                 self.logger.warning("\n✋ Scraping interrupted by user! Saving collected data...")
+                 self.interrupted = True
+
 
             # Convert to list of dicts with type detection
             result = []
@@ -489,23 +518,30 @@ if LIBRARY_AVAILABLE:
                 self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
                 time.sleep(self.config.scroll_post_delay)
 
-        def _save_links(self, links: List[Dict[str, str]]) -> None:
+        def _save_links(self, links: List[Dict[str, str]], output_file: Optional[str] = None) -> None:
             """
             Save links to file
 
             Args:
                 links: List of link dictionaries with 'url' and 'type' keys
+                output_file: Optional custom path
             """
-            output_file = Path(self.config.links_file)
+            if output_file:
+                path = Path(output_file)
+            else:
+                path = Path(self.config.base_output_dir) / self.config.links_file
+            
+            # Ensure directory exists
+            path.parent.mkdir(parents=True, exist_ok=True)
 
             try:
-                with open(output_file, 'w', encoding='utf-8') as f:
+                with open(path, 'w', encoding='utf-8') as f:
                     for link_data in links:
                         url = link_data['url']
                         content_type = link_data['type']
                         f.write(f"{url}\t{content_type}\n")
 
-                self.logger.info(f"Links saved to: {output_file}")
+                self.logger.info(f"Links saved to: {path}")
 
             except Exception as e:
                 self.logger.error(f"Failed to save links: {e}")
@@ -513,35 +549,35 @@ if LIBRARY_AVAILABLE:
 
 
 def main():
-    """Main funksiya - CLI uchun"""
+    """Main function - for CLI"""
     print('🚀 Instagram Post Links Scraper\n')
 
-    # Username ni so'rash
-    username = input('Instagram username kiriting (@ belgisisiz): ').strip().lstrip('@')
+    # Ask for username
+    username = input('Enter Instagram username (without @): ').strip().lstrip('@')
 
     if not username:
-        print('❌ Username kiritilmadi!')
+        print('❌ Username not provided!')
         return
 
-    # Scraping boshlash
+    # Start scraping
     scraper = InstagramPostLinksScraper(username)
 
     try:
         links = scraper.scrape()
 
         print('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        print(f'✅ Scraping tugadi!')
-        print(f'📊 To\'plangan linklar: {len(links)} ta')
+        print(f'✅ Scraping finished!')
+        print(f'📊 Collected links: {len(links)}')
         print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
-        # Birinchi 5 ta linkni ko'rsatish
+        # Show first 5 links
         if links:
-            print('\n🔗 Misol linklar (birinchi 5 ta):')
+            print('\n🔗 Example links (first 5):')
             for i, link in enumerate(sorted(links)[:5], 1):
                 print(f'  {i}. {link}')
 
     except Exception as e:
-        print(f'\n❌ Xatolik: {e}')
+        print(f'\n❌ Error: {e}')
         raise
 
 
@@ -549,6 +585,6 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print('\n\n⚠️  Dastur to\'xtatildi!')
+        print('\n\n⚠️  Program stopped!')
     except Exception:
         pass

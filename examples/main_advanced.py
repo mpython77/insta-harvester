@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Instagram Scraper - FULL AUTOMATIC SCRAPING
 Professional version with complete automation
@@ -15,6 +17,15 @@ Features:
 """
 
 import multiprocessing
+import sys
+import os
+
+# ALWAYS prioritize local development version if available
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if os.path.exists(os.path.join(parent_dir, 'instaharvest')):
+    sys.path.insert(0, parent_dir)
+
 from instaharvest import InstagramOrchestrator, ScraperConfig
 
 
@@ -80,11 +91,15 @@ def main():
     print()
 
     # Optimized configuration for production
+    # Session file is in examples folder
+    session_path = os.path.join(current_dir, 'instagram_session.json')
+    
     config = ScraperConfig(
         headless=False,  # Visual mode for monitoring
         log_level='INFO',
         log_to_console=True,
-        log_file=f'instagram_scraper_{username}.log'
+        log_file=f'instagram_scraper_{username}.log',
+        session_file=session_path  # Use session from examples folder
     )
 
     try:

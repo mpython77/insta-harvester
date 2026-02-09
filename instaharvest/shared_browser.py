@@ -8,13 +8,14 @@ from typing import Optional
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page, Playwright
 
 from .config import ScraperConfig
-from .logger import setup_logger
+from .logging_config import get_logger
 from .follow import FollowManager
 from .message import MessageManager
 from .followers import FollowersCollector
 from .profile import ProfileScraper
 from .post_links import PostLinksScraper
 from .reel_links import ReelLinksScraper
+from .downloader import MediaDownloader # [NEW]
 
 
 class SharedBrowser:
@@ -55,12 +56,7 @@ class SharedBrowser:
         """
         self.config = config or ScraperConfig()
         self.session_file = session_file if session_file is not None else self.config.session_file
-        self.logger = setup_logger(
-            name='SharedBrowser',
-            log_file=self.config.log_file,
-            level=self.config.log_level,
-            log_to_console=self.config.log_to_console
-        )
+        self.logger = get_logger('SharedBrowser')
 
         # Browser components
         self.playwright: Optional[Playwright] = None
@@ -75,6 +71,7 @@ class SharedBrowser:
         self._profile_scraper: Optional[ProfileScraper] = None
         self._post_links_scraper: Optional[PostLinksScraper] = None
         self._reel_links_scraper: Optional[ReelLinksScraper] = None
+        self._downloader: Optional[MediaDownloader] = None # [NEW]
 
         self.logger.info("✨ SharedBrowser initialized")
 
@@ -196,6 +193,9 @@ class SharedBrowser:
             self._reel_links_scraper.page = None
             self._reel_links_scraper = None
 
+        self._downloader = None
+
+
         # Close browser resources
         if self.page:
             self.page.close()
@@ -301,6 +301,13 @@ class SharedBrowser:
             self._reel_links_scraper = scraper
         return self._reel_links_scraper
 
+    @property
+    def downloader(self) -> MediaDownloader:
+        """Get MediaDownloader instance"""
+        if self._downloader is None:
+            self._downloader = MediaDownloader()
+        return self._downloader
+
     # ==================== CONVENIENCE METHODS ====================
 
     def follow(self, username: str, check_status: bool = True) -> dict:
@@ -387,7 +394,7 @@ class SharedBrowser:
 
         Args:
             username: Instagram username
-
+        
         Returns:
             Profile data dict
         """
@@ -452,13 +459,56 @@ class SharedBrowser:
         """
         return self.reel_links_scraper.scrape(username, save_to_file=save_to_file)
 
+    def download_post(self, url: str) -> list:
+        """
+        Download all media (images/videos) from a post URL.
+        Handles Carousels automatically.
+        
+        Args:
+            url: Post URL
+        
+        Returns:
+            List of saved file paths
+        """
+        self.logger.info(f"📥 Starting download for: {url}")
+        
+        # 1. Scrape metadata & media URLs
+        # We need to temporarily use the PostDataScraper
+        scraper = self.post_links_scraper # reused just for property access or create new
+        # Wait, PostDataScraper is not exposed as property directly? Handled.
+        # Actually I need PostDataScraper, shared_browser has no property for it yet.
+        # It has _post_links_scraper.. wait.
+        
+        # Let's create a temporary PostDataScraper with the SHARED browser context
+        from .post_data import PostDataScraper
+        
+        # We need to inject the context manually or use a proper property
+        scraper = PostDataScraper(self.config)
+        scraper.playwright = self.playwright
+        scraper.browser = self.browser
+        scraper.context = self.context
+        scraper.page = self.page
+        scraper.sync_network_client() # Important for cookies!
+        
+        # Scrape
+        post_data = scraper.scrape(url, get_media=True)
+        
+        # 2. Extract username from data or URL for folder name
+        username = "unknown"
+        if post_data.tagged_accounts:
+             # simple heuristic, or we could scrape owner. For now 'unknown' or maybe infer from previous calls
+             pass
+        
+        # 3. Download
+        return self.downloader.download_post(post_data, username=username)
+
     # ==================== CONTEXT MANAGER ====================
 
     def __enter__(self):
         """Context manager entry"""
         self.start()
         return self
-
+    
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
         self.close()

@@ -11,7 +11,7 @@ long_description = (this_directory / "README.md").read_text(encoding='utf-8')
 
 setup(
     name="instaharvest",
-    version="2.6.0",
+    version="2.7.0",
     author="Muydinov Doston",
     author_email="kelajak054@gmail.com",
     description="Professional Instagram data collection toolkit with automation features",
@@ -34,6 +34,7 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "playwright>=1.40.0",
+        "playwright-stealth>=1.0.6",  # Anti-detection / Stealth mode
         "pandas>=2.0.0",
         "openpyxl>=3.1.0",
         "beautifulsoup4>=4.12.0",
@@ -42,7 +43,8 @@ setup(
         "curl_cffi>=0.7.4",
         "pydantic>=2.0.0",
         "fake-useragent>=1.5.0",
-        "httpx>=0.27.0",
+        "requests>=2.31.0",
+        "yt-dlp>=2023.7.6",  # For media downloading (videos/reels)
     ],
     extras_require={
         "dev": [

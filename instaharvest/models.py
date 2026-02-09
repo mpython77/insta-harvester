@@ -39,4 +39,3 @@ class Collaborator(BaseModel):
 
 # Backward compatibility aliases
 CommentData = Comment
-

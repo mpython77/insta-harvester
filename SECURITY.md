@@ -6,11 +6,10 @@ InstaHarvest is currently supporting the following versions with security update
 
 | Version | Supported          |
 | ------- | ------------------ |
-| Version | Supported          |
-| ------- | ------------------ |
 | 2.6.x   | :white_check_mark: |
 | 2.5.x   | :white_check_mark: |
 | < 2.5   | :x:                |
+
 
 We recommend always using the latest version available on [PyPI](https://pypi.org/project/instaharvest/).
 

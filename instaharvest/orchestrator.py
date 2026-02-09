@@ -18,11 +18,11 @@ from .post_data import PostDataScraper, PostData
 from .reel_links import ReelLinksScraper
 from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
-from .excel_export import ExcelExporter
 from .comment_scraper import CommentScraper, PostCommentsData
 from .models import CommentData
-from .comments_export import CommentsExporter, export_comments_to_json, export_comments_to_excel
-from .logger import setup_logger
+from .exporters import CommentsExporter, export_comments_to_json, export_comments_to_excel, ExcelExporter
+from .logging_config import get_logger
+from .interactions import InteractionManager # [NEW] Interaction Support
 
 
 class InstagramOrchestrator:
@@ -55,12 +55,7 @@ class InstagramOrchestrator:
             config: Scraper configuration
         """
         self.config = config or ScraperConfig()
-        self.logger = setup_logger(
-            name='InstagramOrchestrator',
-            log_file=self.config.log_file,
-            level=self.config.log_level,
-            log_to_console=self.config.log_to_console
-        )
+        self.logger = get_logger("InstagramOrchestrator")
 
         # Graceful shutdown tracking
         self.shutdown_requested = False
@@ -68,9 +63,9 @@ class InstagramOrchestrator:
         self.current_results = None
         self.current_username = None
 
-        # Register signal handlers for Ctrl+C and SIGTERM
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
+        # Signal handling delegated to individual components
+        # signal.signal(signal.SIGINT, self._signal_handler)
+        # signal.signal(signal.SIGTERM, self._signal_handler)
 
         # Register cleanup on exit
         atexit.register(self._cleanup)
@@ -158,10 +153,14 @@ class InstagramOrchestrator:
         NOTE: Reels are collected separately by _collect_reel_links()
         """
         scraper = PostLinksScraper(self.config)
-        return scraper.scrape(
+        results = scraper.scrape(
             username,
             save_to_file=True
         )
+        if scraper.interrupted:
+             self.logger.warning("⚠️ Scraping interrupted during post link collection")
+             self.shutdown_requested = True
+        return results
 
     def _collect_reel_links(self, username: str) -> List[str]:
         """
@@ -171,10 +170,14 @@ class InstagramOrchestrator:
             List of reel URLs
         """
         scraper = ReelLinksScraper(self.config)
-        return scraper.scrape(
+        results = scraper.scrape(
             username,
             save_to_file=True
         )
+        if scraper.interrupted:
+             self.logger.warning("⚠️ Scraping interrupted during reel link collection")
+             self.shutdown_requested = True
+        return results
 
     def _scrape_posts_data(self, post_links: List[Dict[str, str]]) -> List[PostData]:
         """
@@ -264,7 +267,14 @@ class InstagramOrchestrator:
         # Initialize Excel exporter if needed
         excel_exporter = None
         if save_excel:
-            excel_filename = self.config.excel_filename_pattern.format(username=username)
+            # Construct Excel path using base_output_dir
+            if self.config.base_output_dir:
+                base_dir = Path(self.config.base_output_dir)
+                base_dir.mkdir(parents=True, exist_ok=True)
+                excel_filename = str(base_dir / self.config.excel_filename_pattern.format(username=username))
+            else:
+                 excel_filename = self.config.excel_filename_pattern.format(username=username)
+
             excel_exporter = ExcelExporter(excel_filename, self.logger, self.config)
             self.excel_exporter = excel_exporter
             self.logger.info(f"Excel exporter initialized: {excel_filename}")
@@ -538,6 +548,10 @@ class InstagramOrchestrator:
                         timestamp='N/A',
                         content_type=content_type  # Use detected type from link_data
                     ))
+                except KeyboardInterrupt:  # [NEW]
+                    self.logger.warning("\n⚠️ Interrupted by user during post scraping!")
+                    self.shutdown_requested = True
+                    break
 
                 # Delay
                 if i < len(post_links):
@@ -606,6 +620,10 @@ class InstagramOrchestrator:
                         timestamp='N/A',
                         content_type='Reel'
                     ))
+                except KeyboardInterrupt:  # [NEW]
+                    self.logger.warning("\n⚠️ Interrupted by user during reel scraping!")
+                    self.shutdown_requested = True
+                    break
 
                 # Delay
                 if i < len(reel_links):
@@ -790,13 +808,96 @@ class InstagramOrchestrator:
             )
 
         # Scrape comments
-        self.logger.info(f"\nScraping comments from {len(post_urls)} posts...")
         comments_data = self._scrape_comments(
             post_links=post_urls,
             max_comments_per_post=max_comments_per_post,
             include_replies=include_replies,
             comments_exporter=comments_exporter
         )
+        
+        return comments_data
+
+    def interact_with_post(
+        self,
+        url: str,
+        like: bool = False,
+        comment: Optional[str] = None
+    ) -> bool:
+        """
+        Interact with a single post/reel (Like/Comment)
+        """
+        self.logger.info(f"❤️/💬 Interacting with: {url}")
+        
+        # Use PostDataScraper just to setup browser, then use InteractionManager
+        scraper = PostDataScraper(self.config)
+        session_data = scraper.load_session()
+        scraper.setup_browser(session_data)
+        
+        try:
+            interaction = InteractionManager(scraper.page, self.logger, self.config)
+            scraper.goto_url(url)
+            time.sleep(3) # Wait for load
+            
+            success = True
+            if like:
+                if not interaction.like_post():
+                    success = False
+            
+            if comment:
+                if not interaction.comment_post(comment):
+                    success = False
+                    
+            return success
+        finally:
+            scraper.close()
+
+    def run_reels_interaction_flow(
+        self,
+        duration_minutes: int = 10,
+        like_probability: float = 0.5,
+        comments: Optional[List[str]] = None
+    ):
+        """
+        Watch Reels, scroll automatically, and randomly like/comment.
+        """
+        self.logger.info(f"🎬 Starting Reels Interaction Flow ({duration_minutes}m)...")
+        
+        scraper = ReelDataScraper(self.config)
+        session_data = scraper.load_session()
+        scraper.setup_browser(session_data)
+        
+        try:
+            interaction = InteractionManager(scraper.page, self.logger, self.config)
+            
+            # Go to Reels feed
+            scraper.goto_url("https://www.instagram.com/reels/")
+            time.sleep(5)
+            
+            start_time = time.time()
+            reels_cnt = 0
+            
+            while (time.time() - start_time) < (duration_minutes * 60):
+                reels_cnt += 1
+                self.logger.info(f"📺 Watching Reel #{reels_cnt}")
+                
+                # Watch for random duration
+                watch_time = random.uniform(5, 15)
+                time.sleep(watch_time)
+                
+                # Random Like
+                if random.random() < like_probability:
+                    interaction.like_reel()
+                    
+                # Random Comment (if enabled)
+                if comments and random.random() < 0.1: # 10% chance if comments provided
+                    text = random.choice(comments)
+                    interaction.comment_reel(text)
+                
+                # Next Reel
+                interaction.next_reel()
+                
+        finally:
+            scraper.close()
 
         # Finalize exporter
         if comments_exporter:
@@ -824,7 +925,13 @@ class InstagramOrchestrator:
         """Export results to JSON file"""
         import json
 
-        output_file = Path(self.config.json_filename_pattern.format(username=results['username']))
+        json_filename = self.config.json_filename_pattern.format(username=results['username'])
+        if self.config.base_output_dir:
+            base_dir = Path(self.config.base_output_dir)
+            base_dir.mkdir(parents=True, exist_ok=True)
+            output_file = base_dir / json_filename
+        else:
+            output_file = Path(json_filename)
 
         try:
             with open(output_file, 'w', encoding='utf-8') as f:

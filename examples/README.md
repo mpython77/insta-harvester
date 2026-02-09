@@ -11,6 +11,7 @@ examples/
 ├── save_session.py             # Create Instagram session (REQUIRED FIRST)
 ├── all_in_one.py               # Complete demo with ALL features
 ├── main_advanced.py            # Production scraping automation
+├── download_media.py           # 📥 Download Images & Videos (Post/Reel)
 └── example_custom_config.py    # Configuration customization examples
 ```
 
@@ -19,22 +20,27 @@ examples/
 ## 🚀 Quick Start
 
 ### 1. Save Instagram Session (ONE TIME ONLY)
+
 ```bash
-cd examples
-python save_session.py
+# Run directly (Automatic session path handling)
+python examples/save_session.py
 ```
+
 This will:
+
 - Open Chrome browser
 - Let you login to Instagram manually
 - Save session to `instagram_session.json`
 - All future scripts use this session (no re-login!)
 
 ### 2. Try the Complete Demo
+
 ```bash
 python all_in_one.py
 ```
 
 This interactive menu demonstrates ALL library features:
+
 - Follow/Unfollow users
 - Send messages
 - Collect followers/following
@@ -42,6 +48,7 @@ This interactive menu demonstrates ALL library features:
 - Profile scraping
 
 ### 3. Custom Configuration
+
 ```bash
 python example_custom_config.py  # See configuration examples
 ```
@@ -127,19 +134,37 @@ with SharedBrowser(config=config) as browser:
 
 ## 🎯 Usage Guide
 
-### For Interactive Demo (Recommended for beginners):
+### For Interactive Demo (Recommended for beginners)
+
 ```bash
 python examples/all_in_one.py
 ```
+
 This shows ALL features in an interactive menu - perfect for learning!
 
-### For Custom Configuration:
+### For Custom Configuration
+
 ```bash
 python examples/example_custom_config.py  # See all config options
 ```
 
-### For Production Code:
+### For Production Code
+
 Use the library directly in your Python scripts (see examples above).
+
+### 🚀 Advanced Scraping (Production Ready)
+
+```bash
+python main_advanced.py
+```
+
+This script is a **Robust, Multi-Process Data Harvester**:
+
+- Uses `InstagramOrchestrator` for workflow management.
+- Runs 3 parallel browser workers (configurable).
+- Exports data to Excel (`instagram_data.xlsx`) in real-time.
+- Safely handles interruptions (Graceful Shutdown guarantees data save).
+- automatically distinguishes Posts vs Reels.
 
 ---
 
@@ -155,6 +180,7 @@ Use the library directly in your Python scripts (see examples above).
    - See `CONFIGURATION_GUIDE.md` for all 40+ parameters
 
 3. **All scripts must be run from project root:**
+
    ```bash
    # From project root directory
    python examples/all_in_one.py
@@ -173,16 +199,19 @@ Use the library directly in your Python scripts (see examples above).
 ## 🎯 Next Steps
 
 1. **Create Instagram session** (required once):
+
    ```bash
    python examples/save_session.py
    ```
 
 2. **Try the interactive demo**:
+
    ```bash
    python examples/all_in_one.py
    ```
 
 3. **Use in your own code**:
+
    ```python
    from instaharvest import FollowManager, MessageManager, SharedBrowser
    from instaharvest.config import ScraperConfig

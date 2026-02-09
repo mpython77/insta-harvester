@@ -302,43 +302,88 @@ class FollowersCollector(BaseScraper):
         Extract currently visible followers using robust selectors.
         
         Strategy:
-        1. Find all 'a' tags with role="link"
-        2. Filter structurally (must be a simple /username/ path)
-        3. Filter system paths
+        1. Primary: Find avatar links (44px style) - most reliable
+        2. Fallback: Find username spans with specific classes
+        3. Filter system paths and validate username format
         """
         usernames = []
 
         try:
-            # Execute JS to get potential profile links quickly
-            # This avoids transferring strict DOM elements back and forth
-            # Uses URL API to handle relative/absolute paths and query params securely
+            # Execute JS to get usernames using multiple strategies
             raw_usernames = self.page.evaluate('''() => {
-                const candidates = [];
-                const links = document.querySelectorAll('a[href]');
+                const usernames = [];
+                const seen = new Set();
                 
-                for (const link of links) {
-                    const href = link.getAttribute('href');
-                    if (!href) continue;
+                // Strategy 1: Avatar links (44px profile pictures)
+                // These are the most reliable - each user entry has a 44px avatar
+                const avatarLinks = document.querySelectorAll('a[href^="/"]');
+                for (const link of avatarLinks) {
+                    // Check if this looks like a profile avatar link
+                    const style = link.getAttribute('style') || '';
+                    const hasSize = style.includes('44px') || style.includes('54px') || style.includes('56px');
                     
-                    try {
-                        // Normalize URL (handles relative/absolute)
-                        const url = new URL(href, document.baseURI);
-                        
-                        // Get path segments
-                        const parts = url.pathname.split('/').filter(p => p.length > 0);
-                        
-                        // Profile usually has exactly 1 segment: /username/
-                        if (parts.length === 1) {
-                            candidates.push(parts[0]);
+                    // Also check parent/child for size indicators
+                    const img = link.querySelector('img');
+                    const isAvatar = img && (
+                        img.alt?.includes('profile picture') ||
+                        hasSize ||
+                        link.getAttribute('role') === 'link'
+                    );
+                    
+                    if (isAvatar || hasSize) {
+                        const href = link.getAttribute('href');
+                        if (href && href.match(/^\/[a-zA-Z0-9._]+\/$/)) {
+                            const username = href.replace(/\//g, '');
+                            if (username && !seen.has(username)) {
+                                seen.add(username);
+                                usernames.push(username);
+                            }
                         }
-                    } catch (e) {
-                        continue;
                     }
                 }
-                return candidates;
+                
+                // Strategy 2: Username spans with specific Instagram classes
+                // Fallback if avatar detection fails
+                if (usernames.length === 0) {
+                    const spans = document.querySelectorAll('span._ap3a._aaco._aacw._aacx._aad7._aade');
+                    for (const span of spans) {
+                        const text = span.textContent?.trim();
+                        if (text && text.match(/^[a-zA-Z0-9._]+$/) && !seen.has(text)) {
+                            seen.add(text);
+                            usernames.push(text);
+                        }
+                    }
+                }
+                
+                // Strategy 3: Any link that looks like /username/
+                // Last resort fallback
+                if (usernames.length === 0) {
+                    const allLinks = document.querySelectorAll('a[href]');
+                    for (const link of allLinks) {
+                        const href = link.getAttribute('href');
+                        if (!href) continue;
+                        
+                        try {
+                            const url = new URL(href, document.baseURI);
+                            const parts = url.pathname.split('/').filter(p => p.length > 0);
+                            
+                            if (parts.length === 1 && parts[0].match(/^[a-zA-Z0-9._]+$/)) {
+                                const username = parts[0];
+                                if (!seen.has(username)) {
+                                    seen.add(username);
+                                    usernames.push(username);
+                                }
+                            }
+                        } catch (e) {
+                            continue;
+                        }
+                    }
+                }
+                
+                return usernames;
             }''')
 
-            # Filter in Python
+            # Filter in Python - remove system paths
             for username in raw_usernames:
                 if username in self.config.instagram_system_paths:
                     continue

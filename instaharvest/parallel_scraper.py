@@ -17,7 +17,7 @@ from playwright.sync_api import sync_playwright, Page
 
 from .config import ScraperConfig
 from .post_data import PostData
-from .logger import setup_logger
+from .logging_config import get_logger
 
 # Global flag for graceful shutdown in worker processes
 _shutdown_requested = False
@@ -89,7 +89,7 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
                     if username not in tagged:
                         tagged.append(username)
                         logger.debug(f"✓ Added tag: {username}")
-            except:
+            except Exception:
                 continue
 
         # Close popup
@@ -97,7 +97,7 @@ def _extract_reel_tags(soup: BeautifulSoup, page: Page, url: str, worker_id: int
             close_button = page.locator(config.selector_close_button).first
             close_button.click(timeout=config.popup_close_timeout)
             logger.debug(f"✓ Closed tag popup")
-        except:
+        except Exception:
             pass
 
         if tagged:
@@ -141,7 +141,7 @@ def _parse_number(text: str, config: ScraperConfig) -> Optional[int]:
                 
         value = float(clean_text)
         return int(value * multiplier)
-    except:
+    except Exception:
         return None
 
 def _extract_reel_likes(soup: BeautifulSoup, page: Page, worker_id: int, config: ScraperConfig) -> int:
@@ -343,7 +343,7 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                             # Use config selector for waiting
                             page.wait_for_selector(config.selector_post_tag_container, timeout=config.post_tag_wait_timeout, state='attached')
                             logger.debug(f"[{idx}/{total_in_batch}] ✓ Tag elements detected")
-                        except:
+                        except Exception:
                             logger.debug(f"[{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
 
                         tagged_accounts = _extract_tags_robust(soup, page, url, worker_id, config)
@@ -399,11 +399,11 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Always cleanup browser resources
             try:
                 context.close()
-            except:
+            except Exception:
                 pass
             try:
                 browser.close()
-            except:
+            except Exception:
                 pass
 
     return batch_results
@@ -429,7 +429,7 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
             logger.debug("Detected VIDEO post")
         else:
             logger.debug("Detected IMAGE post")
-    except:
+    except Exception:
         pass
 
     # STEP 2: If VIDEO post, use POPUP extraction (like reels)
@@ -468,14 +468,14 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
 
                                 if username and username not in tagged:
                                     tagged.append(username)
-                        except:
+                        except Exception:
                             continue
 
                     # Close popup
                     try:
                         close_button = page.locator(config.selector_close_button).first
                         close_button.click(timeout=config.popup_close_timeout)
-                    except:
+                    except Exception:
                         page.keyboard.press('Escape')
 
         except Exception as e:
@@ -523,7 +523,7 @@ def _extract_tags_robust(soup: BeautifulSoup, page: Page, url: str, worker_id: i
 
                     if username and username not in tagged:
                         tagged.append(username)
-            except:
+            except Exception:
                 continue
 
         if tagged:
@@ -581,12 +581,7 @@ class ParallelPostDataScraper:
     def __init__(self, config: Optional[ScraperConfig] = None):
         """Initialize parallel scraper"""
         self.config = config or ScraperConfig()
-        self.logger = setup_logger(
-            name='ParallelPostDataScraper',
-            log_file=self.config.log_file,
-            level=self.config.log_level,
-            log_to_console=self.config.log_to_console
-        )
+        self.logger = get_logger('ParallelPostDataScraper')
 
     def scrape_multiple(
         self,
@@ -718,68 +713,97 @@ class ParallelPostDataScraper:
             # Start workers asynchronously
             async_result = pool.map_async(_worker_scrape_batch, worker_args)
 
+            # Collected data for partial return
+            collected_data_map = {}
+
             # REAL-TIME: Monitor queue while workers are running
-            while not async_result.ready() or not result_queue.empty():
-                try:
-                    # Non-blocking queue check
-                    message = result_queue.get(timeout=0.5)
+            try:
+                while not async_result.ready() or not result_queue.empty():
+                    try:
+                        # Non-blocking queue check
+                        message = result_queue.get(timeout=0.5)
 
-                    if message['type'] == 'post_result':
-                        # SUCCESS: Post scraped
-                        data = message['data']
-                        worker_id = message['worker_id']
-                        completed_count += 1
+                        if message['type'] == 'post_result':
+                            # SUCCESS: Post scraped
+                            data = message['data']
+                            worker_id = message['worker_id']
+                            completed_count += 1
+                            
+                            # Store for partial return
+                            collected_data_map[data['url']] = data
 
-                        self.logger.info(
-                            f"📦 [{completed_count}/{total_posts}] Worker {worker_id} completed: "
-                            f"{len(data['tagged_accounts'])} tags, {data['likes']} likes"
-                        )
+                            self.logger.info(
+                                f"📦 [{completed_count}/{total_posts}] Worker {worker_id} completed: "
+                                f"{len(data['tagged_accounts'])} tags, {data['likes']} likes"
+                            )
 
-                        # REAL-TIME Excel write
-                        if excel_exporter:
-                            try:
-                                excel_exporter.add_row(
-                                    post_url=data['url'],
-                                    tagged_accounts=data['tagged_accounts'],
-                                    likes=data['likes'],
-                                    post_date=data['timestamp'],
-                                    content_type=data.get('content_type', 'Post')
-                                )
-                                self.logger.info(f"  ✓ Saved to Excel: {data['url']}")
-                            except Exception as e:
-                                self.logger.error(f"  ✗ Excel write failed: {e}")
+                            # REAL-TIME Excel write
+                            if excel_exporter:
+                                try:
+                                    excel_exporter.add_row(
+                                        post_url=data['url'],
+                                        tagged_accounts=data['tagged_accounts'],
+                                        likes=data['likes'],
+                                        post_date=data['timestamp'],
+                                        content_type=data.get('content_type', 'Post')
+                                    )
+                                    self.logger.info(f"  ✓ Saved to Excel: {data['url']}")
+                                except Exception as e:
+                                    self.logger.error(f"  ✗ Excel write failed: {e}")
 
-                    elif message['type'] == 'post_error':
-                        # ERROR: Post failed
-                        worker_id = message['worker_id']
-                        url = message['url']
-                        error = message['error']
-                        completed_count += 1
+                        elif message['type'] == 'post_error':
+                            # ERROR: Post failed
+                            worker_id = message['worker_id']
+                            url = message['url']
+                            error = message['error']
+                            completed_count += 1
 
-                        self.logger.error(
-                            f"❌ [{completed_count}/{total_posts}] Worker {worker_id} failed: {url} - {error}"
-                        )
+                            self.logger.error(
+                                f"❌ [{completed_count}/{total_posts}] Worker {worker_id} failed: {url} - {error}"
+                            )
 
-                except:
-                    # Queue empty or timeout - continue
-                    time.sleep(self.config.ui_element_load_delay)
+                    except KeyboardInterrupt:
+                        raise # Re-raise to outer block
+                    except Exception:
+                        # Queue empty or timeout - continue
+                        time.sleep(self.config.ui_element_load_delay)
 
-            # Get final results from workers
-            batch_results_list = async_result.get()
+                # Get final results from workers (normal completion)
+                batch_results_list = async_result.get()
 
-            # Flatten results
-            for batch_results in batch_results_list:
-                for result_dict in batch_results:
+                # Flatten results
+                for batch_results in batch_results_list:
+                    for result_dict in batch_results:
+                        results.append(PostData(
+                            url=result_dict['url'],
+                            tagged_accounts=result_dict['tagged_accounts'],
+                            likes=result_dict['likes'],
+                            timestamp=result_dict['timestamp'],
+                            content_type=result_dict.get('content_type', 'Post')
+                        ))
+            
+            except KeyboardInterrupt:
+                self.logger.warning("\n⚠️ Parallel scraping interrupted! Terminating workers...")
+                pool.terminate()
+                pool.join()
+                
+                # Construct partial results from what we collected from queue
+                for url, data in collected_data_map.items():
                     results.append(PostData(
-                        url=result_dict['url'],
-                        tagged_accounts=result_dict['tagged_accounts'],
-                        likes=result_dict['likes'],
-                        timestamp=result_dict['timestamp'],
-                        content_type=result_dict.get('content_type', 'Post')  # Include content_type
+                        url=data['url'],
+                        tagged_accounts=data['tagged_accounts'],
+                        likes=data['likes'],
+                        timestamp=data['timestamp'],
+                        content_type=data.get('content_type', 'Post')
                     ))
+                
+                self.logger.warning(f"Returning {len(results)} partial results...")
+                return results
 
         # Sort results by original URL order
-        results_dict = {r.url: r for r in results}
+        # Filter out any dicts that may have slipped through (only keep PostData objects)
+        valid_results = [r for r in results if hasattr(r, 'url') and not isinstance(r, dict)]
+        results_dict = {r.url: r for r in valid_results}
         sorted_results = [
             results_dict.get(
                 link['url'],

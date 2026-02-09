@@ -24,13 +24,16 @@
 - ✓ **Verified Badge Check** - Detect if account has verified badge
 - 🎭 **Profile Category** - Extract profile category (Actor, Model, Photographer, etc.)
 - 📝 **Complete Bio** - Extract full bio with links, emails, mentions, and contact info
-- 🔗 **Post & Reel Links** - Intelligent scrolling and link collection
-- 🏷️ **Tagged Accounts** - Extract tags from posts and reels
+- 🔗 **Post & Reel Links** - Intelligent scrolling and link collection (Post vs Reel detection)
+- 📥 **Media Download** - Download Images & Videos (High Quality + yt-dlp support)
+- 🎬 **Reel Data** - Specialized scraping for Reels (views, plays, distinct metrics)
+- 🏷️ **Tagged Accounts** - Extract tags from posts and reels (popup & container support)
 - 💬 **Comment Scraping** - Full comment extraction with likes, replies, author info
 - 👥 **Followers/Following** - Collect lists with real-time output
 - 💬 **Direct Messaging** - Send DMs with smart rate limiting
 - 🤝 **Follow/Unfollow** - Manage following with rate limiting
 - ⚡ **Parallel Processing** - Scrape multiple posts simultaneously
+- 🛡️ **Graceful Shutdown** - Safe interruption (Ctrl+C) with auto-save
 - 📑 **Excel Export** - Real-time data export to Excel
 - 🌐 **Shared Browser** - Single browser for all operations
 - 🔍 **HTML Detection** - Automatic structure change detection
@@ -57,12 +60,14 @@ playwright install chrome
 <summary><b>🔧 Method 2: Install from GitHub (Latest Development Version)</b> - Click to expand</summary>
 
 #### Step 1: Clone the Repository
+
 ```bash
 git clone https://github.com/mpython77/insta-harvester.git
 cd insta-harvester
 ```
 
 #### Step 2: Install Dependencies
+
 ```bash
 # Install Python dependencies
 pip install -r requirements.txt
@@ -72,17 +77,16 @@ playwright install chrome
 ```
 
 #### Step 3: Install Package in Development Mode (Optional)
+
 ```bash
 # Install as editable package
 pip install -e .
 ```
 
 **OR** simply use it without installation:
-```bash
-# Just make sure you're in the project directory
-cd /path/to/insta-harvester
 
-# Then run examples
+```bash
+# ⚡ Run directly from source (Intelligent Session Discovery included)
 python examples/save_session.py
 ```
 
@@ -96,6 +100,7 @@ python examples/save_session.py
 <summary><b>📋 Step-by-Step Setup Instructions</b> - Click to expand</summary>
 
 ### Step 1: Verify Python Installation
+
 ```bash
 # Check Python version (requires 3.8+)
 python --version
@@ -106,6 +111,7 @@ python --version
 ### Step 2: Install InstaHarvest
 
 **From GitHub:**
+
 ```bash
 git clone https://github.com/mpython77/insta-harvester.git
 cd insta-harvester
@@ -114,6 +120,7 @@ playwright install chrome
 ```
 
 **From PyPI:**
+
 ```bash
 pip install instaharvest
 playwright install chrome
@@ -139,6 +146,7 @@ python save_session.py
 ```
 
 This will:
+
 1. Open Chrome browser
 2. Navigate to Instagram
 3. Let you log in manually
@@ -163,7 +171,6 @@ python examples/main_advanced.py
 </details>
 
 ---
-
 
 > **⚠️ IMPORTANT: Always Use ScraperConfig!**
 > All examples below use `ScraperConfig()` for proper timing and reliability.
@@ -347,7 +354,33 @@ if save_json:
 scraper.close()
 ```
 
+</details>
 
+<details>
+<summary><b>Example 6: Download Media (Images/Videos)</b> - Click to expand</summary>
+
+```python
+from instaharvest import SharedBrowser
+from instaharvest.config import ScraperConfig
+
+# Create config
+config = ScraperConfig()
+
+with SharedBrowser(config=config) as browser:
+    # Download from ANY Post or Reel URL
+    url = "https://www.instagram.com/reel/C-example..."
+    
+    # Automatically handles:
+    # - Images (High Res)
+    # - Videos/Reels (via yt-dlp)
+    # - Carousels (multiple files)
+    files = browser.download_post(url)
+    
+    if files:
+        print(f"✅ Downloaded {len(files)} files:")
+        for f in files:
+            print(f"   📂 {f}")
+```
 
 </details>
 
@@ -361,16 +394,21 @@ scraper.close()
 The `examples/` directory contains ready-to-use scripts:
 
 ### 🔑 Session Setup (Required First)
+
 ```bash
 python examples/save_session.py
 ```
+
 Creates Instagram session (one-time setup, then reused automatically).
 
 ### 🎮 Interactive Demo
+
 ```bash
 python examples/all_in_one.py
 ```
+
 Interactive menu with ALL features:
+
 - Follow/Unfollow users
 - Send messages
 - Collect followers/following
@@ -378,10 +416,13 @@ Interactive menu with ALL features:
 - Profile scraping
 
 ### 🚀 Production Scraping
+
 ```bash
 python examples/main_advanced.py
 ```
+
 Full automatic profile scraping:
+
 - Collects all post/reel links
 - Extracts data with parallel processing
 - Exports to Excel + JSON
@@ -392,6 +433,7 @@ Full automatic profile scraping:
 To download or view Videos/Reels correctly, the scraper defaults to using Google Chrome (`channel='chrome'`) instead of the bundled Chromium, as Chromium often lacks necessary video codecs.
 
 **Requirements:**
+
 - **Google Chrome** must be installed on your system.
 - If you see a "Library Error" regarding Chrome, please install it or switch to `channel='chromium'` in your config (note: videos might not play/download).
 
@@ -403,9 +445,11 @@ config = ScraperConfig(
 ```
 
 ### ⚙️ Configuration Examples
+
 ```bash
 python examples/example_custom_config.py
 ```
+
 Shows how to customize configuration (delays, viewport, etc.).
 
 </details>
@@ -682,6 +726,7 @@ python examples/save_session.py
 ```
 
 Both methods will:
+
 1. Open Chrome browser
 2. Let you log in to Instagram manually
 3. Save session to `instagram_session.json`
@@ -762,6 +807,7 @@ config = ScraperConfig(
 ### Installation Issues
 
 #### Error: "playwright command not found"
+
 ```bash
 # Solution: Install Playwright first
 pip install playwright
@@ -769,6 +815,7 @@ playwright install chrome
 ```
 
 #### Error: "No module named 'instaharvest'"
+
 ```bash
 # Solution 1: If installed from PyPI
 pip install instaharvest
@@ -783,6 +830,7 @@ python examples/save_session.py  # Works without installation
 ```
 
 #### Error: "Could not find Chrome browser"
+
 ```bash
 # Solution: Install Playwright browsers
 playwright install chrome
@@ -793,6 +841,7 @@ playwright install chrome
 ### Session Issues
 
 #### Error: "Session file not found"
+
 ```bash
 # Solution: Create session first (REQUIRED!)
 cd examples
@@ -802,7 +851,18 @@ python save_session.py
 python all_in_one.py  # or any other script
 ```
 
+### Data Issues
+
+#### "Posts: 0" or "Reels: 0" but content exists
+
+If you see 0 posts despite successful scrolling:
+
+1. Ensure you are using the latest version (v2.7.0+)
+2. **Case Sensitivity**: Newest version handles 'Post' vs 'post' automatically.
+3. Check `save_excel=True` output - data might be saved even if console count is confusing.
+
 #### Error: "Login required" or "Session expired"
+
 ```bash
 # Solution: Re-create session
 cd examples
@@ -820,6 +880,7 @@ python save_session.py
 **Cause:** Unfollow popup appears too slowly for the program
 
 **Solution:** Increase popup delays in configuration
+
 ```python
 from instaharvest import FollowManager
 from instaharvest.config import ScraperConfig
@@ -838,6 +899,7 @@ See **[Configuration Guide](https://github.com/mpython77/insta-harvester/blob/ma
 #### Error: "Could not follow @username"
 
 **Solution:**
+
 ```python
 config = ScraperConfig(
     button_click_delay=3.0,
@@ -851,6 +913,7 @@ config = ScraperConfig(
 **Cause:** Instagram rate limiting - you're doing too much too quickly
 
 **Solution:** Increase rate limiting delays
+
 ```python
 config = ScraperConfig(
     follow_delay_min=10.0,      # Wait 10-15 seconds between follows
@@ -867,6 +930,7 @@ config = ScraperConfig(
 **Problem:** You have slow internet, pages load slowly, getting errors
 
 **Solution:**
+
 ```python
 from instaharvest.config import ScraperConfig
 
@@ -899,11 +963,11 @@ manager = FollowManager(config=config)
    - Rate limiting → Increase `follow_delay_*` and `message_delay_*`
 
 3. **Report bugs:**
-   - GitHub Issues: https://github.com/mpython77/insta-harvester/issues
+   - GitHub Issues: <https://github.com/mpython77/insta-harvester/issues>
    - See `CONTRIBUTING.md` for bug report guidelines
 
 4. **Email support:**
-   - kelajak054@gmail.com
+   - <kelajak054@gmail.com>
 
 </details>
 
@@ -938,13 +1002,14 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 - GitHub Issues: [Report a bug](https://github.com/mpython77/insta-harvester/issues)
 - Documentation: [Read the docs](https://github.com/mpython77/insta-harvester#readme)
-- Email: kelajak054@gmail.com
+- Email: <kelajak054@gmail.com>
 
 ---
 
 ## 🎉 Acknowledgments
 
 Built with:
+
 - [Playwright](https://playwright.dev/) - Browser automation
 - [Pandas](https://pandas.pydata.org/) - Data processing
 - [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) - HTML parsing

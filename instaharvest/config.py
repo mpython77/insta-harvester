@@ -4,7 +4,8 @@ Centralized configuration for all hardcoded values
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
+
 
 
 @dataclass
@@ -44,10 +45,43 @@ class ScraperConfig:
     browser_channel: str = 'chrome'  # Browser channel: 'chrome' (system) or 'chromium' (bundled)
     browser_args: List[str] = field(default_factory=lambda: ['--start-maximized'])  # Browser launch arguments
     
+    # ==================== PROXY CONFIGURATION ====================
+    # Simple single proxy (most common use case)
+    proxy_url: Optional[str] = None  # "http://user:pass@ip:port" or "socks5://user:pass@ip:port"
+    
+    # Advanced: Proxy pool (for rotation)
+    proxies: List[str] = field(default_factory=list)  # List of proxy URLs for rotation
+    
+    # Proxy behavior settings
+    proxy_rotation: bool = True  # Enable automatic proxy rotation
+    proxy_rotation_interval: int = 10  # Rotate every N requests
+    proxy_check_on_start: bool = False  # Validate proxies before use
+    proxy_retry_on_fail: bool = True  # Retry with different proxy on failure
+    proxy_max_failures: int = 3  # Remove proxy after N consecutive failures
+    
     # ==================== SECURITY & ANTI-BAN ====================
-    proxies: List[str] = field(default_factory=list)  # List of proxy URLs
     rotate_user_agent: bool = True  # Enable User-Agent rotation
     user_agents: List[str] = field(default_factory=list)  # Custom User-Agents (overrides default)
+
+    # ==================== STEALTH MODE (ANTI-DETECTION) ====================
+    # Master Controls
+    enable_stealth: bool = True  # Enable anti-detection measures
+    stealth_level: str = 'aggressive'  # 'basic', 'moderate', 'aggressive'
+    
+    # Fingerprint Masking
+    mask_webgl: bool = True  # Mask WebGL fingerprint
+    mask_canvas: bool = True  # Mask Canvas fingerprint (aggressive only)
+    mask_audio: bool = True  # Mask AudioContext fingerprint
+    randomize_viewport: bool = True  # Slightly randomize viewport size
+    
+    # Human Behavior Simulation
+    human_like_mouse: bool = True  # Simulate realistic mouse movements (Bezier curves)
+    human_like_typing: bool = True  # Variable typing speed with pauses/typos
+    human_like_scrolling: bool = True  # Natural scrolling patterns
+    
+    # Delay Variance (makes timing less predictable)
+    delay_variance_min: float = 0.8  # Minimum delay multiplier
+    delay_variance_max: float = 1.4  # Maximum delay multiplier
 
     # ==================== INSTAGRAM URLS ====================
     instagram_base_url: str = 'https://www.instagram.com/'
@@ -186,8 +220,11 @@ class ScraperConfig:
     log_to_console: bool = True
     log_format: str = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
     log_date_format: str = '%Y-%m-%d %H:%M:%S'
+    log_emoji_enabled: bool = True  # Use emoji prefixes in terminal
+    log_show_context: bool = True   # Show module/function context
 
     # ==================== OUTPUT FILES ====================
+    base_output_dir: str = '.'  # Root directory for all outputs (default: current dir)
     links_file: str = 'post_links.txt'
     excel_filename_pattern: str = "instagram_data_{username}.xlsx"
     json_filename_pattern: str = "instagram_data_{username}.json"
@@ -249,6 +286,7 @@ class ScraperConfig:
     # We remove 'section' to be safer as the link might be in a div sibling to the section.
     # We also remove 'header' to be maximally robust (some mobile views or layouts might differ).
     selector_bio_link_container: str = 'svg[aria-label="Link icon"]'
+    selector_bio_more_button: str = 'div[role="button"]:has-text("more"), span:text-is("more")'  # Expands truncated bio
     selector_examples_links: str = 'a[href*="threads"]' 
     selector_threads_badge: str = 'svg[aria-label="Threads"]'
     
@@ -269,9 +307,11 @@ class ScraperConfig:
     selector_post_tag_container: str = 'div._aa1y'
     selector_post_tag: str = 'div._aa1y'
 
-    # Follower selectors
-    selector_follower_container: str = 'div.x1dm5mii.x16mil14.xieb3on.x1e56ztr.x1lliihq.x193iq5w.xh8yej3'
-    selector_follower_username_span: str = 'span.xjp7ctv'
+    # Follower selectors (based on 2026 HTML structure analysis)
+    selector_follower_container: str = 'div.x1qnrgzn'  # Entry container
+    selector_follower_avatar_link: str = 'a[href^="/"][style*="44px"]'  # Avatar with size indicator
+    selector_follower_username_span: str = 'span._ap3a._aaco._aacw._aacx._aad7._aade'  # Username text
+    selector_follower_fullname_span: str = 'span.x1lliihq.x1plvlek'  # Full name (optional)
 
     # Reel selectors
     selector_reel_container: str = 'div._ac7v.x1ty9z65.xzboxd6'
@@ -335,7 +375,11 @@ class ScraperConfig:
     ])
 
     # Likes selectors (multiple options for different layouts)
+    # Priority order: most specific/reliable first
+    # selector pattern: span.x1ypdohk.x1s688f.x2fvf9.xe9ewy2 - action bar likes counter (2024-2026)
     selector_likes_options: List[str] = field(default_factory=lambda: [
+        'span.x1ypdohk.x1s688f.x2fvf9.xe9ewy2[role="button"]',  # Action bar likes (e.g., "149.2K")
+        'section.x6s0dn4 span.x1ypdohk.x1s688f',  # Section-scoped likes
         'span.html-span.xdj266r.x11i5rnm.xat24cr.x1mh8g0r.xexx8yu.x4uap5.x18d9i69.xkhd6sd.x1hl2dhg.x16tdsg8.x1vvkbs',
         'section.x12nagc span.xdj266r',
         'span.html-span.xdj266r',
@@ -351,21 +395,22 @@ class ScraperConfig:
         'time._aaqe'
     ])
 
-    # Diagnostics selectors
+    # Diagnostics selectors - updated for current Instagram HTML
     diagnostics_post_selectors: Dict[str, str] = field(default_factory=lambda: {
-        'likes': 'span.html-span.xdj266r',
-        'timestamp': 'time[datetime]',
-        'tagged': 'button:has(svg[aria-label="Tags"])',
-        'caption': 'h1._aacl._aaco._aacu._aacx._aad7._aade',
-        'comments': 'section.x1ypdohk.x1pa1cj4 span.x1lliihq'
+        'likes': 'span.x1ypdohk.x1s688f.x2fvf9.xe9ewy2[role="button"], span.html-span.xdj266r, section span.x1lliihq',
+        'timestamp': 'time[datetime], time',
+        'tagged': 'svg[aria-label="Tags"], a[href*="/tagged/"]',
+        'caption': 'h1, div[role="button"] span, span._ap3a',
+        'comments': 'ul li span, svg[aria-label="Comment"]'
     })
 
     diagnostics_reel_selectors: Dict[str, str] = field(default_factory=lambda: {
-        'likes': 'span.x1ypdohk.xt0psk2',
-        'timestamp': 'time.x1p4m5qa',
-        'tagged': 'button:has(svg[aria-label="Tags"])',
-        'views': 'span.xrbpuxu',
-        'audio': 'div._ac0k a'
+        'username': 'a[aria-label$=" reels"] span',
+        'caption': 'span.xuxw1ft',
+        'audio': 'a[href^="/reels/audio/"] span.xlyipyv',
+        'comments': 'svg[aria-label="Comment"] ~ div span.x1hl2dhg',
+        'likes': 'svg[aria-label="Like"] ~ div span.html-span',
+        'profile_pic': 'img[alt$="profile picture"]'
     })
 
     # ==================== COMMENT SCRAPING SETTINGS ====================
@@ -457,3 +502,107 @@ class ScraperConfig:
     })
     number_separators: List[str] = field(default_factory=lambda: [',', '.', ' '])
     return_empty_list_for_no_tags: bool = True
+
+    # ==================== INTERACTION SELECTORS ====================
+    # Used in interactions.py for liking/commenting
+    # Update these when Instagram changes button structure
+    
+    selector_like_svg: str = 'svg[aria-label="Like"]'
+    selector_unlike_svg: str = 'svg[aria-label="Unlike"]'
+    
+    # Multiple strategies for clicking Like button (Instagram varies structure)
+    selector_like_strategies: List[tuple] = field(default_factory=lambda: [
+        ('section:not(ul *) span:has(> svg[aria-label="Like"])', 'section span'),
+        ('article section span:has(svg[aria-label="Like"])', 'article section'),
+        ('section:first-of-type span:has(svg[aria-label="Like"])', 'first section'),
+        ('div:not(li *) > span:has(> svg[aria-label="Like"])', 'non-comment div'),
+    ])
+    
+    # Verification selector after clicking Like
+    selector_unlike_verify: str = 'section span:has(> svg[aria-label="Unlike"])'
+    
+    # Comment interaction selectors
+    selector_comment_textarea: str = 'textarea[aria-label="Add a comment…"]'
+    selector_comment_textarea_fallback: str = 'textarea[placeholder="Add a comment…"]'
+    selector_comment_post_button: str = 'div[role="button"]:has-text("Post")'
+    
+    # ==================== NAVIGATION SELECTORS ====================
+    # Carousel, navigation buttons
+    
+    selector_carousel_next: str = 'button[aria-label="Next"]'
+    selector_carousel_prev: str = 'button[aria-label="Go back"]'
+    selector_home_icon: str = 'svg[aria-label="Home"]'
+    
+    # Tag button for extracting tagged users
+    selector_tag_button: str = 'button:has(svg[aria-label="Tags"]), button:has(svg[aria-label="Tagged people"])'
+    
+    # ==================== MEDIA SELECTORS ====================
+    # For extracting images/videos
+    
+    selector_post_image: str = 'img[src*="cdninstagram"], img[srcset*="cdninstagram"]'
+    selector_post_video: str = 'video source[src*="cdninstagram"], video[src*="cdninstagram"]'
+    selector_reel_video: str = 'video source[type="video/mp4"]'
+
+    # ==================== POST MEDIA SELECTORS (Refactored) ====================
+    # Selectors for finding images and videos in posts
+    
+    # Priority list of image selectors (used in post_data.py)
+    post_image_selectors: List[str] = field(default_factory=lambda: [
+        'img[srcset]',  # Images with srcset (usually high quality)
+        'img[src*="scontent"]',  # scontent CDN images (most common now)
+        'img[src*="cdninstagram"]',  # Direct CDN images
+        'img[src*="fbcdn"]',  # Facebook CDN images
+        'div[role="button"] img',  # Carousel images
+        'div._aagv img',  # Post container images
+        'div._aatk img',  # Alternate post container
+        'article img',  # General article images
+        'main img',  # Main content images
+    ])
+
+    # Priority list of video selectors (used in post_data.py)
+    post_video_selectors: List[str] = field(default_factory=lambda: [
+        'video[poster]',  # Sometimes poster has useful URL
+    ])
+
+    # Carousel selectors (used in post_data.py)
+    carousel_selectors: Dict[str, str] = field(default_factory=lambda: {
+        'container': 'ul._acay, ul',
+        'next_button': 'button[aria-label="Next"]',
+        'slide': 'li',
+        'indicator': 'div._acnb'
+    })
+
+    # Tagged user selectors (used in post_data.py)
+    tagged_user_selectors: Dict[str, str] = field(default_factory=lambda: {
+        'tag_button': 'button:has(svg[aria-label="Tags"]), button:has(svg[aria-label="Tagged people"])',
+        'tag_link': "a[href^='/']",
+        'ignored_users': ['p', 'explore', 'reels', 'stories', 'direct', 'accounts', '']
+    })
+
+    # ==================== BIO EXTRACTION SETTINGS ====================
+    # Domains and keywords to ignore when extracting external links from bio
+    bio_extraction_ignore_list: List[str] = field(default_factory=lambda: [
+        'threads.net', 
+        'threads.com', 
+        '/followers/', 
+        '/following/',
+        'facebook.com', # Often share buttons
+        'javascript:void(0);',
+        '#'
+    ])
+    
+    # Bio text filters (regex or keywords)
+    bio_text_filters: List[str] = field(default_factory=lambda: [
+        r'^\d+(\.\d+)?[KkMm]?\s*(posts|followers|following)$', # Stats
+        'Message', 'Follow', 'Contact' # UI buttons
+    ])
+
+    # ==================== COMMENT UI TEXT ====================
+    # Text patterns for finding UI elements in comments (Localization support)
+    comment_ui_text: Dict[str, Any] = field(default_factory=lambda: {
+        'view_replies': ['View', 'replies'], # Substring check
+        'hide_replies': ['Hide'],
+        'load_more': 'svg[aria-label="Load more comments"]',
+        'reply_button': 'Reply',
+    })
+

@@ -3,26 +3,173 @@ Instagram Session Management Utilities
 
 This module provides utilities for creating and managing Instagram sessions.
 Sessions are saved to allow reuse across multiple runs without re-logging in.
+
+ARCHITECTURE v2.0:
+- Smart session discovery across multiple locations
+- Robust path handling for different IDEs and working directories
+- Backward compatible with existing code
 """
 
 import json
 import os
+import sys
+import logging
 from pathlib import Path
+from typing import Optional, List, Callable
 from playwright.sync_api import sync_playwright
 from .config import ScraperConfig
 
+# Module-level logger
+_logger = logging.getLogger(__name__)
 
-def get_default_session_path():
+# Session file name constant
+SESSION_FILENAME = 'instagram_session.json'
+
+
+def _get_search_paths() -> List[str]:
     """
-    Get the default session file path.
-
-    Returns the session file in the current working directory.
-    This ensures the session is easily accessible and portable.
-
+    Get list of directories to search for session file.
+    
+    Search order (most likely to least likely):
+    1. Current working directory
+    2. Script's directory (where main.py is located)
+    3. User's home/.instaharvest directory
+    4. Library directory (where this file is)
+    
     Returns:
-        str: Path to the default session file
+        List of directory paths to search
     """
-    return os.path.join(os.getcwd(), 'instagram_session.json')
+    paths = []
+    
+    # 1. Current working directory (most common)
+    try:
+        cwd = os.getcwd()
+        if cwd not in paths:
+            paths.append(cwd)
+    except Exception:
+        pass
+    
+    # 2. Script's directory (where the user's script is)
+    try:
+        if sys.argv and sys.argv[0]:
+            script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+            if script_dir and script_dir not in paths:
+                paths.append(script_dir)
+    except Exception:
+        pass
+    
+    # 3. User's instaharvest config directory
+    try:
+        user_config_dir = os.path.expanduser('~/.instaharvest')
+        if user_config_dir not in paths:
+            paths.append(user_config_dir)
+    except Exception:
+        pass
+    
+    # 4. Library directory (fallback)
+    try:
+        lib_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(lib_dir)
+        if parent_dir not in paths:
+            paths.append(parent_dir)
+    except Exception:
+        pass
+    
+    return paths
+
+
+def find_session_file(filename: str = SESSION_FILENAME) -> Optional[str]:
+    """
+    Search for an existing session file in multiple locations.
+    
+    This function searches for the session file in the following order:
+    1. Current working directory
+    2. Script's directory
+    3. User's ~/.instaharvest directory
+    4. Library's parent directory
+    
+    Args:
+        filename: Name of the session file to find
+        
+    Returns:
+        Absolute path to the session file if found, None otherwise
+        
+    Example:
+        >>> path = find_session_file()
+        >>> if path:
+        ...     print(f"Found session at: {path}")
+        ... else:
+        ...     print("No session found, please create one")
+    """
+    search_paths = _get_search_paths()
+    
+    for directory in search_paths:
+        session_path = os.path.join(directory, filename)
+        if os.path.isfile(session_path):
+            _logger.debug(f"Found session file at: {session_path}")
+            return os.path.abspath(session_path)
+    
+    _logger.debug(f"Session file '{filename}' not found in any of: {search_paths}")
+    return None
+
+
+def get_default_session_path(filename: str = SESSION_FILENAME, auto_discover: bool = True) -> str:
+    """
+    Get the default session file path with smart discovery.
+    
+    This function provides intelligent session file path resolution:
+    - If auto_discover is True, searches multiple locations for existing session
+    - Falls back to current working directory if no session found
+    - Ensures consistent behavior across different IDEs and terminals
+    
+    Args:
+        filename: Name of the session file
+        auto_discover: If True, search for existing session in multiple locations.
+                      If False, always return CWD path (legacy behavior).
+    
+    Returns:
+        str: Absolute path to the session file
+        
+    Example:
+        >>> # Will find existing session or default to CWD
+        >>> path = get_default_session_path()
+        >>> print(f"Session path: {path}")
+        
+        >>> # Force CWD (legacy behavior)
+        >>> path = get_default_session_path(auto_discover=False)
+    """
+    if auto_discover:
+        # Try to find existing session file
+        found_path = find_session_file(filename)
+        if found_path:
+            return found_path
+    
+    # Default: current working directory
+    return os.path.join(os.getcwd(), filename)
+
+
+def get_session_save_path(filename: str = SESSION_FILENAME, prefer_cwd: bool = True) -> str:
+    """
+    Get the path where a new session should be saved.
+    
+    Unlike get_default_session_path which searches for existing sessions,
+    this function determines where to SAVE a new session file.
+    
+    Args:
+        filename: Name of the session file
+        prefer_cwd: If True, save to current working directory.
+                   If False, save to user's config directory.
+    
+    Returns:
+        str: Absolute path where session should be saved
+    """
+    if prefer_cwd:
+        return os.path.join(os.getcwd(), filename)
+    else:
+        # Use user's config directory
+        config_dir = os.path.expanduser('~/.instaharvest')
+        os.makedirs(config_dir, exist_ok=True)
+        return os.path.join(config_dir, filename)
 
 
 def save_session(session_file=None, headless=False):

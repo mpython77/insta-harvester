@@ -561,7 +561,7 @@ class FollowManager(BaseScraper):
                                         unfollow_confirm_button = btn
                                         self.logger.debug(f"✓ Found Unfollow button at index {i}!")
                                         break
-                            except:
+                            except Exception:
                                 continue
                     except Exception as e:
                         self.logger.debug(f"Last resort failed: {e}")

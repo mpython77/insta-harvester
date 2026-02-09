@@ -154,16 +154,29 @@ from .post_data import PostDataScraper, PostData
 from .reel_links import ReelLinksScraper
 from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
-from .excel_export import ExcelExporter
+
 from .comment_scraper import CommentScraper, PostCommentsData
 from .models import CommentData, CommentAuthor, Collaborator, Comment
-from .comments_export import CommentsExporter, RealTimeCommentsExporter, export_comments_to_json, export_comments_to_excel
+from .exporters import CommentsExporter, RealTimeCommentsExporter, export_comments_to_json, export_comments_to_excel, ExcelExporter
 from .follow import FollowManager
 from .message import MessageManager
 from .followers import FollowersCollector
 from .shared_browser import SharedBrowser
 from .orchestrator import InstagramOrchestrator, quick_scrape
-from .session_utils import save_session, check_session_exists, load_session_data, get_default_session_path
+from .session_utils import (
+    save_session, 
+    check_session_exists, 
+    load_session_data, 
+    get_default_session_path,
+    find_session_file,
+    get_session_save_path,
+    SESSION_FILENAME
+)
+from .stealth import StealthManager
+from .proxy import ProxyManager
+from .logging_config import SmartLogger, get_logger
+from .core import InstaHarvest
+
 
 __version__ = '2.6.0'
 __author__ = 'Muydinov Doston'
@@ -225,4 +238,21 @@ __all__ = [
     'check_session_exists',
     'load_session_data',
     'get_default_session_path',
+    'find_session_file',
+    'get_session_save_path',
+    'SESSION_FILENAME',
+    
+    # Stealth / Anti-Detection
+    'StealthManager',
+    
+    # Proxy Management
+    'ProxyManager',
+    
+    # Smart Logging
+    'SmartLogger',
+    'get_logger',
+    
+    # Central Hub
+    'InstaHarvest',
 ]
+

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Example: Scrape Data from a Single Post/Reel
 Demonstrates how to extract metadata (likes, tags, date) from a specific URL.
@@ -6,8 +8,19 @@ Usage:
     python examples/example_post_data.py
 """
 
+import sys
+import os
+
+# ALWAYS prioritize local development version if available
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if os.path.exists(os.path.join(parent_dir, 'instaharvest')):
+    sys.path.insert(0, parent_dir)
+
 from instaharvest import PostDataScraper
 from instaharvest.config import ScraperConfig
+from instaharvest.session_utils import find_session_file
+
 
 def main():
     print("=" * 60)
@@ -16,7 +29,15 @@ def main():
 
     # 1. Setup Config
     # headless=False so you can see it working
-    config = ScraperConfig(headless=False)
+    
+    # Use intelligent session discovery
+    session_file = find_session_file()
+    if session_file:
+         print(f"✅ Found session: {session_file}")
+         config = ScraperConfig(headless=False, session_file=session_file)
+    else:
+         print("⚠️  No session file found via auto-discovery, using default...")
+         config = ScraperConfig(headless=False)
     
     # 2. Create Scraper
     scraper = PostDataScraper(config=config)
