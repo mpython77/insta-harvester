@@ -114,9 +114,27 @@ class SharedBrowser:
         if self.config.browser_channel and self.config.browser_channel != 'chromium':
             launch_options['channel'] = self.config.browser_channel
 
-        # Launch browser
-        self.browser = self.playwright.chromium.launch(**launch_options)
-        self.logger.info(f"🌐 Browser launched (headless={headless})")
+        # Launch browser with retry logic for headless mode
+        try:
+            self.browser = self.playwright.chromium.launch(**launch_options)
+        except Exception as launch_error:
+            error_msg = str(launch_error)
+            
+            # RETRY LOGIC: If "Old Headless" error, try launching in NEW HEADLESS mode
+            if "Old Headless mode" in error_msg or "Old Headless" in error_msg:
+                self.logger.warning("System Chrome rejected 'Old Headless' mode. Retrying with 'new' Headless...")
+                launch_options['headless'] = 'new'
+                try:
+                    self.browser = self.playwright.chromium.launch(**launch_options)
+                except Exception as retry_error:
+                    # If New Headless also fails, try HEADFUL as last resort
+                    self.logger.warning("New Headless also failed. Retrying in HEADFUL mode...")
+                    launch_options['headless'] = False
+                    self.browser = self.playwright.chromium.launch(**launch_options)
+            else:
+                raise launch_error
+        
+        self.logger.info(f"🌐 Browser launched (headless={launch_options.get('headless', headless)})")
 
         # Create context with session
         self.context = self.browser.new_context(
@@ -125,7 +143,8 @@ class SharedBrowser:
                 'width': self.config.viewport_width,
                 'height': self.config.viewport_height
             },
-            user_agent=self.config.user_agent
+            user_agent=self.config.user_agent,
+            locale=self.config.locale
         )
 
         # Create page

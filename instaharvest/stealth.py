@@ -343,9 +343,11 @@ class StealthManager:
         # Use playwright-stealth if available
         if self._playwright_stealth_available:
             try:
-                from playwright_stealth import stealth
-                stealth(page)
-                self.logger.debug("✓ playwright-stealth patches applied")
+                from playwright_stealth import Stealth
+                # Create Stealth instance with default settings
+                stealth_plugin = Stealth() 
+                stealth_plugin.apply_stealth_sync(page)
+                self.logger.debug("✓ playwright-stealth patches applied (class-based)")
             except Exception as e:
                 self.logger.warning(f"playwright-stealth failed: {e}")
         

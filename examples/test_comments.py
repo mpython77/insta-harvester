@@ -158,8 +158,9 @@ def test_export_functions():
     print("="*60)
 
     try:
-        from instaharvest.comment_scraper import CommentData, CommentAuthor, PostCommentsData
-        from instaharvest.comments_export import export_comments_to_json, export_comments_to_excel
+        from instaharvest.models import CommentData, CommentAuthor
+        from instaharvest.comment_scraper import PostCommentsData
+        from instaharvest.exporters import export_comments_to_json, export_comments_to_excel
 
         # Create test data
         author = CommentAuthor(
@@ -170,14 +171,14 @@ def test_export_functions():
         )
 
         comment = CommentData(
-            comment_id="123456",
+            id="123456",
             author=author,
             text="This is a test comment!",
             timestamp="January 14, 2026",
             timestamp_iso="2026-01-14T12:00:00Z",
             likes_count=42,
             reply_count=2,
-            comment_url="https://instagram.com/p/ABC123/c/123456/",
+            permalink="https://instagram.com/p/ABC123/c/123456/",
             is_reply=False,
             replies=[]
         )

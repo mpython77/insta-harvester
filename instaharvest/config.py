@@ -44,6 +44,7 @@ class ScraperConfig:
     user_agent: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     browser_channel: str = 'chrome'  # Browser channel: 'chrome' (system) or 'chromium' (bundled)
     browser_args: List[str] = field(default_factory=lambda: ['--start-maximized'])  # Browser launch arguments
+    locale: str = 'en-US'  # Browser locale (language)
     
     # ==================== PROXY CONFIGURATION ====================
     # Simple single proxy (most common use case)

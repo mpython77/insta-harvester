@@ -133,7 +133,7 @@ Quick Start:
         save_session()
 
 Author: Muydinov Doston
-Version: 2.6.0
+Version: 2.7.1
 License: MIT
 """
 
@@ -178,7 +178,7 @@ from .logging_config import SmartLogger, get_logger
 from .core import InstaHarvest
 
 
-__version__ = '2.7.0'
+__version__ = '2.7.1'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'

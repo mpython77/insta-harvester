@@ -201,8 +201,10 @@ class BaseScraper(ABC):
                     'width': self.config.viewport_width,
                     'height': self.config.viewport_height
                 },
-                'user_agent': final_user_agent
+                'user_agent': final_user_agent,
+                'locale': self.config.locale
             }
+            
             
             # Apply Proxy at Context Level
             if selected_proxy:

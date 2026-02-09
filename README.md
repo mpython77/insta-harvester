@@ -302,14 +302,12 @@ with SharedBrowser(config=config) as browser:
 <summary><b>Example 5: Scrape Comments from Posts</b> - Click to expand</summary>
 
 ```python
-import sys
-import os
-sys.path.insert(0, os.getcwd())
-
 from instaharvest import CommentScraper
-from instaharvest.comments_export import export_comments_to_json, export_comments_to_excel
+from instaharvest.exporters import export_comments_to_json, export_comments_to_excel
+from instaharvest.config import ScraperConfig
 
-scraper = CommentScraper()
+config = ScraperConfig()
+scraper = CommentScraper(config=config)
 session_data = scraper.load_session()
 scraper.setup_browser(session_data)
 
@@ -857,7 +855,7 @@ python all_in_one.py  # or any other script
 
 If you see 0 posts despite successful scrolling:
 
-1. Ensure you are using the latest version (v2.7.0+)
+1. Ensure you are using the latest version (v2.7.1+)
 2. **Case Sensitivity**: Newest version handles 'Post' vs 'post' automatically.
 3. Check `save_excel=True` output - data might be saved even if console count is confusing.
 

@@ -460,19 +460,21 @@ def export_comments_to_excel(
     logger: Optional[logging.Logger] = None
 ) -> bool:
     """Standalone helper function"""
-    # Simply use CommentsExporter logic
     try:
-        exporter = CommentsExporter(filename.replace('.xlsx',''), logger=logger, export_json=False)
+        # Use CommentsExporter to flatten data but handle saving manually
+        exporter = CommentsExporter("temp", logger=logger, export_json=False, export_excel=False)
+        
         if isinstance(comments_data, list):
             for cd in comments_data:
                 exporter.add_post_comments(cd)
         else:
             exporter.add_post_comments(comments_data)
-        
-        # Override filename pattern logic in exporter for this specific call
-        # Hacky? Better to reuse logic cleanly. 
-        # Writing manual implementation for standalone speed:
-        exporter.finalize()
+            
+        if not exporter.excel_rows:
+            return False
+            
+        df = pd.DataFrame(exporter.excel_rows)
+        df.to_excel(filename, index=False)
         return True
     except Exception as e:
          if logger: logger.error(f"Excel export failed: {e}")
