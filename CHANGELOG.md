@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-02-26
+
+### Added
+
+- **Hashtag Scraper** (`hashtag_scraper.py`): Scrape posts from `#hashtag` pages with scroll-collect
+- **Story Scraper** (`story_scraper.py`): Extract story items via API interception + DOM fallback
+- **Location Scraper** (`location_scraper.py`): Scrape posts from location pages with metadata
+- **Search API** (`search_api.py`): Search users, hashtags, places via web search endpoint
+- **Explore Scraper** (`explore_scraper.py`): Scrape trending posts from explore page
+
 ## [2.8.0] - 2026-02-26
 
 ### Added

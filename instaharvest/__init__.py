@@ -134,7 +134,7 @@ Quick Start:
         save_session()
 
 Author: Muydinov Doston
-Version: 2.8.0
+Version: 2.9.0
 License: MIT
 """
 
@@ -181,9 +181,14 @@ from .notifications import NotificationReader, NotificationItem
 from .webhooks import EventEmitter, FollowerWatcher, Event, EventTypes
 from .batch_downloader import BatchDownloader, DownloadTask, DownloadResult, BatchResult, ProgressTracker
 from .async_engine import AsyncBaseScraper, AsyncProfileScraper, AsyncBatchScraper
+from .hashtag_scraper import HashtagScraper, HashtagResult
+from .story_scraper import StoryScraper, StoryResult, StoryItem
+from .location_scraper import LocationScraper, LocationResult
+from .search_api import SearchAPI, SearchResult
+from .explore_scraper import ExploreScraper, ExploreResult
 
 
-__version__ = '2.8.0'
+__version__ = '2.9.0'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
@@ -281,5 +286,26 @@ __all__ = [
     'AsyncBaseScraper',
     'AsyncProfileScraper',
     'AsyncBatchScraper',
+
+    # Hashtag Scraper
+    'HashtagScraper',
+    'HashtagResult',
+
+    # Story Scraper
+    'StoryScraper',
+    'StoryResult',
+    'StoryItem',
+
+    # Location Scraper
+    'LocationScraper',
+    'LocationResult',
+
+    # Search API
+    'SearchAPI',
+    'SearchResult',
+
+    # Explore Scraper
+    'ExploreScraper',
+    'ExploreResult',
 ]
 
