@@ -12,6 +12,7 @@ examples/
 ├── all_in_one.py               # Complete demo with ALL features
 ├── main_advanced.py            # Production scraping automation
 ├── download_media.py           # 📥 Download Images & Videos (Post/Reel)
+├── example_notifications.py    # 🔔 Read & filter activity notifications
 └── example_custom_config.py    # Configuration customization examples
 ```
 

@@ -507,25 +507,49 @@ class ScraperConfig:
     # ==================== INTERACTION SELECTORS ====================
     # Used in interactions.py for liking/commenting
     # Update these when Instagram changes button structure
+    #
+    # IMPORTANT: Post like SVG has height="24", Comment like SVG has height="12"
+    # We use this attribute to distinguish between post and comment like buttons
     
-    selector_like_svg: str = 'svg[aria-label="Like"]'
-    selector_unlike_svg: str = 'svg[aria-label="Unlike"]'
+    # --- POST LIKE selectors (height=24) ---
+    selector_like_svg: str = 'svg[aria-label="Like"][height="24"]'
+    selector_unlike_svg: str = 'svg[aria-label="Unlike"][height="24"]'
     
     # Multiple strategies for clicking Like button (Instagram varies structure)
     selector_like_strategies: List[tuple] = field(default_factory=lambda: [
-        ('section:not(ul *) span:has(> svg[aria-label="Like"])', 'section span'),
-        ('article section span:has(svg[aria-label="Like"])', 'article section'),
-        ('section:first-of-type span:has(svg[aria-label="Like"])', 'first section'),
-        ('div:not(li *) > span:has(> svg[aria-label="Like"])', 'non-comment div'),
+        ('section span:has(> svg[aria-label="Like"][height="24"])', 'section span'),
+        ('article section span:has(svg[aria-label="Like"][height="24"])', 'article section'),
+        ('section:first-of-type span:has(svg[aria-label="Like"][height="24"])', 'first section'),
+        ('div:not(li *) > span:has(> svg[aria-label="Like"][height="24"])', 'non-comment div'),
+        ('span.x1rg5ohu span:has(> svg[aria-label="Like"])', 'action bar span'),
     ])
     
     # Verification selector after clicking Like
-    selector_unlike_verify: str = 'section span:has(> svg[aria-label="Unlike"])'
+    selector_unlike_verify: str = 'section span:has(> svg[aria-label="Unlike"][height="24"])'
     
     # Comment interaction selectors
     selector_comment_textarea: str = 'textarea[aria-label="Add a comment…"]'
     selector_comment_textarea_fallback: str = 'textarea[placeholder="Add a comment…"]'
     selector_comment_post_button: str = 'div[role="button"]:has-text("Post")'
+    
+    # --- COMMENT LIKE selectors (height=12) ---
+    selector_comment_like_svg: str = 'svg[aria-label="Like"][height="12"]'
+    selector_comment_unlike_svg: str = 'svg[aria-label="Unlike"][height="12"]'
+    selector_comment_like_button: str = 'span._a9zu div[role="button"]:has(svg[aria-label="Like"][height="12"])'
+    selector_comment_unlike_button: str = 'span._a9zu div[role="button"]:has(svg[aria-label="Unlike"][height="12"])'
+    selector_comment_item_wrapper: str = 'ul._a9ym div[role="button"]:has(li._a9zj)'
+    selector_comment_author_link: str = 'h3 a[role="link"]'
+    
+    # --- NOTIFICATION selectors ---
+    notification_url: str = 'https://www.instagram.com/accounts/activity/'
+    selector_notif_item: str = 'div[data-pressable-container]'
+    selector_notif_username: str = 'a._a6hd'
+    selector_notif_username_text: str = 'span._aade'
+    selector_notif_time: str = 'abbr[aria-label]'
+    selector_notif_thumbnail: str = 'a[aria-label="Media thumbnail"]'
+    selector_notif_follow_btn: str = 'button._aswp'
+    selector_notif_section: str = 'div[role="heading"] > span'
+    selector_notif_heading: str = 'span:has-text("Notifications")'
     
     # ==================== NAVIGATION SELECTORS ====================
     # Carousel, navigation buttons

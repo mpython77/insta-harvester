@@ -38,6 +38,7 @@
 - 🌐 **Shared Browser** - Single browser for all operations
 - 🔍 **HTML Detection** - Automatic structure change detection
 - 📝 **Professional Logging** - Comprehensive logging system
+- 🔔 **Notification Reader** - Read, filter, and analyze activity feed notifications
 
 ---
 
@@ -657,6 +658,71 @@ export_comments_to_json(comments, 'comments.json')
 export_comments_to_excel(comments, 'comments.xlsx')
 ```
 
+### 9. Notification Reader
+
+```python
+from playwright.sync_api import sync_playwright
+from instaharvest import ScraperConfig, StealthManager, NotificationReader
+import logging, time
+
+config = ScraperConfig()
+logger = logging.getLogger('notif')
+
+with sync_playwright() as pw:
+    browser = pw.chromium.launch(headless=False)
+    context = browser.new_context(
+        storage_state='instagram_session.json',
+        viewport={'width': 1280, 'height': 900},
+        user_agent=config.user_agent,
+    )
+    page = context.new_page()
+
+    # Apply stealth
+    stealth = StealthManager(config)
+    stealth.apply_page_stealth(page)
+    page.goto('https://www.instagram.com/', wait_until='domcontentloaded')
+    time.sleep(4)
+
+    # Read notifications
+    reader = NotificationReader(page, logger, config)
+    notifications = reader.read_notifications(max_count=50, scroll=True)
+
+    # Filter by type
+    follows = reader.filter_by_type(notifications, 'follow')
+    likes = reader.filter_by_type(notifications, 'post_like')
+
+    # Filter by section
+    this_week = reader.filter_by_section(notifications, 'This week')
+
+    # Summary statistics
+    stats = reader.summary(notifications)
+    print(f"Total: {stats['total']}, By type: {stats['by_type']}")
+
+    # Convenience methods
+    new_followers = reader.get_new_followers_usernames()
+
+    # Export to JSON-serializable dicts
+    data = reader.to_dicts(notifications)
+
+    context.close()
+    browser.close()
+```
+
+**Supported notification types:**
+
+| Type | Example |
+|------|---------|
+| `follow` | "started following you" |
+| `post_like` | "liked your post/reel/photo/video" |
+| `comment_like` | "liked your comment: ..." |
+| `comment` | "commented: ..." |
+| `mention` | "mentioned you" / "tagged you" |
+| `follow_request` | "requested to follow you" |
+| `follow_accepted` | "accepted your follow request" |
+| `thread` | "posted a thread you might be interested in" |
+| `story` | "posted a story" |
+| `system` | Meta/Instagram system notifications |
+
 </details>
 
 ---
@@ -749,8 +815,10 @@ instaharvest/
 │   ├── message.py         # Direct messaging
 │   ├── post_data.py       # Post data extraction
 │   ├── shared_browser.py  # Shared browser manager
+│   ├── notifications.py   # Notification reader
 │   └── ...                # More modules
 ├── examples/              # Example scripts
+│   ├── example_notifications.py  # Notification reader example
 ├── README.md              # This file
 ├── setup.py               # Package setup
 └── LICENSE                # MIT License

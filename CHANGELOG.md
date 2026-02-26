@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.2] - 2026-02-26
+
+### Added
+
+- **Notification Reader**: New `NotificationReader` class for reading Instagram activity feed notifications.
+  - Reads all notification types: follow, post_like, comment_like, comment, mention, follow_request, follow_accepted, thread, story, system.
+  - Section-based tracking (Today, Yesterday, This week, This month, Earlier).
+  - Filters by type, section, and username.
+  - Summary statistics with unique users, follow-back tracking.
+  - Convenience methods: `get_follows()`, `get_post_likes()`, `get_comment_likes()`, `get_comments()`, `get_new_followers_usernames()`.
+  - Grouped notification support ("and 5 others").
+  - JSON export via `to_dicts()`.
+- **`NotificationItem`** dataclass with full notification metadata.
+- **`example_notifications.py`** example script demonstrating notification reading.
+
+### Changed
+
+- **Full English Localization**: All comments, docstrings, and log messages in `notifications.py` converted to English.
+- **Documentation**: Updated README with Notification Reader API docs, Features list, and project structure.
+
+---
+
 ## [2.7.1] - 2026-02-10
 
 ### Fixed

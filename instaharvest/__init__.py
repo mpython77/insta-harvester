@@ -26,6 +26,7 @@ Features:
 - HTML structure change detection
 - Professional logging
 - Modular design for library usage
+- Notification reader for activity feed
 
 Quick Start:
     # Simple usage
@@ -133,7 +134,7 @@ Quick Start:
         save_session()
 
 Author: Muydinov Doston
-Version: 2.7.1
+Version: 2.7.2
 License: MIT
 """
 
@@ -176,9 +177,10 @@ from .stealth import StealthManager
 from .proxy import ProxyManager
 from .logging_config import SmartLogger, get_logger
 from .core import InstaHarvest
+from .notifications import NotificationReader, NotificationItem
 
 
-__version__ = '2.7.1'
+__version__ = '2.7.2'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
@@ -254,5 +256,9 @@ __all__ = [
     
     # Central Hub
     'InstaHarvest',
+    
+    # Notifications
+    'NotificationReader',
+    'NotificationItem',
 ]
 
