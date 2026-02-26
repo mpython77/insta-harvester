@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-02-26
+
+### Added
+
+- **Async Engine** (`async_engine.py`): Full async scraping with `async_playwright`
+  - `AsyncBaseScraper`: async browser management, navigation, rate limit detection
+  - `AsyncProfileScraper`: async profile data extraction
+  - `AsyncBatchScraper`: concurrent multi-profile scraping with `asyncio.Semaphore`, streaming results via `async for`
+- **Webhook/Event System** (`webhooks.py`): Event-driven architecture
+  - `EventEmitter`: thread-safe event bus with sync/async emit, wildcard `*` listeners, `once()`, event history
+  - `EventTypes`: standard event type constants (new_follower, unfollow, scrape_complete, etc.)
+  - `FollowerWatcher`: monitors follower changes, emits events, snapshot persistence
+- **Batch Downloader** (`batch_downloader.py`): Concurrent media downloads
+  - `BatchDownloader`: `ThreadPoolExecutor(8)` parallel downloads, auto-retry, resume support
+  - `ProgressTracker`: real-time progress bar with speed, size, and failure stats
+  - `DownloadTask` / `DownloadResult` / `BatchResult`: structured data models
+
 ## [2.7.3] - 2026-02-26
 
 ### Added

@@ -134,7 +134,7 @@ Quick Start:
         save_session()
 
 Author: Muydinov Doston
-Version: 2.7.3
+Version: 2.8.0
 License: MIT
 """
 
@@ -178,9 +178,12 @@ from .proxy import ProxyManager
 from .logging_config import SmartLogger, get_logger
 from .core import InstaHarvest
 from .notifications import NotificationReader, NotificationItem
+from .webhooks import EventEmitter, FollowerWatcher, Event, EventTypes
+from .batch_downloader import BatchDownloader, DownloadTask, DownloadResult, BatchResult, ProgressTracker
+from .async_engine import AsyncBaseScraper, AsyncProfileScraper, AsyncBatchScraper
 
 
-__version__ = '2.7.3'
+__version__ = '2.8.0'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
@@ -260,5 +263,23 @@ __all__ = [
     # Notifications
     'NotificationReader',
     'NotificationItem',
+
+    # Webhooks / Events
+    'EventEmitter',
+    'FollowerWatcher',
+    'Event',
+    'EventTypes',
+
+    # Batch Downloader
+    'BatchDownloader',
+    'DownloadTask',
+    'DownloadResult',
+    'BatchResult',
+    'ProgressTracker',
+
+    # Async Engine
+    'AsyncBaseScraper',
+    'AsyncProfileScraper',
+    'AsyncBatchScraper',
 ]
 
