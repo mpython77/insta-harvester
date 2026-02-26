@@ -71,7 +71,7 @@ class ExploreScraper(BaseScraper):
             self.setup_browser(session_data)
 
             # Navigate to explore
-            url = f"{self.config.instagram_base_url}/explore/"
+            url = f"{self.config.instagram_base_url.rstrip('/')}/explore/"
             self.goto_url(url)
             time.sleep(self.config.page_stability_delay + 1.0)  # Extra wait for explore grid
 
@@ -109,7 +109,7 @@ class ExploreScraper(BaseScraper):
             session_data = self._load_session()
             self.setup_browser(session_data)
 
-            url = f"{self.config.instagram_base_url}/explore/search/{topic_id}/"
+            url = f"{self.config.instagram_base_url.rstrip('/')}/explore/search/{topic_id}/"
             self.goto_url(url)
             time.sleep(self.config.page_stability_delay)
 

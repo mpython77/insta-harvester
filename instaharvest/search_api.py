@@ -88,7 +88,7 @@ class SearchAPI(BaseScraper):
             self._setup_search_interceptor()
 
             # Navigate to Instagram
-            self.goto_url(self.config.instagram_base_url)
+            self.goto_url(self.config.instagram_base_url.rstrip('/'))
             time.sleep(self.config.page_stability_delay)
 
             # Type in search and capture results

@@ -68,7 +68,7 @@ class HashtagScraper(BaseScraper):
             self.setup_browser(session_data)
 
             # Navigate to hashtag page
-            url = f"{self.config.instagram_base_url}/explore/tags/{hashtag}/"
+            url = f"{self.config.instagram_base_url.rstrip('/')}/explore/tags/{hashtag}/"
             self.goto_url(url)
             time.sleep(self.config.page_stability_delay)
 
@@ -93,7 +93,6 @@ class HashtagScraper(BaseScraper):
     def _get_post_count(self) -> int:
         """Extract total post count from hashtag page header"""
         try:
-            # Try meta description or span with post count
             selectors = [
                 'header span',
                 'span.x1lliihq',
@@ -105,7 +104,9 @@ class HashtagScraper(BaseScraper):
                     for el in elements:
                         text = el.inner_text() if selector != 'meta[name="description"]' else (el.get_attribute('content') or '')
                         if text and any(c.isdigit() for c in text):
-                            return self.parse_number(text.split()[0])
+                            result = self.parse_number(text.split()[0])
+                            if result is not None and isinstance(result, (int, float)):
+                                return int(result)
                 except Exception:
                     continue
         except Exception:

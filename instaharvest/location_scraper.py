@@ -73,7 +73,7 @@ class LocationScraper(BaseScraper):
             session_data = self._load_session()
             self.setup_browser(session_data)
 
-            url = f"{self.config.instagram_base_url}/explore/locations/{location_id}/"
+            url = f"{self.config.instagram_base_url.rstrip('/')}/explore/locations/{location_id}/"
             self.goto_url(url)
             time.sleep(self.config.page_stability_delay)
 

@@ -134,7 +134,7 @@ Quick Start:
         save_session()
 
 Author: Muydinov Doston
-Version: 2.9.0
+Version: 2.9.1
 License: MIT
 """
 
@@ -188,7 +188,7 @@ from .search_api import SearchAPI, SearchResult
 from .explore_scraper import ExploreScraper, ExploreResult
 
 
-__version__ = '2.9.0'
+__version__ = '2.9.1'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
