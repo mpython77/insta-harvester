@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.3] - 2026-02-26
+
+### Added
+
+- **Rate Limit Detection**: Auto-detect Instagram "Action Blocked" / "Try Again Later" pages with configurable cooldown (default: 5 min) and retry before raising `RateLimitError`.
+  - URL pattern detection (`/challenge/`, `/action_blocked/`)
+  - Page content detection (12 indicator strings)
+  - Configurable: `rate_limit_cooldown`, `rate_limit_max_retries`, `rate_limit_indicators`
+- **Engagement Rate Calculator**: `ProfileData.calculate_engagement_rate(avg_likes, avg_comments)` computes `(avg_likes + avg_comments) / followers * 100`.
+  - Auto-calculated in `Orchestrator.scrape_complete_profile()` after post scraping
+  - New `engagement_rate` field in `ProfileData` dataclass
+
 ## [2.7.2] - 2026-02-26
 
 ### Added

@@ -183,6 +183,30 @@ class ScraperConfig:
     batch_operation_delay_min: float = 2.0  # Min delay between batch operations
     batch_operation_delay_max: float = 4.0  # Max delay between batch operations
 
+    # ==================== RATE LIMIT DETECTION ====================
+    # Auto-detect Instagram "Action Blocked" pages and wait before retrying
+    rate_limit_cooldown: float = 300.0  # Cooldown wait in seconds (5 minutes)
+    rate_limit_max_retries: int = 2  # Max cooldown retries before raising RateLimitError
+    rate_limit_indicators: List[str] = field(default_factory=lambda: [
+        'Action Blocked',
+        'action blocked',
+        'Try Again Later',
+        'try again later',
+        'We restrict certain activity',
+        'we restrict certain activity',
+        'Suspicious Activity',
+        'suspicious activity',
+        'Please wait a few minutes',
+        'please wait a few minutes',
+        'temporarily blocked',
+        'Temporarily Blocked',
+    ])
+    rate_limit_url_patterns: List[str] = field(default_factory=lambda: [
+        '/challenge/',
+        '/action_blocked/',
+        'challenge_required',
+    ])
+
     # ==================== RETRY DELAYS ====================
     retry_delay: float = 2.0  # Delay before retry on failure
     error_recovery_delay_min: float = 1.0  # Min delay for error recovery

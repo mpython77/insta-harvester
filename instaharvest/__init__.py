@@ -134,7 +134,7 @@ Quick Start:
         save_session()
 
 Author: Muydinov Doston
-Version: 2.7.2
+Version: 2.7.3
 License: MIT
 """
 
@@ -180,7 +180,7 @@ from .core import InstaHarvest
 from .notifications import NotificationReader, NotificationItem
 
 
-__version__ = '2.7.2'
+__version__ = '2.7.3'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'

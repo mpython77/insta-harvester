@@ -122,6 +122,24 @@ class InstagramOrchestrator:
             results['posts_data'] = [p.to_dict() for p in posts_data]
             self.logger.info(f"✓ Scraped {len(posts_data)} posts")
 
+            # Step 3.5: Calculate Engagement Rate
+            if posts_data and profile_data.followers > 0:
+                try:
+                    likes_values = []
+                    for p in posts_data:
+                        try:
+                            likes_val = int(str(p.likes).replace(',', '').replace('.', ''))
+                            likes_values.append(likes_val)
+                        except (ValueError, TypeError):
+                            pass
+                    if likes_values:
+                        avg_likes = sum(likes_values) / len(likes_values)
+                        er = profile_data.calculate_engagement_rate(avg_likes)
+                        results['profile'] = profile_data.to_dict()
+                        self.logger.info(f"📊 Engagement Rate: {er}% (avg {avg_likes:.0f} likes / {profile_data.followers} followers)")
+                except Exception as e:
+                    self.logger.debug(f"Engagement rate calculation error: {e}")
+
         # Export results
         if export_results:
             self.logger.info("\nExporting results...")
@@ -134,6 +152,8 @@ class InstagramOrchestrator:
         self.logger.info(f"Profile: {results['profile']}")
         self.logger.info(f"Post links: {len(results['post_links'])}")
         self.logger.info(f"Posts scraped: {len(results['posts_data'])}")
+        if profile_data.engagement_rate is not None:
+            self.logger.info(f"Engagement Rate: {profile_data.engagement_rate}%")
         self.logger.info(f"{'='*60}\n")
 
         return results

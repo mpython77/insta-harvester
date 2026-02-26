@@ -41,10 +41,30 @@ class ProfileData:
     bio: Optional[str] = None
     external_links: List[str] = field(default_factory=list)
     threads_profile: Optional[str] = None
+    engagement_rate: Optional[float] = None  # Calculated from post data
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return asdict(self)
+
+    def calculate_engagement_rate(self, avg_likes: float, avg_comments: float = 0) -> float:
+        """
+        Calculate engagement rate from average post metrics
+
+        Formula: (avg_likes + avg_comments) / followers * 100
+
+        Args:
+            avg_likes: Average number of likes per post
+            avg_comments: Average number of comments per post (default: 0)
+
+        Returns:
+            Engagement rate as percentage (e.g. 3.25 means 3.25%)
+        """
+        if self.followers <= 0:
+            self.engagement_rate = 0.0
+            return 0.0
+        self.engagement_rate = round((avg_likes + avg_comments) / self.followers * 100, 2)
+        return self.engagement_rate
 
 
 class ProfileScraper(BaseScraper):

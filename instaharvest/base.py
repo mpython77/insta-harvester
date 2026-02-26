@@ -19,7 +19,8 @@ from .exceptions import (
     PageLoadError,
     ProfileNotFoundError,
     HTMLStructureChangedError,
-    LoginRequiredError
+    LoginRequiredError,
+    RateLimitError
 )
 from .security import SecurityManager
 from .network_client import NetworkClient  # [NEW]
@@ -312,6 +313,23 @@ class BaseScraper(ABC):
                 self.logger.debug(f"⏱️ Page loaded, waiting {sleep_time}s...")
                 time.sleep(sleep_time)
 
+                # Check if rate limited (before login check)
+                if self._is_rate_limited():
+                    self.logger.warning(
+                        f"⚠️ Rate limit detected! "
+                        f"Auto-cooldown: {self.config.rate_limit_cooldown}s "
+                        f"(attempt {attempt + 1}/{self.config.rate_limit_max_retries})"
+                    )
+                    if attempt < self.config.rate_limit_max_retries:
+                        self.logger.info(f"⏳ Waiting {self.config.rate_limit_cooldown}s before retry...")
+                        time.sleep(self.config.rate_limit_cooldown)
+                        continue
+                    else:
+                        raise RateLimitError(
+                            f"Rate limited by Instagram after {self.config.rate_limit_max_retries} "
+                            f"cooldown attempts ({self.config.rate_limit_cooldown}s each)"
+                        )
+
                 # Check if login required
                 if self._is_login_page():
                     self.logger.warning("Login page detected on first load - attempting session recovery...")
@@ -342,8 +360,8 @@ class BaseScraper(ABC):
                 self.logger.info(f"Successfully navigated to: {url}")
                 return True
 
-            except LoginRequiredError:
-                # Re-raise login errors immediately
+            except (LoginRequiredError, RateLimitError):
+                # Re-raise login and rate limit errors immediately
                 raise
             except Exception as e:
                 self.logger.warning(
@@ -435,6 +453,49 @@ class BaseScraper(ABC):
             self.logger.warning(f"Error checking login status: {e}")
             # Conservative approach: if we can't tell, assume login required
             return True
+
+    def _is_rate_limited(self) -> bool:
+        """
+        Check if current page shows a rate limit / action blocked page
+
+        Detection methods:
+        1. URL check - /challenge/, /action_blocked/, challenge_required
+        2. Page content check - known Instagram block indicator strings
+
+        Returns:
+            True if rate limited, False otherwise
+        """
+        try:
+            # Method 1: Check URL patterns
+            current_url = self.page.url.lower()
+            for pattern in self.config.rate_limit_url_patterns:
+                if pattern in current_url:
+                    self.logger.debug(f"Rate limit detected via URL pattern: {pattern}")
+                    return True
+
+            # Method 2: Check page content for block indicators
+            try:
+                body_text = self.page.locator('body').inner_text(timeout=3000)
+                for indicator in self.config.rate_limit_indicators:
+                    if indicator in body_text:
+                        self.logger.debug(f"Rate limit detected via content: '{indicator}'")
+                        return True
+            except Exception:
+                # Fallback: check raw HTML
+                try:
+                    content = self.page.content()
+                    for indicator in self.config.rate_limit_indicators:
+                        if indicator in content:
+                            self.logger.debug(f"Rate limit detected via raw HTML: '{indicator}'")
+                            return True
+                except Exception:
+                    pass
+
+            return False
+
+        except Exception as e:
+            self.logger.debug(f"Rate limit check error: {e}")
+            return False
 
     def safe_extract(
         self,
