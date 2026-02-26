@@ -2,6 +2,8 @@
 Instagram Search API
 Search users, hashtags, and places using Instagram's web search.
 
+Strategy: Direct API first (fetch topsearch), UI search as fallback.
+
 Usage:
     from instaharvest import SearchAPI, ScraperConfig
 
@@ -16,6 +18,7 @@ import time
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Any
+from urllib.parse import quote
 
 from .base import BaseScraper
 from .config import ScraperConfig
@@ -41,15 +44,16 @@ class SearchAPI(BaseScraper):
     """
     Instagram Search using web endpoints.
 
-    Uses two methods:
-    1. Network interception: Capture search API responses from /web/search/topsearch/
-    2. DOM extraction: Parse visible search dropdown results
+    Strategy (v2.10):
+    1. PRIMARY: Direct API via browser fetch() — fastest, most reliable
+    2. FALLBACK: UI search via DOM interaction — when API blocked
 
     Features:
     - Search users, hashtags, and locations
     - Filter by type (all, users, hashtags, places)
     - Extract profile pics, follower counts, verified status
     - Uses existing session for authenticated results
+    - Automatic fallback from API to UI search
     """
 
     def __init__(self, config: Optional[ScraperConfig] = None):
@@ -84,22 +88,20 @@ class SearchAPI(BaseScraper):
             session_data = self._load_session()
             self.setup_browser(session_data)
 
-            # Setup interceptor
-            self._setup_search_interceptor()
-
-            # Navigate to Instagram
-            self.goto_url(self.config.instagram_base_url.rstrip('/'))
+            # Navigate to Instagram home first (session warm-up)
+            base = self.config.instagram_base_url.rstrip('/')
+            self.goto_url(base)
             time.sleep(self.config.page_stability_delay)
 
-            # Type in search and capture results
-            self._perform_search(query)
+            # PRIMARY: Direct API via fetch()
+            result = self._direct_api_search(query, search_type)
 
-            # Parse intercepted API responses
-            result = self._parse_search_results(query, search_type)
-
-            # Fallback: try direct API endpoint via network_client
+            # FALLBACK: UI search if API returned nothing
             if result.total_count == 0:
-                result = self._direct_api_search(query, search_type)
+                self.logger.info("Direct API returned 0, trying UI search...")
+                self._setup_search_interceptor()
+                self._perform_search(query)
+                result = self._parse_search_results(query, search_type)
 
             self.logger.info(
                 f"Search results: {len(result.users)} users, "
@@ -127,8 +129,70 @@ class SearchAPI(BaseScraper):
         """Search only places"""
         return self.search(query, 'places').places
 
+    # ==================== PRIMARY: Direct API ====================
+
+    def _direct_api_search(self, query: str, search_type: str) -> SearchResult:
+        """
+        PRIMARY search method: Direct API call through browser's fetch().
+        Uses the browser's cookies/session for authenticated results.
+        """
+        result = SearchResult(query=query)
+        encoded = quote(query)
+
+        # Try multiple API endpoints
+        endpoints = [
+            f"https://www.instagram.com/web/search/topsearch/?context=blended&query={encoded}&include_reel=true",
+            f"https://www.instagram.com/web/search/topsearch/?query={encoded}",
+        ]
+
+        for url in endpoints:
+            try:
+                self.logger.info(f"Direct API: {url[:80]}...")
+
+                data = self.page.evaluate("""
+                    async (url) => {
+                        try {
+                            const res = await fetch(url, {
+                                method: 'GET',
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                    'Accept': 'application/json',
+                                    'X-IG-App-ID': '936619743392459',
+                                },
+                                credentials: 'include',
+                            });
+                            if (res.ok) {
+                                const text = await res.text();
+                                try { return JSON.parse(text); }
+                                catch(e) { return null; }
+                            }
+                            return null;
+                        } catch(e) { return null; }
+                    }
+                """, url)
+
+                if data and isinstance(data, dict):
+                    self._search_responses = [{'url': url, 'data': data}]
+                    result = self._parse_search_results(query, search_type)
+
+                    if result.total_count > 0:
+                        self.logger.info(
+                            f"Direct API success: {len(result.users)} users, "
+                            f"{len(result.hashtags)} hashtags, "
+                            f"{len(result.places)} places"
+                        )
+                        return result
+
+            except Exception as e:
+                self.logger.debug(f"API endpoint failed: {e}")
+                continue
+
+        return result
+
+    # ==================== FALLBACK: UI Search ====================
+
     def _setup_search_interceptor(self) -> None:
-        """Intercept search API responses"""
+        """Intercept search API responses from network"""
         def handle_response(response):
             try:
                 url = response.url
@@ -152,12 +216,11 @@ class SearchAPI(BaseScraper):
         self.page.on('response', handle_response)
 
     def _perform_search(self, query: str) -> None:
-        """Type search query in Instagram search bar"""
+        """Type search query in Instagram search bar (UI fallback)"""
         try:
-            # Step 1: Click the Search link/icon in sidebar
-            self.logger.info("Looking for search input...")
+            self.logger.info("UI fallback: looking for search input...")
 
-            # Try clicking the Search link (sidebar navigation)
+            # Step 1: Click the Search link/icon
             clicked = False
             click_selectors = [
                 'a[href="/explore/"] span',
@@ -181,11 +244,10 @@ class SearchAPI(BaseScraper):
 
             if not clicked:
                 self.logger.warning("Could not find search button, trying keyboard")
-                # Fallback: Ctrl+K or just click body and type
                 self.page.keyboard.press('Control+k')
                 time.sleep(0.5)
 
-            # Step 2: Find search input and type
+            # Step 2: Find and type in search input
             time.sleep(0.5)
             input_selectors = [
                 'input[aria-label="Search input"]',
@@ -204,7 +266,7 @@ class SearchAPI(BaseScraper):
                         input_el.fill('')
                         input_el.type(query, delay=80)
                         self.logger.info(f"Typed: '{query}' in {selector}")
-                        time.sleep(2.0)  # Wait for API response to arrive
+                        time.sleep(2.5)  # Wait for API response
                         return
                 except Exception:
                     continue
@@ -212,10 +274,12 @@ class SearchAPI(BaseScraper):
             self.logger.warning("Could not find search input")
 
         except Exception as e:
-            self.logger.warning(f"Search input failed: {e}")
+            self.logger.warning(f"UI search failed: {e}")
+
+    # ==================== Result Parsing ====================
 
     def _parse_search_results(self, query: str, search_type: str) -> SearchResult:
-        """Parse intercepted search API responses"""
+        """Parse intercepted/fetched search API responses"""
         result = SearchResult(query=query)
 
         for response in self._search_responses:
@@ -265,42 +329,6 @@ class SearchAPI(BaseScraper):
             except Exception as e:
                 self.logger.debug(f"Parse error: {e}")
 
-        return result
-
-    def _direct_api_search(self, query: str, search_type: str) -> SearchResult:
-        """Fallback: Direct API call through the browser's fetch()"""
-        result = SearchResult(query=query)
-        try:
-            url = f"https://www.instagram.com/web/search/topsearch/?query={query}"
-            self.logger.info(f"Trying direct API: {url}")
-
-            # Use page's fetch to maintain cookies/session
-            data = self.page.evaluate(f"""
-                async () => {{
-                    try {{
-                        const res = await fetch("{url}", {{
-                            headers: {{
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Accept': 'application/json',
-                            }},
-                        }});
-                        if (res.ok) return await res.json();
-                        return null;
-                    }} catch(e) {{ return null; }}
-                }}
-            """)
-
-            if data:
-                self._search_responses = [{'url': url, 'data': data}]
-                result = self._parse_search_results(query, search_type)
-                self.logger.info(
-                    f"Direct API: {len(result.users)} users, "
-                    f"{len(result.hashtags)} hashtags, "
-                    f"{len(result.places)} places"
-                )
-
-        except Exception as e:
-            self.logger.debug(f"Direct API search failed: {e}")
         return result
 
     def _load_session(self) -> Dict:

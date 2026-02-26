@@ -59,6 +59,24 @@ class ScraperConfig:
     proxy_check_on_start: bool = False  # Validate proxies before use
     proxy_retry_on_fail: bool = True  # Retry with different proxy on failure
     proxy_max_failures: int = 3  # Remove proxy after N consecutive failures
+    proxy_file: Optional[str] = None  # Path to proxy list file (txt/json/csv)
+    
+    # ==================== SESSION POOL ====================
+    session_pool: List[str] = field(default_factory=list)  # List of session file paths for rotation
+    session_rotation: str = 'round_robin'  # Session rotation strategy: round_robin, random, least_used
+    session_max_failures: int = 5  # Max failures before disabling session
+    session_cooldown: float = 30.0  # Min seconds between reusing same session
+    
+    # ==================== CAPTCHA SOLVING ====================
+    captcha_api_key: str = ''  # API key for captcha solving service
+    captcha_provider: str = '2captcha'  # Provider: '2captcha' or 'anticaptcha'
+    captcha_auto_solve: bool = False  # Auto-detect and solve CAPTCHAs
+    captcha_timeout: int = 120  # Max seconds to wait for captcha solution
+    
+    # ==================== DATA EXPORT ====================
+    export_dir: str = '.'  # Directory for exported files
+    export_csv_bom: bool = True  # Add BOM to CSV for Excel compatibility
+    export_json_pretty: bool = True  # Pretty-print JSON output
     
     # ==================== SECURITY & ANTI-BAN ====================
     rotate_user_agent: bool = True  # Enable User-Agent rotation

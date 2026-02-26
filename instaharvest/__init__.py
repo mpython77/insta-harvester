@@ -134,7 +134,7 @@ Quick Start:
         save_session()
 
 Author: Muydinov Doston
-Version: 2.9.2
+Version: 2.10.0
 License: MIT
 """
 
@@ -186,9 +186,12 @@ from .story_scraper import StoryScraper, StoryResult, StoryItem
 from .location_scraper import LocationScraper, LocationResult
 from .search_api import SearchAPI, SearchResult
 from .explore_scraper import ExploreScraper, ExploreResult
+from .data_export import DataExporter
+from .session_manager import SessionManager, SessionRotationStrategy
+from .captcha_solver import CaptchaSolver, CaptchaProvider
 
 
-__version__ = '2.9.2'
+__version__ = '2.10.0'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
@@ -307,5 +310,16 @@ __all__ = [
     # Explore Scraper
     'ExploreScraper',
     'ExploreResult',
+
+    # Data Export
+    'DataExporter',
+
+    # Session Management
+    'SessionManager',
+    'SessionRotationStrategy',
+
+    # Captcha Solver
+    'CaptchaSolver',
+    'CaptchaProvider',
 ]
 

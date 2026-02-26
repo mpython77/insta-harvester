@@ -523,6 +523,142 @@ class ProxyManager:
             logger=logger
         )
     
+    def load_from_file(self, filepath: str) -> int:
+        """
+        Load proxies from a text/JSON/CSV file.
+
+        Supported formats:
+        - .txt: One proxy per line (http://user:pass@host:port)
+        - .json: Array of proxy URLs or objects with 'url' key
+        - .csv: One proxy per line
+
+        Args:
+            filepath: Path to proxy file
+
+        Returns:
+            Number of proxies added
+        """
+        from pathlib import Path
+        path = Path(filepath)
+
+        if not path.exists():
+            self.logger.error(f"Proxy file not found: {filepath}")
+            return 0
+
+        count = 0
+        try:
+            content = path.read_text(encoding='utf-8').strip()
+
+            if path.suffix == '.json':
+                data = __import__('json').loads(content)
+                if isinstance(data, list):
+                    for item in data:
+                        url = item.get('url', item) if isinstance(item, dict) else str(item)
+                        if url and url.strip():
+                            self._add_proxy(url.strip())
+                            count += 1
+            else:
+                # txt/csv — one proxy per line
+                for line in content.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        # Handle CSV (take first column)
+                        if ',' in line and '://' not in line.split(',')[0]:
+                            parts = line.split(',')
+                            line = parts[0].strip()
+                        if line:
+                            self._add_proxy(line)
+                            count += 1
+
+            self.logger.info(f"Loaded {count} proxies from {path.name}")
+
+        except Exception as e:
+            self.logger.error(f"Failed to load proxies from {filepath}: {e}")
+
+        return count
+
+    def load_from_url(self, url: str, timeout: int = 15) -> int:
+        """
+        Load proxies from an online proxy list URL.
+
+        Args:
+            url: URL to fetch proxy list from
+            timeout: Request timeout in seconds
+
+        Returns:
+            Number of proxies added
+        """
+        count = 0
+        try:
+            import requests
+            resp = requests.get(url, timeout=timeout)
+            if resp.status_code == 200:
+                for line in resp.text.strip().splitlines():
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        self._add_proxy(line)
+                        count += 1
+                self.logger.info(f"Loaded {count} proxies from URL")
+            else:
+                self.logger.error(f"Failed to fetch proxies: HTTP {resp.status_code}")
+
+        except ImportError:
+            self.logger.error("requests library required for load_from_url")
+        except Exception as e:
+            self.logger.error(f"Failed to load proxies from URL: {e}")
+
+        return count
+
+    def auto_remove_dead(self) -> int:
+        """
+        Remove all unhealthy (dead) proxies from the pool.
+
+        Returns:
+            Number of proxies removed
+        """
+        dead = [
+            p for p in self._proxy_pool
+            if not self._proxy_stats[p.server].is_healthy
+        ]
+
+        for proxy in dead:
+            self._proxy_pool.remove(proxy)
+            del self._proxy_stats[proxy.server]
+            self.logger.info(f"Removed dead proxy: {proxy.server}")
+
+        if dead:
+            self._current_index = 0
+            self.logger.info(
+                f"Removed {len(dead)} dead proxies, "
+                f"{len(self._proxy_pool)} remaining"
+            )
+
+        return len(dead)
+
+    def get_stats_summary(self) -> str:
+        """Get formatted stats summary string"""
+        lines = [
+            f"\n{'='*70}",
+            f"  Proxy Pool: {len(self._proxy_pool)} total, "
+            f"{self.healthy_count} healthy",
+            f"  Strategy: {self.rotation_strategy.value}",
+            f"{'='*70}",
+        ]
+
+        for proxy in self._proxy_pool:
+            stats = self._proxy_stats[proxy.server]
+            icon = '✅' if stats.is_healthy else '❌'
+            lines.append(
+                f"  {icon} {proxy.server:35s} | "
+                f"req={stats.requests:3d} ok={stats.successes:3d} "
+                f"fail={stats.failures:3d} | "
+                f"{stats.success_rate:.0%} | "
+                f"{stats.location}"
+            )
+
+        summary = '\n'.join(lines)
+        return summary
+
     def __repr__(self) -> str:
         if not self._proxy_pool:
             return "ProxyManager(no proxies)"
