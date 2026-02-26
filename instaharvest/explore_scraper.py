@@ -70,8 +70,13 @@ class ExploreScraper(BaseScraper):
             session_data = self._load_session()
             self.setup_browser(session_data)
 
+            # Warm-up: visit home first to activate session
+            base = self.config.instagram_base_url.rstrip('/')
+            self.goto_url(base)
+            time.sleep(2.0)
+
             # Navigate to explore
-            url = f"{self.config.instagram_base_url.rstrip('/')}/explore/"
+            url = f"{base}/explore/"
             self.goto_url(url)
             time.sleep(self.config.page_stability_delay + 1.0)  # Extra wait for explore grid
 

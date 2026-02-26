@@ -154,44 +154,62 @@ class SearchAPI(BaseScraper):
     def _perform_search(self, query: str) -> None:
         """Type search query in Instagram search bar"""
         try:
-            # Click search icon/input
-            search_selectors = [
-                'a[href="/explore/"]',
+            # Step 1: Click the Search link/icon in sidebar
+            self.logger.info("Looking for search input...")
+
+            # Try clicking the Search link (sidebar navigation)
+            clicked = False
+            click_selectors = [
+                'a[href="/explore/"] span',
                 'svg[aria-label="Search"]',
-                'input[aria-label="Search input"]',
-                'input[placeholder*="Search"]',
+                '[aria-label="Search"]',
+                'a[href="/explore/"]',
                 'span:text("Search")',
             ]
 
-            for selector in search_selectors:
+            for selector in click_selectors:
                 try:
                     el = self.page.locator(selector).first
-                    if el.count() > 0:
+                    if el.count() > 0 and el.is_visible():
                         el.click()
-                        time.sleep(0.5)
+                        clicked = True
+                        self.logger.info(f"Clicked search: {selector}")
+                        time.sleep(1.0)
                         break
                 except Exception:
                     continue
 
-            time.sleep(0.5)
+            if not clicked:
+                self.logger.warning("Could not find search button, trying keyboard")
+                # Fallback: Ctrl+K or just click body and type
+                self.page.keyboard.press('Control+k')
+                time.sleep(0.5)
 
-            # Find and type in search input
+            # Step 2: Find search input and type
+            time.sleep(0.5)
             input_selectors = [
                 'input[aria-label="Search input"]',
                 'input[placeholder*="Search"]',
+                'input[placeholder*="search"]',
                 'input[type="text"]',
+                'input[aria-label*="Search"]',
             ]
 
             for selector in input_selectors:
                 try:
                     input_el = self.page.locator(selector).first
-                    if input_el.count() > 0:
+                    if input_el.count() > 0 and input_el.is_visible():
+                        input_el.click()
+                        time.sleep(0.3)
                         input_el.fill('')
-                        input_el.type(query, delay=50)
-                        time.sleep(1.5)  # Wait for search results
+                        input_el.type(query, delay=80)
+                        self.logger.info(f"Typed: '{query}' in {selector}")
+                        time.sleep(2.0)  # Wait for API response to arrive
                         return
                 except Exception:
                     continue
+
+            self.logger.warning("Could not find search input")
 
         except Exception as e:
             self.logger.warning(f"Search input failed: {e}")
@@ -250,16 +268,37 @@ class SearchAPI(BaseScraper):
         return result
 
     def _direct_api_search(self, query: str, search_type: str) -> SearchResult:
-        """Fallback: Direct API call via network_client"""
+        """Fallback: Direct API call through the browser's fetch()"""
         result = SearchResult(query=query)
         try:
             url = f"https://www.instagram.com/web/search/topsearch/?query={query}"
-            response = self.network_client.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                # Re-parse using same logic
+            self.logger.info(f"Trying direct API: {url}")
+
+            # Use page's fetch to maintain cookies/session
+            data = self.page.evaluate(f"""
+                async () => {{
+                    try {{
+                        const res = await fetch("{url}", {{
+                            headers: {{
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json',
+                            }},
+                        }});
+                        if (res.ok) return await res.json();
+                        return null;
+                    }} catch(e) {{ return null; }}
+                }}
+            """)
+
+            if data:
                 self._search_responses = [{'url': url, 'data': data}]
                 result = self._parse_search_results(query, search_type)
+                self.logger.info(
+                    f"Direct API: {len(result.users)} users, "
+                    f"{len(result.hashtags)} hashtags, "
+                    f"{len(result.places)} places"
+                )
+
         except Exception as e:
             self.logger.debug(f"Direct API search failed: {e}")
         return result
