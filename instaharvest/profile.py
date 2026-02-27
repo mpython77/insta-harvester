@@ -529,9 +529,25 @@ class ProfileScraper(BaseScraper):
         selector = self.config.selector_posts_count
 
         def extract():
-            posts_element = self.page.locator(selector).first
-            posts_text = posts_element.locator(self.config.selector_html_span).first.inner_text()
-            return self.parse_number(posts_text)
+            try:
+                posts_element = self.page.locator(selector).first
+                posts_element.wait_for(timeout=1500)
+                posts_text = posts_element.locator(self.config.selector_html_span).first.inner_text(timeout=1000)
+                return self.parse_number(posts_text)
+            except Exception:
+                pass
+                
+            try:
+                # Fallback: look for generic list item containing "post"
+                fallback = self.page.locator('li:has-text("post")').first
+                fallback.wait_for(timeout=1500)
+                span = fallback.locator(self.config.selector_html_span).first
+                if span.count() > 0:
+                    return self.parse_number(span.inner_text(timeout=1000))
+                return self.parse_number(fallback.inner_text(timeout=1000).lower().replace('posts', '').replace('post', ''))
+            except Exception:
+                pass
+            return 0
 
         result = self.safe_extract(
             extract,
@@ -552,16 +568,34 @@ class ProfileScraper(BaseScraper):
         selector = self.config.selector_followers_link
 
         def extract():
-            followers_link = self.page.locator(selector).first
-            # Try title attribute first (exact count)
-            title_span = followers_link.locator('span[title]').first
-            if title_span.count() > 0:
-                text = title_span.get_attribute('title')
+            try:
+                followers_link = self.page.locator(selector).first
+                followers_link.wait_for(timeout=1500)
+                
+                # Try title attribute first (exact count)
+                title_span = followers_link.locator('span[title]').first
+                if title_span.count() > 0:
+                    text = title_span.get_attribute('title')
+                    if text:
+                        return self.parse_number(text)
+                
+                # Fallback to visible text
+                text = followers_link.locator(self.config.selector_html_span).first.inner_text(timeout=1000)
                 return self.parse_number(text)
+            except Exception:
+                pass
             
-            # Fallback to visible text
-            text = followers_link.locator(self.config.selector_html_span).first.inner_text()
-            return self.parse_number(text)
+            try:
+                # Fallback: generic list item
+                fallback = self.page.locator('li:has-text("follower")').first
+                fallback.wait_for(timeout=1500)
+                span = fallback.locator(self.config.selector_html_span).first
+                if span.count() > 0:
+                    return self.parse_number(span.inner_text(timeout=1000))
+                return self.parse_number(fallback.inner_text(timeout=1000).lower().replace('followers', '').replace('follower', ''))
+            except Exception:
+                pass
+            return 0
 
         result = self.safe_extract(
             extract,
@@ -582,9 +616,25 @@ class ProfileScraper(BaseScraper):
         selector = self.config.selector_following_link
 
         def extract():
-            following_link = self.page.locator(selector).first
-            text = following_link.locator(self.config.selector_html_span).first.inner_text()
-            return self.parse_number(text)
+            try:
+                following_link = self.page.locator(selector).first
+                following_link.wait_for(timeout=1500)
+                text = following_link.locator(self.config.selector_html_span).first.inner_text(timeout=1000)
+                return self.parse_number(text)
+            except Exception:
+                pass
+                
+            try:
+                # Fallback: generic list item (might just be text if 0 following)
+                fallback = self.page.locator('li:has-text("following")').first
+                fallback.wait_for(timeout=1500)
+                span = fallback.locator(self.config.selector_html_span).first
+                if span.count() > 0:
+                    return self.parse_number(span.inner_text(timeout=1000))
+                return self.parse_number(fallback.inner_text(timeout=1000).lower().replace('following', '').strip())
+            except Exception:
+                pass
+            return 0
 
         result = self.safe_extract(
             extract,
