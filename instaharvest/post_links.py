@@ -388,6 +388,20 @@ if LIBRARY_AVAILABLE:
                                 elif "url('" in style:
                                     thumbnail = style.split("url('")[1].split("')")[0]
 
+                        # Check if it's a pinned post using robust HTML matching
+                        is_pinned = False
+                        try:
+                            html_content = element.inner_html()
+                            if 'Pinned post icon' in html_content or 'm22.707 7.583' in html_content or 'aria-label="Pinned post icon"' in html_content:
+                                is_pinned = True
+                        except Exception as e:
+                            self.logger.debug(f"Error checking pinned status for {full_url}: {e}")
+                        
+                        # If skip_pinned_posts is True, ignore it
+                        if self.config.skip_pinned_posts and is_pinned:
+                            self.logger.debug(f"Skipping pinned post: {full_url}")
+                            continue
+
                         # Try Stats (Views/Likes)
                         stat_span = element.locator(self.config.selector_grid_time).first
                         if stat_span.count() > 0:
@@ -396,7 +410,8 @@ if LIBRARY_AVAILABLE:
                         results.append({
                             'url': full_url,
                             'thumbnail': thumbnail,
-                            'stats': stats
+                            'stats': stats,
+                            'is_pinned': is_pinned
                         })
                     except Exception:
                         continue
@@ -491,7 +506,8 @@ if LIBRARY_AVAILABLE:
                     'url': url, 
                     'type': content_type,
                     'thumbnail': data.get('thumbnail', ''),
-                    'stats': data.get('stats', '')
+                    'stats': data.get('stats', ''),
+                    'is_pinned': data.get('is_pinned', False)
                 })
 
             return result

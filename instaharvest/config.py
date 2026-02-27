@@ -187,6 +187,7 @@ class ScraperConfig:
     post_scrape_delay_min: float = 2.0  # Min delay when scraping post data
     post_scrape_delay_max: float = 4.0  # Max delay when scraping post data
     post_navigation_delay: float = 1.5  # Wait when navigating between posts
+    skip_pinned_posts: bool = False     # Skip pinned posts when scraping profile grid
 
     reel_open_delay: float = 3.0  # Wait after opening reel
     reel_scrape_delay_min: float = 2.0  # Min delay when scraping reel data

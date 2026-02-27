@@ -123,27 +123,101 @@ class NotificationReader:
     """
     
     # Patterns for detecting notification type (order matters!)
+    # Multi-language support: English, Russian, Turkish, Spanish, Portuguese,
+    # French, German, Indonesian, Arabic, Korean, Japanese, Italian, Chinese, Uzbek
     NOTIFICATION_PATTERNS = [
-        (r'liked your comment:', 'comment_like'),
-        (r'liked your post', 'post_like'),
-        (r'liked your reel', 'post_like'),
-        (r'liked your photo', 'post_like'),
-        (r'liked your video', 'post_like'),
-        (r'started following you', 'follow'),
+        # --- COMMENT LIKE ---
+        (r'liked your comment', 'comment_like'),
+        (r'понравился ваш комментарий', 'comment_like'),       # Russian
+        (r'yorumunuzu beğendi', 'comment_like'),                # Turkish
+        (r'le gustó tu comentario', 'comment_like'),            # Spanish
+        (r'curtiu seu comentário', 'comment_like'),             # Portuguese
+        (r'a aimé votre commentaire', 'comment_like'),          # French
+        (r'gefällt dein Kommentar', 'comment_like'),            # German
+        (r'menyukai komentar', 'comment_like'),                 # Indonesian
+        (r'أعجب بتعليقك', 'comment_like'),                      # Arabic
+        (r'kommentingizni yoqtirdi', 'comment_like'),           # Uzbek
+        
+        # --- POST/REEL/PHOTO/VIDEO LIKE ---
+        (r'liked your', 'post_like'),                           # English (generic)
+        (r'нравится ваш', 'post_like'),                         # Russian  
+        (r'нравится ваше видео', 'post_like'),                  # Russian (video Reels)
+        (r'gönderinizi beğendi', 'post_like'),                  # Turkish
+        (r'le gustó tu', 'post_like'),                          # Spanish
+        (r'curtiu sua', 'post_like'),                           # Portuguese
+        (r'a aimé votre', 'post_like'),                         # French
+        (r'gefällt dein', 'post_like'),                         # German
+        (r'menyukai postingan', 'post_like'),                   # Indonesian
+        (r'أعجب بمنشورك', 'post_like'),                         # Arabic
+        (r'postingizni yoqtirdi', 'post_like'),                 # Uzbek
+        
+        # --- FOLLOW (most critical for follow-back detection!) ---
+        (r'started following you', 'follow'),                   # English
+        (r'подписался.*на ваши', 'follow'),                     # Russian (male)
+        (r'подписалась.*на ваши', 'follow'),                    # Russian (female)
+        (r'подписался\(-ась\) на ваши', 'follow'),              # Russian (combined)
+        (r'seni takip etmeye başladı', 'follow'),               # Turkish
+        (r'empezó a seguirte', 'follow'),                       # Spanish
+        (r'começou a seguir você', 'follow'),                   # Portuguese
+        (r'a commencé à vous suivre', 'follow'),                # French
+        (r'folgt dir jetzt', 'follow'),                         # German
+        (r'mulai mengikuti', 'follow'),                         # Indonesian
+        (r'بدأ بمتابعتك', 'follow'),                            # Arabic
+        (r'あなたをフォロー', 'follow'),                          # Japanese
+        (r'님이 팔로우', 'follow'),                               # Korean
+        (r'ha iniziato a seguirti', 'follow'),                  # Italian
+        (r'开始关注了你', 'follow'),                              # Chinese
+        (r'sizni kuzatishni boshladi', 'follow'),               # Uzbek
+        (r'follow', 'follow'),                                  # Fallback: button-based
+        
+        # --- FOLLOW REQUEST ---
         (r'requested to follow', 'follow_request'),
+        (r'запросил.*подписку', 'follow_request'),              # Russian
+        
+        # --- FOLLOW ACCEPTED ---
         (r'accepted your follow', 'follow_accepted'),
-        (r'commented:', 'comment'),
+        (r'принял.*запрос на подписку', 'follow_accepted'),     # Russian
+        
+        # --- COMMENT ---
+        (r'прокомментировал', 'comment'),                       # Russian
+        (r'commented:', 'comment'),                             # English
+        (r'comentó:', 'comment'),                               # Spanish
+        (r'comentou:', 'comment'),                              # Portuguese
+        (r'yorum yaptı:', 'comment'),                           # Turkish
+        (r'a commenté', 'comment'),                             # French
+        (r'hat kommentiert', 'comment'),                        # German
+        (r'berkomentar:', 'comment'),                           # Indonesian
+        (r'komment yozdi', 'comment'),                          # Uzbek
+        
+        # --- MENTION/TAG ---
         (r'mentioned you', 'mention'),
         (r'tagged you', 'mention'),
+        (r'упомянул', 'mention'),                               # Russian
+        (r'отметил', 'mention'),                                # Russian (tagged)
+        
+        # --- THREAD ---
         (r'posted a thread', 'thread'),
+        (r'опубликовал.*тему', 'thread'),                       # Russian
+        
+        # --- STORY ---
         (r'posted a story', 'story'),
+        (r'опубликовал.*историю', 'story'),                     # Russian
     ]
     
     # Pattern to find "and X others" in grouped notifications
     GROUPED_PATTERN = re.compile(r'and (\d+) others?')
     
-    # Known section headings
-    KNOWN_SECTIONS = {'Yesterday', 'This week', 'This month', 'Earlier', 'Today', 'New'}
+    # Known section headings (multi-language)
+    KNOWN_SECTIONS = {
+        # English
+        'Yesterday', 'This week', 'This month', 'Earlier', 'Today', 'New',
+        # Russian
+        'Вчера', 'На этой неделе', 'В этом месяце', 'Ранее', 'Сегодня', 'Новинки',
+        # Turkish
+        'Dün', 'Bu hafta', 'Bu ay', 'Daha önce', 'Bugün', 'Yeni',
+        # Spanish
+        'Ayer', 'Esta semana', 'Este mes', 'Antes', 'Hoy', 'Nuevo',
+    }
     
     def __init__(self, page, logger, config: Optional[ScraperConfig] = None):
         self.page = page

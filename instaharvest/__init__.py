@@ -191,7 +191,7 @@ from .session_manager import SessionManager, SessionRotationStrategy
 from .captcha_solver import CaptchaSolver, CaptchaProvider
 
 
-__version__ = '2.10.1'
+__version__ = '2.12.0'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
