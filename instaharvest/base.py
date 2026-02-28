@@ -114,8 +114,26 @@ class BaseScraper(ABC):
             return
 
         try:
+            import inspect
             # Get current storage state (cookies, localStorage, etc.)
-            storage_state = self.context.storage_state()
+            result = self.context.storage_state()
+            
+            # Handle case where storage_state returns a coroutine
+            if inspect.iscoroutine(result):
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        self.logger.debug("⚠ storage_state returned coroutine, skipping update")
+                        result.close()
+                        return
+                    else:
+                        result = loop.run_until_complete(result)
+                except RuntimeError:
+                    result.close()
+                    return
+            
+            storage_state = result
 
             # Save to session file
             with open(self.config.session_file, 'w', encoding='utf-8') as f:

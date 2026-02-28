@@ -231,7 +231,29 @@ class SharedBrowser:
         """Update and save session"""
         try:
             import json
-            storage_state = self.context.storage_state()
+            import inspect
+            
+            result = self.context.storage_state()
+            
+            # Handle case where storage_state returns a coroutine
+            # (can happen with certain Playwright versions)
+            if inspect.iscoroutine(result):
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Can't await in sync context with running loop
+                        # Fall back to reading existing session file
+                        self.logger.debug("⚠ storage_state returned coroutine, skipping update")
+                        result.close()  # Prevent "was never awaited" warning
+                        return
+                    else:
+                        result = loop.run_until_complete(result)
+                except RuntimeError:
+                    result.close()
+                    return
+            
+            storage_state = result
 
             with open(self.session_file, 'w', encoding='utf-8') as f:
                 json.dump(storage_state, f, indent=2)
