@@ -25,6 +25,14 @@ from .hashtag_scraper import HashtagScraper
 from .location_scraper import LocationScraper
 from .explore_scraper import ExploreScraper
 from .notifications import NotificationReader
+from .web_api import (
+    InstagramWebAPI, WebProfileData, WebSearchResult, SearchUserResult,
+    FollowUserItem, FollowListResult, FriendshipStatus,
+    FeedPost, UserFeedResult, MediaInfo, CommentItem, CommentsResult,
+    LikerItem, LikersResult, StoryMediaItem, StoriesTrayResult,
+    HighlightInfo, HighlightsResult, ReelItem, ReelsResult,
+    HashtagSection, LocationSection
+)
 
 
 class SharedBrowser:
@@ -91,6 +99,7 @@ class SharedBrowser:
         self._location_scraper: Optional[LocationScraper] = None
         self._explore_scraper: Optional[ExploreScraper] = None
         self._notification_reader: Optional[NotificationReader] = None
+        self._web_api: Optional[InstagramWebAPI] = None
 
         self.logger.info("✨ SharedBrowser initialized")
 
@@ -460,7 +469,126 @@ class SharedBrowser:
             self._notification_reader = self._inject_browser(NotificationReader(self.config))
         return self._notification_reader
 
+    @property
+    def web_api(self) -> InstagramWebAPI:
+        """Get InstagramWebAPI instance (lazy loading)"""
+        if self._web_api is None:
+            self._web_api = InstagramWebAPI(
+                page=self.page,
+                config=self.config,
+                logger=self.logger
+            )
+        return self._web_api
+
     # ==================== CONVENIENCE METHODS ====================
+
+    def get_profile_json(self, username: str) -> Optional[WebProfileData]:
+        """
+        Get complete profile data via Instagram Web API (JSON).
+
+        Returns exact follower counts, business info, bio links etc.
+        Much faster and more accurate than DOM scraping.
+
+        Args:
+            username: Instagram username (without @)
+
+        Returns:
+            WebProfileData object or None if failed
+
+        Example:
+            >>> with SharedBrowser() as browser:
+            ...     profile = browser.get_profile_json('mondayswimwear')
+            ...     print(f"{profile.full_name}: {profile.follower_count:,}")
+            Monday Swimwear: 1,069,117
+        """
+        return self.web_api.get_profile(username)
+
+    def get_user_info(self, user_id: str) -> Optional[WebProfileData]:
+        """
+        Get profile data by user ID via Web API.
+
+        Args:
+            user_id: Instagram numeric user ID
+
+        Returns:
+            WebProfileData object or None
+        """
+        return self.web_api.get_user_info(user_id)
+
+    def search_users(self, query: str, limit: int = 20) -> WebSearchResult:
+        """
+        Search for Instagram users via Web API.
+
+        Args:
+            query: Search query string
+            limit: Max results
+
+        Returns:
+            WebSearchResult with matched users
+
+        Example:
+            >>> with SharedBrowser() as browser:
+            ...     results = browser.search_users('swimwear brand')
+            ...     for user in results.users:
+            ...         print(f"@{user.username}")
+        """
+        return self.web_api.search(query, limit=limit)
+
+    def fetch_raw_api(self, endpoint: str, params: dict = None, method: str = 'GET', body: dict = None) -> Optional[dict]:
+        """Make raw API call to any Instagram endpoint (GET or POST)."""
+        return self.web_api.fetch_raw(endpoint, params, method=method, body=body)
+
+    def get_followers_api(self, user_id: str, count: int = 50, max_id: str = None) -> FollowListResult:
+        """Get followers list via Web API (paginated)."""
+        return self.web_api.get_followers(user_id, count, max_id)
+
+    def get_following_api(self, user_id: str, count: int = 50, max_id: str = None) -> FollowListResult:
+        """Get following list via Web API (paginated)."""
+        return self.web_api.get_following(user_id, count, max_id)
+
+    def get_friendship_status(self, user_id: str) -> FriendshipStatus:
+        """Check friendship status with user."""
+        return self.web_api.get_friendship_status(user_id)
+
+    def get_user_feed_api(self, user_id: str, count: int = 12) -> UserFeedResult:
+        """Get user's posts via Web API."""
+        return self.web_api.get_user_feed(user_id, count)
+
+    def get_media_info_api(self, media_id: str) -> Optional[MediaInfo]:
+        """Get detailed post info via Web API."""
+        return self.web_api.get_media_info(media_id)
+
+    def get_media_comments_api(self, media_id: str) -> CommentsResult:
+        """Get post comments via Web API."""
+        return self.web_api.get_media_comments(media_id)
+
+    def get_media_likers_api(self, media_id: str) -> LikersResult:
+        """Get post likers via Web API."""
+        return self.web_api.get_media_likers(media_id)
+
+    def get_stories_api(self, user_id: str) -> list:
+        """Get user's active stories via Web API."""
+        return self.web_api.get_stories(user_id)
+
+    def get_highlights_api(self, user_id: str) -> HighlightsResult:
+        """Get user's highlights via Web API."""
+        return self.web_api.get_highlights(user_id)
+
+    def get_reels_api(self, user_id: str) -> ReelsResult:
+        """Get user's reels via Web API."""
+        return self.web_api.get_reels(user_id)
+
+    def get_hashtag_feed_api(self, tag: str) -> HashtagSection:
+        """Get hashtag posts via Web API."""
+        return self.web_api.get_hashtag_feed(tag)
+
+    def get_location_feed_api(self, location_id: str) -> LocationSection:
+        """Get location posts via Web API."""
+        return self.web_api.get_location_feed(location_id)
+
+    def get_tagged_posts_api(self, user_id: str) -> UserFeedResult:
+        """Get tagged posts via Web API."""
+        return self.web_api.get_tagged_posts(user_id)
 
     def follow(self, username: str, check_status: bool = True) -> dict:
         """

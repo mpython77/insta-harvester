@@ -233,9 +233,18 @@ from .tagged_posts import TaggedPostsScraper, TaggedPostData, TaggedPostsResult
 from .highlight_scraper import HighlightsScraper, HighlightResult, HighlightSlide, HighlightSticker, HighlightMusic, HighlightInfo, HighlightsListResult
 from .session_manager import SessionManager, SessionRotationStrategy
 from .captcha_solver import CaptchaSolver, CaptchaProvider
+from .web_api import (
+    InstagramWebAPI, WebProfileData, WebSearchResult, SearchUserResult,
+    FollowUserItem, FollowListResult, FriendshipStatus,
+    FeedPost, UserFeedResult, MediaInfo, CommentItem, CommentsResult,
+    LikerItem, LikersResult, StoryMediaItem, StoriesTrayResult,
+    HighlightInfo, HighlightsResult, ReelItem, ReelsResult,
+    HashtagSection, LocationSection
+)
+from .exceptions import WebAPIError
 
 
-__version__ = '2.14.0'
+__version__ = '2.14.8'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
@@ -379,5 +388,28 @@ __all__ = [
     # Captcha Solver
     'CaptchaSolver',
     'CaptchaProvider',
+
+    # Web API (JSON-first) — 16+ endpoints
+    'InstagramWebAPI',
+    'WebProfileData',
+    'WebSearchResult',
+    'SearchUserResult',
+    'WebAPIError',
+    'FollowUserItem',
+    'FollowListResult',
+    'FriendshipStatus',
+    'FeedPost',
+    'UserFeedResult',
+    'MediaInfo',
+    'CommentItem',
+    'CommentsResult',
+    'LikerItem',
+    'LikersResult',
+    'StoryMediaItem',
+    'StoriesTrayResult',
+    'ReelItem',
+    'ReelsResult',
+    'HashtagSection',
+    'LocationSection',
 ]
 

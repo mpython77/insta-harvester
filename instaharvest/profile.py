@@ -30,22 +30,60 @@ class ProfileData:
         bio: Biography text
         external_links: List of external links found in bio
         threads_profile: Threads profile username/URL if available
+        full_name: Display name from Web API
+        user_id: Instagram numeric user ID
+        is_business_account: Business account flag
+        is_professional_account: Professional/creator account flag
+        bio_links: Structured bio links [{title, url, link_type}]
+        profile_pic_url: Profile picture URL
+        business_address: Business address dict
+        business_email: Business contact email
+        business_phone: Business phone number
+        highlight_reel_count: Number of highlight reels
+        has_clips: Whether account has reels
+        data_source: Where data came from ('api' or 'dom')
     """
     username: str
-    posts: int  # Changed to int for consistency
+    posts: int
     followers: int
     following: int
     is_verified: bool = False
-    is_private: bool = False  # New field
+    is_private: bool = False
     category: Optional[str] = None
     bio: Optional[str] = None
     external_links: List[str] = field(default_factory=list)
     threads_profile: Optional[str] = None
-    engagement_rate: Optional[float] = None  # Calculated from post data
+    engagement_rate: Optional[float] = None
+    # Web API extended fields
+    full_name: Optional[str] = None
+    user_id: Optional[str] = None
+    fbid: Optional[str] = None
+    is_business_account: bool = False
+    is_professional_account: bool = False
+    category_enum: Optional[str] = None
+    bio_links: List[Dict[str, str]] = field(default_factory=list)
+    profile_pic_url: Optional[str] = None
+    profile_pic_url_hd: Optional[str] = None
+    business_address: Optional[Dict[str, Any]] = None
+    business_email: Optional[str] = None
+    business_phone: Optional[str] = None
+    business_category_name: Optional[str] = None
+    highlight_reel_count: int = 0
+    has_clips: bool = False
+    has_guides: bool = False
+    mutual_followers_count: int = 0
+    followed_by_viewer: bool = False
+    follows_viewer: bool = False
+    data_source: str = 'dom'  # 'api' or 'dom'
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return asdict(self)
+
+    @property
+    def is_business(self) -> bool:
+        """Check if account is any type of business/professional"""
+        return self.is_business_account or self.is_professional_account
 
     def calculate_engagement_rate(self, avg_likes: float, avg_comments: float = 0) -> float:
         """
@@ -92,13 +130,22 @@ class ProfileScraper(BaseScraper):
         *,
         get_posts: bool = True,
         get_followers: bool = True,
-        get_following: bool = True
+        get_following: bool = True,
+        prefer_api: bool = True
     ) -> ProfileData:
         """
-        Scrape profile data
+        Scrape profile data (JSON-first with DOM fallback)
+
+        Strategy:
+            1. Try Instagram Web API (fast, exact counts, business info)
+            2. If API fails, fall back to DOM scraping
 
         Args:
             username: Instagram username (without @)
+            get_posts: Extract posts count
+            get_followers: Extract followers count
+            get_following: Extract following count
+            prefer_api: Try Web API first (default: True)
 
         Returns:
             ProfileData object
@@ -126,46 +173,35 @@ class ProfileScraper(BaseScraper):
             if not self._profile_exists():
                 raise ProfileNotFoundError(f"Profile @{username} not found")
 
-            # Check if Private
-            is_private = self._is_private_account()
-            if is_private:
-                self.logger.warning(f"⚠️ Account @{username} is PRIVATE")
+            # ─────────────────────────────────────────
+            # Strategy 1: JSON-first via Web API
+            # ─────────────────────────────────────────
+            if prefer_api and self.web_api:
+                try:
+                    api_data = self.web_api.get_profile(username)
+                    if api_data:
+                        data = self._build_profile_from_api(api_data)
+                        self.logger.info(
+                            f"✅ Profile via API: {data.posts:,} posts, "
+                            f"{data.followers:,} followers (exact), "
+                            f"data_source=api"
+                        )
+                        return data
+                    else:
+                        self.logger.debug("API returned no data, falling back to DOM")
+                except Exception as e:
+                    self.logger.debug(f"API extraction failed ({e}), falling back to DOM")
 
-            # Wait for profile stats to load
-            self._wait_for_profile_stats()
-
-            # Extract data
-            # Use safe_extract with parse_number directly
-            posts = self.get_posts_count() if get_posts else 0
-            followers = self.get_followers_count() if get_followers else 0
-            following = self.get_following_count() if get_following else 0
-
-            # Get complete bio data
-            bio_data = self._get_bio_data()
-
-            data = ProfileData(
-                username=username,
-                posts=posts,
-                followers=followers,
-                following=following,
-                is_verified=self._check_verified(),
-                is_private=is_private,
-                category=self._get_category(),
-                bio=bio_data['bio'],
-                external_links=bio_data['external_links'],
-                threads_profile=bio_data['threads_profile']
+            # ─────────────────────────────────────────
+            # Strategy 2: DOM fallback
+            # ─────────────────────────────────────────
+            self.logger.debug("Using DOM scraping strategy")
+            return self._scrape_dom(
+                username,
+                get_posts=get_posts,
+                get_followers=get_followers,
+                get_following=get_following
             )
-
-            verified_status = "✓ Verified" if data.is_verified else "Not verified"
-            private_status = "🔒 Private" if data.is_private else "🔓 Public"
-
-            self.logger.info(
-                f"Profile scrape complete: {data.posts} posts, "
-                f"{data.followers} followers, {data.following} following, "
-                f"{verified_status}, {private_status}"
-            )
-
-            return data
 
         finally:
             # Only close browser if not in SharedBrowser mode
@@ -173,6 +209,97 @@ class ProfileScraper(BaseScraper):
                 self.close()
             else:
                 self.logger.debug("Keeping browser open (SharedBrowser mode)")
+
+    def _build_profile_from_api(self, api_data) -> ProfileData:
+        """
+        Build ProfileData from WebProfileData (Web API response).
+
+        Maps all WebProfileData fields to ProfileData fields.
+        """
+        return ProfileData(
+            username=api_data.username,
+            posts=api_data.media_count,
+            followers=api_data.follower_count,
+            following=api_data.following_count,
+            is_verified=api_data.is_verified,
+            is_private=api_data.is_private,
+            category=api_data.category_name,
+            bio=api_data.biography,
+            external_links=[l.get('url', '') for l in api_data.bio_links] if api_data.bio_links else (
+                [api_data.external_url] if api_data.external_url else []
+            ),
+            # Web API extended fields
+            full_name=api_data.full_name,
+            user_id=api_data.user_id,
+            fbid=api_data.fbid,
+            is_business_account=api_data.is_business_account,
+            is_professional_account=api_data.is_professional_account,
+            category_enum=api_data.category_enum,
+            bio_links=api_data.bio_links,
+            profile_pic_url=api_data.profile_pic_url,
+            profile_pic_url_hd=api_data.profile_pic_url_hd,
+            business_address=api_data.business_address,
+            business_email=api_data.business_email,
+            business_phone=api_data.business_phone,
+            business_category_name=api_data.business_category_name,
+            highlight_reel_count=api_data.highlight_reel_count,
+            has_clips=api_data.has_clips,
+            has_guides=api_data.has_guides,
+            mutual_followers_count=api_data.mutual_followers_count,
+            followed_by_viewer=api_data.followed_by_viewer,
+            follows_viewer=api_data.follows_viewer,
+            data_source='api'
+        )
+
+    def _scrape_dom(
+        self,
+        username: str,
+        *,
+        get_posts: bool = True,
+        get_followers: bool = True,
+        get_following: bool = True
+    ) -> ProfileData:
+        """Original DOM-based profile scraping (fallback)."""
+        # Check if Private
+        is_private = self._is_private_account()
+        if is_private:
+            self.logger.warning(f"⚠️ Account @{username} is PRIVATE")
+
+        # Wait for profile stats to load
+        self._wait_for_profile_stats()
+
+        # Extract data
+        posts = self.get_posts_count() if get_posts else 0
+        followers = self.get_followers_count() if get_followers else 0
+        following = self.get_following_count() if get_following else 0
+
+        # Get complete bio data
+        bio_data = self._get_bio_data()
+
+        data = ProfileData(
+            username=username,
+            posts=posts,
+            followers=followers,
+            following=following,
+            is_verified=self._check_verified(),
+            is_private=is_private,
+            category=self._get_category(),
+            bio=bio_data['bio'],
+            external_links=bio_data['external_links'],
+            threads_profile=bio_data['threads_profile'],
+            data_source='dom'
+        )
+
+        verified_status = "✓ Verified" if data.is_verified else "Not verified"
+        private_status = "🔒 Private" if data.is_private else "🔓 Public"
+
+        self.logger.info(
+            f"Profile scrape complete (DOM): {data.posts} posts, "
+            f"{data.followers} followers, {data.following} following, "
+            f"{verified_status}, {private_status}"
+        )
+
+        return data
 
     def _profile_exists(self) -> bool:
         """Check if profile exists"""

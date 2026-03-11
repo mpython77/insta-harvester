@@ -1,223 +1,66 @@
-# 📚 Examples Directory
+# 📚 Examples
 
-This folder contains all example scripts and usage demonstrations for InstaHarvest.
+Ready-to-use scripts for InstaHarvest. **Run `save_session.py` first!**
 
 ---
 
-## 📁 Directory Structure
+## 📁 Scripts
 
-```
-examples/
-├── save_session.py             # Create Instagram session (REQUIRED FIRST)
-├── all_in_one.py               # Complete demo with ALL features
-├── main_advanced.py            # Production scraping automation
-├── download_media.py           # 📥 Download Images & Videos (Post/Reel)
-├── example_notifications.py    # 🔔 Read & filter activity notifications
-└── example_custom_config.py    # Configuration customization examples
-```
+| Script | Description |
+|--------|-------------|
+| `save_session.py` | 🔑 Create Instagram session (required, one-time) |
+| `all_in_one.py` | 🎮 Interactive demo — ALL features in one menu |
+| `main_advanced.py` | 🚀 Production scraping — parallel processing, Excel export |
+| `example_web_api.py` | 🔌 Web API demo — 16+ JSON endpoints (profiles, reels, feed) |
+| `example_notifications.py` | 🔔 Read & filter activity notifications |
+| `example_post_data.py` | 📸 Post data extraction (JSON-first, 30+ fields) |
+| `example_custom_config.py` | ⚙️ Configuration customization examples |
+| `example_proxy.py` | 🌐 Proxy configuration & rotation |
+| `download_media.py` | 📥 Download images & videos from posts/reels |
 
-**Note:** All operations (follow, unfollow, messaging, collect followers/following, batch operations, etc.) are demonstrated in `all_in_one.py`. It's a complete interactive menu showing all library features.
+---
 
 ## 🚀 Quick Start
 
-### 1. Save Instagram Session (ONE TIME ONLY)
-
 ```bash
-# Run directly (Automatic session path handling)
+# 1. Create session (one-time)
 python examples/save_session.py
-```
 
-This will:
+# 2. Try interactive demo
+python examples/all_in_one.py
 
-- Open Chrome browser
-- Let you login to Instagram manually
-- Save session to `instagram_session.json`
-- All future scripts use this session (no re-login!)
-
-### 2. Try the Complete Demo
-
-```bash
-python all_in_one.py
-```
-
-This interactive menu demonstrates ALL library features:
-
-- Follow/Unfollow users
-- Send messages
-- Collect followers/following
-- Batch operations
-- Profile scraping
-
-### 3. Custom Configuration
-
-```bash
-python example_custom_config.py  # See configuration examples
+# 3. Or try Web API
+python examples/example_web_api.py
 ```
 
 ---
 
-## 📖 Library Usage Examples
+## 💡 Usage
 
-### Example 1: Follow a User
+All scripts should be run from the **project root**:
 
-```python
-from instaharvest import FollowManager
-from instaharvest.config import ScraperConfig
-
-config = ScraperConfig()
-manager = FollowManager(config=config)
-session_data = manager.load_session()
-manager.setup_browser(session_data)
-
-result = manager.follow("instagram")
-print(result)  # {'success': True, 'status': 'followed', ...}
-
-manager.close()
+```bash
+python examples/all_in_one.py        # Interactive demo
+python examples/main_advanced.py     # Production scraping (3 parallel workers)
+python examples/example_web_api.py   # Direct API access (profiles, reels, etc.)
 ```
 
-### Example 2: Send Direct Message
-
-```python
-from instaharvest import MessageManager
-from instaharvest.config import ScraperConfig
-
-config = ScraperConfig()
-manager = MessageManager(config=config)
-session_data = manager.load_session()
-manager.setup_browser(session_data)
-
-result = manager.send_message("username", "Hello from Python!")
-print(result)
-
-manager.close()
-```
-
-### Example 3: Collect Followers
-
-```python
-from instaharvest import FollowersCollector
-from instaharvest.config import ScraperConfig
-
-config = ScraperConfig()
-collector = FollowersCollector(config=config)
-session_data = collector.load_session()
-collector.setup_browser(session_data)
-
-# Collect first 100 followers
-followers = collector.get_followers("username", limit=100, print_realtime=True)
-print(f"Collected {len(followers)} followers")
-
-collector.close()
-```
-
-### Example 4: Using SharedBrowser (Recommended)
+**SharedBrowser (recommended for custom scripts):**
 
 ```python
 from instaharvest import SharedBrowser
 from instaharvest.config import ScraperConfig
 
-# Create config
-config = ScraperConfig()
+with SharedBrowser(config=ScraperConfig()) as browser:
+    profile = browser.scrape_profile("username")
+    browser.follow("user1")
+    browser.send_message("user1", "Hello!")
 
-# Opens browser once, reuses for all operations
-with SharedBrowser(config=config) as browser:
-    # Follow
-    result = browser.follow("user1")
-
-    # Send message
-    result = browser.send_message("user2", "Hello!")
-
-    # Get followers
-    followers = browser.get_followers("user3", limit=50)
-
-    # Browser closes automatically
+    # Web API
+    profile_json = browser.get_profile_json("username")
+    reels = browser.get_reels_api(profile_json.user_id)
 ```
-
-## 🎯 Usage Guide
-
-### For Interactive Demo (Recommended for beginners)
-
-```bash
-python examples/all_in_one.py
-```
-
-This shows ALL features in an interactive menu - perfect for learning!
-
-### For Custom Configuration
-
-```bash
-python examples/example_custom_config.py  # See all config options
-```
-
-### For Production Code
-
-Use the library directly in your Python scripts (see examples above).
-
-### 🚀 Advanced Scraping (Production Ready)
-
-```bash
-python main_advanced.py
-```
-
-This script is a **Robust, Multi-Process Data Harvester**:
-
-- Uses `InstagramOrchestrator` for workflow management.
-- Runs 3 parallel browser workers (configurable).
-- Exports data to Excel (`instagram_data.xlsx`) in real-time.
-- Safely handles interruptions (Graceful Shutdown guarantees data save).
-- automatically distinguishes Posts vs Reels.
 
 ---
 
-## 💡 Tips
-
-1. **Before using:**
-   - Create Instagram session ONCE: `python examples/save_session.py`
-   - Session is saved and reused automatically
-
-2. **Configuration:**
-   - Default settings work for most users
-   - Customize via `ScraperConfig` if needed
-   - See `CONFIGURATION_GUIDE.md` for all 40+ parameters
-
-3. **All scripts must be run from project root:**
-
-   ```bash
-   # From project root directory
-   python examples/all_in_one.py
-   ```
-
----
-
-## 📚 Related Documentation
-
-- `CONFIGURATION_GUIDE.md` - Complete configuration guide with all parameters
-- Main project `README.md` - Full library documentation
-- Library source: `instaharvest/` directory
-
----
-
-## 🎯 Next Steps
-
-1. **Create Instagram session** (required once):
-
-   ```bash
-   python examples/save_session.py
-   ```
-
-2. **Try the interactive demo**:
-
-   ```bash
-   python examples/all_in_one.py
-   ```
-
-3. **Use in your own code**:
-
-   ```python
-   from instaharvest import FollowManager, MessageManager, SharedBrowser
-   from instaharvest.config import ScraperConfig
-   ```
-
----
-
-**For questions or issues, check the main README.md or open an issue on GitHub.** 🚀
+For full documentation, see the main [README.md](../README.md) 🚀

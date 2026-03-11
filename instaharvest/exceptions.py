@@ -42,3 +42,8 @@ class RateLimitError(InstagramScraperError):
 class LoginRequiredError(InstagramScraperError):
     """Login/session expired"""
     pass
+
+
+class WebAPIError(InstagramScraperError):
+    """Instagram Web API call failed"""
+    pass

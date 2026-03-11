@@ -20,7 +20,8 @@ from .exceptions import (
     ProfileNotFoundError,
     HTMLStructureChangedError,
     LoginRequiredError,
-    RateLimitError
+    RateLimitError,
+    WebAPIError
 )
 from .security import SecurityManager
 from .network_client import NetworkClient  # [NEW]
@@ -60,6 +61,9 @@ class BaseScraper(ABC):
         # Interruption tracking
         self.interrupted = False
 
+        # Web API client (lazy initialized)
+        self._web_api = None
+
     def sync_network_client(self):
         """
         Synchronization: Browser Cookies -> Network Client
@@ -71,6 +75,27 @@ class BaseScraper(ABC):
             self.logger.info("⚡ Synced Browser Cookies to Network Client")
 
         self.logger.info(f"{self.__class__.__name__} initialized")
+
+    @property
+    def web_api(self):
+        """
+        Instagram Web API client (lazy initialized).
+
+        Provides JSON-first data extraction via Instagram's internal API.
+        Automatically created when first accessed, requires browser page.
+
+        Returns:
+            InstagramWebAPI instance or None if page not available
+        """
+        if self._web_api is None and self.page is not None:
+            from .web_api import InstagramWebAPI
+            self._web_api = InstagramWebAPI(
+                page=self.page,
+                config=self.config,
+                logger=self.logger
+            )
+            self.logger.debug("🔌 WebAPI client initialized")
+        return self._web_api
 
     def check_session_exists(self) -> None:
         """Check if session file exists"""
