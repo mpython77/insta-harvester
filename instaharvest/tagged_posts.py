@@ -120,7 +120,7 @@ class TaggedPostsScraper(BaseScraper):
         session = scraper.load_session()
         scraper.setup_browser(session)
 
-        result = scraper.scrape("mondayswimwear", max_posts=50)
+        result = scraper.scrape("mondayswimwear", target_count=50)
         for post in result.tagged_posts:
             print(f"{post.owner.username} tagged you — {post.like_count} likes")
     """
@@ -168,7 +168,7 @@ class TaggedPostsScraper(BaseScraper):
 
         # Navigate to tagged page
         self.goto_url(url)
-        time.sleep(3)  # Wait for initial load
+        time.sleep(self.config.comment_initial_load_delay)  # Wait for initial load
 
         # ═══════ JSON-FIRST EXTRACTION ═══════
         posts = self._extract_from_json()
@@ -239,7 +239,7 @@ class TaggedPostsScraper(BaseScraper):
 
             for script in scripts:
                 try:
-                    content = script.inner_text(timeout=1000)
+                    content = script.inner_text(timeout=self.config.script_inner_text_timeout)
                     if len(content) < 500:
                         continue
 
@@ -271,7 +271,7 @@ class TaggedPostsScraper(BaseScraper):
         - edges[].node with pk/media_type
         """
         nodes = []
-        if depth > 20 or not obj:
+        if depth > self.config.json_max_recursion_depth or not obj:
             return nodes
 
         if isinstance(obj, dict):

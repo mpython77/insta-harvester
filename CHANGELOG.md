@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.0] - 2026-03-11
+
+### Fixed
+- **Critical `_ensure_started()` method missing** in `SharedBrowser` — 14 methods now auto-start browser
+- **`__exit__` exception suppression** — both `SharedBrowser` and `BaseScraper` now explicitly `return False`
+- **`HTMLStructureChangedError` never raised** — `safe_extract(critical=True)` now raises for vital fields (followers, posts, following)
+- **Silent `except Exception: pass`** — 7 blocks in `profile.py` now log debug messages
+- **`TypeError` in orchestrator** — `max_posts` → `target_count` parameter mismatch fixed
+
+### Added
+- **`py.typed` marker** (PEP 561) — IDE type checking support for installed package
+- **`critical` parameter** in `safe_extract()` — raises `HTMLStructureChangedError` with element name, selector, original error, and debug snapshot path
+- **Auto-start guard** — `SharedBrowser._ensure_started()` auto-launches browser when not running
+
+### Changed
+- **Hardcoded values extracted to `config.py`** — JSON recursion limits, delays, timeouts now configurable
+- **`.gitignore` expanded** — debug snapshots, DOM dumps, test output files excluded
+- **`setup.py`** — added `package_data` for `py.typed`
+
+### Removed
+- **11 debug files from `tests/`** — `debug_*.py`, `analyze_html.py`, `fail_output.txt`, etc.
+- **2 root debug files** — `comments_dom.html` (2MB), `comments_out.json`
+
 ## [2.9.0] - 2026-02-26
 
 ### Added

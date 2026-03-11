@@ -294,7 +294,7 @@ class HighlightsScraper(BaseScraper):
 
         # Handle "View story" dialog
         self._handle_view_dialog()
-        time.sleep(2.0)
+        time.sleep(self.config.highlight_page_load_delay)
 
         # ═══════ JSON-FIRST EXTRACTION ═══════
         items_data, meta = self._extract_all_from_json()
@@ -464,7 +464,7 @@ class HighlightsScraper(BaseScraper):
         items = []
         meta = {}
 
-        if depth > 20 or not obj:
+        if depth > self.config.json_max_recursion_depth or not obj:
             return items, meta
 
         if isinstance(obj, dict):
@@ -698,7 +698,7 @@ class HighlightsScraper(BaseScraper):
 
     def _extract_mentions(self, data: Any, mentions: List[str], depth: int = 0) -> None:
         """Recursively extract @mentions from ig_mention, reel_mentions, etc."""
-        if depth > 10 or not data:
+        if depth > self.config.json_highlight_mentions_depth or not data:
             return
 
         if isinstance(data, dict):

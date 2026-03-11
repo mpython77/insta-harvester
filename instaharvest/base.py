@@ -521,8 +521,28 @@ class BaseScraper(ABC):
         element_name: str,
         selector: str,
         default: Any = None,
-        snapshot_on_error: bool = True
+        snapshot_on_error: bool = True,
+        critical: bool = False
     ) -> Any:
+        """
+        Safely extract data with error handling and optional HTML snapshot.
+
+        Args:
+            extractor_func: Callable that performs the extraction
+            element_name: Human-readable name of the element being extracted
+            selector: CSS selector being used (for diagnostics)
+            default: Default value if extraction fails
+            snapshot_on_error: Save HTML snapshot on failure for debugging
+            critical: If True, raise HTMLStructureChangedError instead of
+                      returning default. Use for essential fields (followers,
+                      posts count) where a silent 0 would mislead the user.
+
+        Returns:
+            Extracted value, or default if extraction fails and critical=False
+
+        Raises:
+            HTMLStructureChangedError: If critical=True and extraction fails
+        """
         try:
             result = extractor_func()
             self.logger.debug(f"✓ Extracted {element_name}: {result}")
@@ -532,6 +552,7 @@ class BaseScraper(ABC):
                 f"✗ Failed to extract {element_name} using selector '{selector}': {e}"
             )
             
+            snapshot_path = None
             # Detailed diagnostics for HTML structure changes
             if snapshot_on_error:
                 try:
@@ -547,10 +568,11 @@ class BaseScraper(ABC):
                         # Save HTML snapshot
                         with open(filename, "w", encoding="utf-8") as f:
                             f.write(self.page.content())
-                            
+
+                        snapshot_path = str(filename)
                         self.logger.error(
                             f"\n{'!'*60}\n"
-                            f"HTML STRUCTURE CHANGED DETECTED!\n"
+                            f"HTML STRUCTURE CHANGE DETECTED!\n"
                             f"Failed Element: {element_name}\n"
                             f"Selector Used: {selector}\n"
                             f"Snapshot Saved: {filename}\n"
@@ -558,6 +580,21 @@ class BaseScraper(ABC):
                         )
                 except Exception as diag_e:
                     self.logger.error(f"Failed to save diagnostic snapshot: {diag_e}")
+
+            # If critical — raise instead of silently returning default
+            if critical:
+                msg = (
+                    f"HTML structure changed for '{element_name}'. "
+                    f"Selector '{selector}' no longer works. "
+                    f"Original error: {type(e).__name__}: {e}"
+                )
+                if snapshot_path:
+                    msg += f" | Debug snapshot: {snapshot_path}"
+                raise HTMLStructureChangedError(
+                    element_name=element_name,
+                    selector=selector,
+                    message=msg
+                ) from e
 
             return default
 
@@ -632,14 +669,19 @@ class BaseScraper(ABC):
             except Exception as e:
                 self.logger.warning(f"Failed to update session before closing: {e}")
 
-        if self.page:
-            self.page.close()
-        if self.context:
-            self.context.close()
-        if self.browser:
-            self.browser.close()
-        if self.playwright:
-            self.playwright.stop()
+        # Close browser resources — each in its own try/except
+        # so a failure in one doesn't prevent cleanup of others
+        for resource, action, name in [
+            (self.page, lambda r: r.close(), 'page'),
+            (self.context, lambda r: r.close(), 'context'),
+            (self.browser, lambda r: r.close(), 'browser'),
+            (self.playwright, lambda r: r.stop(), 'playwright'),
+        ]:
+            if resource:
+                try:
+                    action(resource)
+                except Exception as e:
+                    self.logger.warning(f"Error closing {name}: {e}")
 
         self.logger.info("Browser closed")
 
@@ -648,10 +690,11 @@ class BaseScraper(ABC):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit"""
+        """Context manager exit — always closes, never suppresses exceptions"""
         self.close()
         if exc_type:
             self.logger.error(f"Error during scraping: {exc_val}")
+        return False  # Never suppress exceptions
 
     @abstractmethod
     def scrape(self, *args, **kwargs):

@@ -258,6 +258,29 @@ class ScraperConfig:
     diagnostics_reel_success_threshold_partial: int = 40  # Reel diagnostics success rate (PARTIAL)
     reel_max_span_check: int = 20  # Max span elements to check for reels
 
+    # ==================== JSON RECURSION LIMITS ====================
+    json_max_recursion_depth: int = 20  # Max depth for recursive JSON parsing (tags, mentions)
+    json_story_recursion_depth: int = 25  # Max depth for story JSON extraction
+    json_story_items_depth: int = 15  # Max depth for story items mapping
+    json_highlight_mentions_depth: int = 10  # Max depth for highlight mentions extraction
+
+    # ==================== MAJOR OPERATION DELAYS ====================
+    # These are 2s+ delays for important operations (not micro-UI delays)
+    story_view_delay: float = 2.0  # Wait after "View story" dialog
+    story_pause_delay: float = 1.0  # Wait after pausing story
+    comment_initial_load_delay: float = 3.0  # Wait for comments to initially load
+    comment_dialog_open_delay: float = 4.0  # Wait for comments dialog to open
+    comment_network_wait_delay: float = 3.0  # Wait for comment network response
+    notification_page_load_delay: float = 3.0  # Wait after notification page load
+    notification_scroll_delay: float = 2.0  # Wait between notification scrolls
+    search_api_response_delay: float = 2.5  # Wait for search API response
+    orchestrator_session_delay: float = 3.0  # Wait after session activation in orchestrator
+    orchestrator_challenge_delay: float = 5.0  # Wait for challenge page in orchestrator
+    highlight_page_load_delay: float = 2.0  # Wait after highlight page load
+
+    # ==================== SCRIPT EXTRACTION TIMEOUTS ====================
+    script_inner_text_timeout: int = 1000  # Timeout (ms) for script.inner_text() calls
+
     # ==================== LOGGING ====================
     log_file: Optional[str] = 'instagram_scraper.log'
     log_level: str = 'INFO'

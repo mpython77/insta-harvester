@@ -177,10 +177,10 @@ class StoryScraper(BaseScraper):
 
             # ── Phase 3: View Story & Pause ──
             self._handle_view_story_dialog()
-            time.sleep(2.0)
+            time.sleep(self.config.story_view_delay)
 
             self._pause_story()
-            time.sleep(1.0)
+            time.sleep(self.config.story_pause_delay)
 
             # ── Phase 4: Extract Tags (JSON-First Architecture) ──
             all_tags: Set[str] = set()
@@ -275,7 +275,8 @@ class StoryScraper(BaseScraper):
                         btn.click()
                         self.logger.info("✅ 'View story' dialog accepted")
                         return
-                except Exception:
+                except Exception as e:
+                    self.logger.debug(f"View story selector '{selector}' failed: {e}")
                     continue
 
             # Method 2: Role-based
@@ -285,7 +286,8 @@ class StoryScraper(BaseScraper):
                     btn.click()
                     self.logger.info("✅ 'View story' dialog accepted (role)")
                     return
-            except Exception:
+            except Exception as e:
+                self.logger.debug(f"View story role-based lookup failed: {e}")
                 pass
 
             # Method 3: Text match fallback
@@ -296,9 +298,11 @@ class StoryScraper(BaseScraper):
                             el.click()
                             self.logger.info("✅ 'View story' dialog accepted (text)")
                             return
-                    except Exception:
+                    except Exception as e:
+                        self.logger.debug(f"View story text match element failed: {e}")
                         continue
-            except Exception:
+            except Exception as e:
+                self.logger.debug(f"View story text match iteration failed: {e}")
                 pass
 
             self.logger.debug("No 'View story' dialog detected")
@@ -320,15 +324,16 @@ class StoryScraper(BaseScraper):
                         el.click()
                         self.logger.debug("Story paused via button")
                         return
-                except Exception:
+                except Exception as e:
+                    self.logger.debug(f"Pause button '{selector}' failed: {e}")
                     continue
 
             # Method 2: Keyboard shortcut
             try:
                 self.page.keyboard.press('Space')
                 self.logger.debug("Story paused via keyboard")
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Keyboard pause failed: {e}")
 
         except Exception as e:
             self.logger.debug(f"Could not pause: {e}")
@@ -364,7 +369,8 @@ class StoryScraper(BaseScraper):
                     # Extract per-slide mapping
                     self._find_story_items_with_tags(data, slides)
 
-                except (json.JSONDecodeError, Exception):
+                except (json.JSONDecodeError, Exception) as e:
+                    self.logger.debug(f"JSON script parse error: {e}")
                     continue
 
         except Exception as e:
@@ -391,7 +397,7 @@ class StoryScraper(BaseScraper):
         - reel_mentions: [{user: {username: "..."}}]
         - story_bloks_stickers: [{bloks_sticker: {sticker_data: {ig_mention: {...}}}}]
         """
-        if depth > 25:
+        if depth > self.config.json_story_recursion_depth:
             return
 
         if isinstance(data, dict):
@@ -441,7 +447,7 @@ class StoryScraper(BaseScraper):
         Looks for arrays of objects that have 'taken_at' (= story items)
         and maps each item's stickers/mentions to a StorySlideInfo.
         """
-        if depth > 15:
+        if depth > self.config.json_story_items_depth:
             return
 
         if isinstance(data, dict):
@@ -462,7 +468,8 @@ class StoryScraper(BaseScraper):
                                 from datetime import datetime, timezone
                                 dt = datetime.fromtimestamp(int(taken_at), tz=timezone.utc)
                                 timestamp_str = dt.strftime('%Y-%m-%d %H:%M:%S UTC')
-                            except Exception:
+                            except Exception as e:
+                                self.logger.debug(f"Timestamp parse error for {taken_at}: {e}")
                                 timestamp_str = str(taken_at)
 
                         # Determine media type
@@ -533,7 +540,8 @@ class StoryScraper(BaseScraper):
                         for m in mention_re.findall(alt):
                             if m.lower() not in ('', 'instagram'):
                                 tags.add(m)
-                except Exception:
+                except Exception as e:
+                    self.logger.debug(f"DOM img alt extraction failed: {e}")
                     continue
 
             # Strategy 2: Anchor tags with profile links
@@ -544,7 +552,8 @@ class StoryScraper(BaseScraper):
                         for m in mention_re.findall(text):
                             if m.lower() not in ('', 'instagram'):
                                 tags.add(m)
-                except Exception:
+                except Exception as e:
+                    self.logger.debug(f"DOM anchor tag extraction failed: {e}")
                     continue
 
             # Strategy 3: Text spans
@@ -555,7 +564,8 @@ class StoryScraper(BaseScraper):
                         for m in mention_re.findall(text):
                             if m.lower() not in ('', 'instagram'):
                                 tags.add(m)
-                except Exception:
+                except Exception as e:
+                    self.logger.debug(f"DOM text span extraction failed: {e}")
                     continue
 
         except Exception as e:
@@ -586,9 +596,11 @@ class StoryScraper(BaseScraper):
                             'data': body,
                         })
                         self.logger.debug(f"Intercepted: {url[:80]}")
-                    except Exception:
+                    except Exception as e:
+                        self.logger.debug(f"Story response parse error: {e}")
                         pass
-            except Exception:
+            except Exception as e:
+                self.logger.debug(f"Story interceptor handler error: {e}")
                 pass
 
         self.page.on('response', handle_response)
@@ -623,7 +635,8 @@ class StoryScraper(BaseScraper):
                         if isinstance(reel, dict):
                             self._parse_reel_items(reel, items, seen_urls)
 
-            except Exception:
+            except Exception as e:
+                self.logger.debug(f"Intercepted response parse error: {e}")
                 continue
 
         return items
@@ -665,7 +678,8 @@ class StoryScraper(BaseScraper):
                             height=image_versions[0].get('height', 0),
                             slide_index=idx,
                         ))
-        except Exception:
+        except Exception as e:
+            self.logger.debug(f"Reel items parse error: {e}")
             pass
 
     def _extract_from_dom_media(self) -> List[StoryItem]:
@@ -690,7 +704,8 @@ class StoryScraper(BaseScraper):
                         src = src.split(',')[-1].strip().split()[0]
                     items.append(StoryItem(media_url=src, media_type='image'))
 
-        except Exception:
+        except Exception as e:
+            self.logger.debug(f"DOM media extraction error: {e}")
             pass
         return items
 

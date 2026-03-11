@@ -562,6 +562,7 @@ class TestHighlightsScraperItemParser:
         with patch.object(HighlightsScraper, '__init__', lambda self, *a, **kw: None):
             self.scraper = HighlightsScraper()
             self.scraper.logger = MagicMock()
+            self.scraper.config = ScraperConfig()
     
     def _make_item(self, **overrides):
         """Create a realistic highlight item dict"""
@@ -740,6 +741,7 @@ class TestHighlightsScraperFindItems:
         with patch.object(HighlightsScraper, '__init__', lambda self, *a, **kw: None):
             self.scraper = HighlightsScraper()
             self.scraper.logger = MagicMock()
+            self.scraper.config = ScraperConfig()
     
     def test_find_items_direct(self):
         """Find items from direct {items: [...]} structure"""
@@ -902,7 +904,7 @@ class TestVersionInfo:
     
     def test_version_updated(self):
         import instaharvest
-        assert instaharvest.__version__ == '2.13.0'
+        assert instaharvest.__version__ == '2.14.0'
 
 
 # ═══════════════════════════════════════════════════════════

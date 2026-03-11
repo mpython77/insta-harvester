@@ -337,7 +337,7 @@ class ReelDataScraper(BaseScraper):
 
     def _find_media_item(self, obj, depth: int = 0) -> Optional[dict]:
         """Find media item: Post items[] or Reel edges[].node.media"""
-        if depth > 20 or not obj:
+        if depth > self.config.json_max_recursion_depth or not obj:
             return None
         if isinstance(obj, dict):
             if 'items' in obj and isinstance(obj['items'], list):

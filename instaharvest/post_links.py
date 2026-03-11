@@ -23,10 +23,14 @@ try:
     LIBRARY_AVAILABLE = True
 except ImportError:
     LIBRARY_AVAILABLE = False
+import warnings
 
 
-class InstagramPostLinksScraper:
-    """Instagram post links scraper - 100% ACCURATE"""
+class _LegacyPostLinksScraper:
+    """
+    [DEPRECATED] Legacy standalone post links scraper.
+    Use PostLinksScraper instead for full library integration.
+    """
 
     def __init__(self, username: str, session_file: str = None):
         """
@@ -237,6 +241,18 @@ class InstagramPostLinksScraper:
             finally:
                 time.sleep(2)  # For viewing
                 self.close()
+
+
+# Backward-compatible alias — emits deprecation warning
+class InstagramPostLinksScraper(_LegacyPostLinksScraper):
+    """Deprecated: Use PostLinksScraper instead."""
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "InstagramPostLinksScraper is deprecated. Use PostLinksScraper instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
 
 # Library-compatible wrapper (only if library components available)

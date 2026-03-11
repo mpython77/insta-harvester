@@ -531,36 +531,38 @@ class CaptchaSolver:
     def _inject_recaptcha_token(self, page, token: str) -> None:
         """Inject reCAPTCHA solution token into the page"""
         try:
-            page.evaluate(f"""
-                () => {{
+            # SECURITY: Pass token as argument, NOT via f-string interpolation
+            # This prevents JS injection if token contains special characters
+            page.evaluate("""
+                (token) => {
                     // Set textarea
                     const textarea = document.getElementById('g-recaptcha-response');
-                    if (textarea) {{
-                        textarea.value = '{token}';
+                    if (textarea) {
+                        textarea.value = token;
                         textarea.style.display = 'block';
-                    }}
+                    }
 
                     // Also try all textareas
-                    document.querySelectorAll('textarea[name="g-recaptcha-response"]').forEach(el => {{
-                        el.value = '{token}';
-                    }});
+                    document.querySelectorAll('textarea[name="g-recaptcha-response"]').forEach(el => {
+                        el.value = token;
+                    });
 
                     // Call callback if available
-                    if (typeof ___grecaptcha_cfg !== 'undefined') {{
-                        try {{
-                            Object.keys(___grecaptcha_cfg.clients).forEach(key => {{
+                    if (typeof ___grecaptcha_cfg !== 'undefined') {
+                        try {
+                            Object.keys(___grecaptcha_cfg.clients).forEach(key => {
                                 const client = ___grecaptcha_cfg.clients[key];
-                                if (client) {{
-                                    Object.keys(client).forEach(k => {{
+                                if (client) {
+                                    Object.keys(client).forEach(k => {
                                         const val = client[k];
-                                        if (val && val.callback) val.callback('{token}');
-                                    }});
-                                }}
-                            }});
-                        }} catch(e) {{}}
-                    }}
-                }}
-            """)
+                                        if (val && val.callback) val.callback(token);
+                                    });
+                                }
+                            });
+                        } catch(e) {}
+                    }
+                }
+            """, token)
             time.sleep(1.0)
             self.logger.info("reCAPTCHA token injected")
         except Exception as e:

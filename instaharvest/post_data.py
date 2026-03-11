@@ -1146,7 +1146,7 @@ class PostDataScraper(BaseScraper):
         - Posts: xdt_api__v1__media__shortcode__web_info.items[0]  
         - Reels: xdt_api__v1__clips__home__connection_v2.edges[0].node.media
         """
-        if depth > 20 or not obj:
+        if depth > self.config.json_max_recursion_depth or not obj:
             return None
         
         if isinstance(obj, dict):

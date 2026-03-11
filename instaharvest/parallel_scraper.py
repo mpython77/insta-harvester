@@ -8,6 +8,7 @@ import random
 import json
 import signal
 import logging
+from dataclasses import asdict
 from typing import List, Optional, Dict, Any
 from multiprocessing import Pool, cpu_count, Manager, Queue
 from bs4 import BeautifulSoup
@@ -19,17 +20,16 @@ from .config import ScraperConfig
 from .post_data import PostData
 from .logging_config import get_logger
 
-# Global flag for graceful shutdown in worker processes
-_shutdown_requested = False
+# Shared shutdown event — works across multiprocessing workers
+# Set by _worker_signal_handler when SIGINT/SIGTERM received
+_shutdown_event = None  # Will be set per-worker from args
 
 
 def _worker_signal_handler(signum, frame):
-    """Signal handler for worker processes"""
-    global _shutdown_requested
-    _shutdown_requested = True
-    # We use print here as logging might not be fully configured/safe in signal handler depending on platform
-    # But usually safe enough to just set the flag
-    pass 
+    """Signal handler for worker processes — sets shared Event"""
+    global _shutdown_event
+    if _shutdown_event is not None:
+        _shutdown_event.set()
 
 def _get_worker_logger(worker_id: int):
     """Get logger for worker process"""
@@ -239,31 +239,15 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
     config_dict = args['config_dict']
     result_queue = args.get('result_queue')  # Optional queue for real-time results
 
+    # Setup shared shutdown event for this worker process
+    global _shutdown_event
+    _shutdown_event = args.get('shutdown_event')  # multiprocessing.Event from main
+
     # Helper for logging
     logger = _get_worker_logger(worker_id)
     
-    # Reconstruct config from dict
-    config = ScraperConfig(
-        headless=config_dict.get('headless', True),
-        viewport_width=config_dict.get('viewport_width', 1280),
-        viewport_height=config_dict.get('viewport_height', 720),
-        user_agent=config_dict.get('user_agent', ''),
-        default_timeout=config_dict.get('default_timeout', 60000),
-        popup_animation_delay=config_dict.get('popup_animation_delay', 1.5),
-        popup_content_load_delay=config_dict.get('popup_content_load_delay', 0.5),
-        error_recovery_delay_min=config_dict.get('error_recovery_delay_min', 1.0),
-        error_recovery_delay_max=config_dict.get('error_recovery_delay_max', 2.0),
-        post_open_delay=config_dict.get('post_open_delay', 3.0),
-        ui_element_load_delay=config_dict.get('ui_element_load_delay', 0.1),
-        browser_channel=config_dict.get('browser_channel', 'chrome'),
-        browser_args=config_dict.get('browser_args', ['--start-maximized'])
-    )
-    
-    # Manually inject new fields if they exist in dict but config.__init__ doesn't capture them (it uses kwargs? No, explicit fields)
-    if 'selector_post_tag_container' in config_dict:
-        config.selector_post_tag_container = config_dict['selector_post_tag_container']
-    if 'return_empty_list_for_no_tags' in config_dict:
-        config.return_empty_list_for_no_tags = config_dict['return_empty_list_for_no_tags']
+    # Reconstruct config from dict — full fidelity, all 200+ fields preserved
+    config = ScraperConfig(**config_dict)
 
     batch_results = []
 
@@ -310,8 +294,7 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                 content_type = link_data.get('type', 'Post')  # 'Post' or 'Reel'
                 is_reel = (content_type == 'Reel')
 
-                global _shutdown_requested
-                if _shutdown_requested:
+                if _shutdown_event is not None and _shutdown_event.is_set():
                     logger.info("Shutdown requested, stopping...")
                     break
 
@@ -784,29 +767,14 @@ class ParallelPostDataScraper:
         # Split link dictionaries into batches
         batches = self._split_into_batches(post_links, num_workers)
 
-        # Prepare config as dict (must be serializable for multiprocessing)
-        config_dict = {
-            'headless': self.config.headless,
-            'viewport_width': self.config.viewport_width,
-            'viewport_height': self.config.viewport_height,
-            'user_agent': self.config.user_agent,
-            'default_timeout': self.config.default_timeout,
-            'popup_animation_delay': self.config.popup_animation_delay,
-            'popup_content_load_delay': self.config.popup_content_load_delay,
-            'error_recovery_delay_min': self.config.error_recovery_delay_min,
-            'error_recovery_delay_max': self.config.error_recovery_delay_max,
-            'post_open_delay': self.config.post_open_delay,
-            'ui_element_load_delay': self.config.ui_element_load_delay,
-            'browser_channel': self.config.browser_channel,
-            'browser_args': self.config.browser_args,
-            # Add dynamic fields
-            'selector_post_tag_container': self.config.selector_post_tag_container,
-            'return_empty_list_for_no_tags': self.config.return_empty_list_for_no_tags
-        }
+        # Serialize full config via dataclasses.asdict() — all 200+ fields preserved
+        # No more manual field-by-field copying that gets out of sync
+        config_dict = asdict(self.config)
 
-        # Create Manager Queue for real-time communication
+        # Create Manager Queue and shared Event for real-time communication & shutdown
         manager = Manager()
         result_queue = manager.Queue()
+        shutdown_event = manager.Event()  # Cross-process shutdown signal
 
         # Prepare arguments for each worker
         worker_args = [
@@ -815,7 +783,8 @@ class ParallelPostDataScraper:
                 'worker_id': i,
                 'session_data': session_data,
                 'config_dict': config_dict,
-                'result_queue': result_queue  # Pass queue to workers
+                'result_queue': result_queue,  # Pass queue to workers
+                'shutdown_event': shutdown_event,  # Shared cross-process event
             }
             for i, batch in enumerate(batches, 1)
         ]

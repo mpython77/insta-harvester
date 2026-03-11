@@ -66,7 +66,7 @@ class CommentScraper(BaseScraper):
             self.setup_browser(session_data)
 
         self.goto_url(post_url)
-        time.sleep(3) # Initial load
+        time.sleep(self.config.comment_initial_load_delay) # Initial load
 
         # ═══════ OPEN COMMENTS DIALOG (Feed View Detection) ═══════
         # Instagram sometimes shows posts in feed view where comments
@@ -257,7 +257,7 @@ class CommentScraper(BaseScraper):
             
             if clicked:
                 self.logger.info("Clicked 'View all comments'. Waiting for dialog to load...")
-                time.sleep(4)  # Wait for comments dialog to open and load
+                time.sleep(self.config.comment_dialog_open_delay)  # Wait for comments dialog to open and load
                 
                 # Verify dialog opened
                 try:
@@ -274,7 +274,7 @@ class CommentScraper(BaseScraper):
                     if comment_icon.count() > 0:
                         self.logger.info("Clicking comment icon to open comments...")
                         comment_icon.first.click()
-                        time.sleep(3)
+                        time.sleep(self.config.comment_network_wait_delay)
                 except Exception:
                     pass
                     
@@ -331,6 +331,6 @@ class CommentScraper(BaseScraper):
             
             if clicked_count > 0:
                 self.logger.info(f"Clicked {clicked_count} 'View replies' buttons. Waiting for load...")
-                time.sleep(3) # Wait longer for network response
+                time.sleep(self.config.comment_network_wait_delay) # Wait longer for network response
         except Exception as e:
             self.logger.error(f"Error expanding replies: {e}")

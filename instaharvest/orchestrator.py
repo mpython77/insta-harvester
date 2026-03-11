@@ -928,7 +928,7 @@ class InstagramOrchestrator:
         try:
             interaction = InteractionManager(scraper.page, self.logger, self.config)
             scraper.goto_url(url)
-            time.sleep(3)
+            time.sleep(self.config.orchestrator_session_delay)
             
             success = True
             if like:
@@ -964,7 +964,7 @@ class InstagramOrchestrator:
             
             # Go to Reels feed
             scraper.goto_url("https://www.instagram.com/reels/")
-            time.sleep(5)
+            time.sleep(self.config.orchestrator_challenge_delay)
             
             start_time = time.time()
             reels_cnt = 0
@@ -1193,7 +1193,7 @@ class InstagramOrchestrator:
     def scrape_tagged_posts(
         self,
         username: str,
-        max_posts: int = 50,
+        target_count: int = 50,
         scroll_pause: float = 2.0,
         max_scrolls: int = 20
     ) -> TaggedPostsResult:
@@ -1205,7 +1205,7 @@ class InstagramOrchestrator:
 
         Args:
             username: Instagram username (without @)
-            max_posts: Maximum posts to collect
+            target_count: Maximum posts to collect
             scroll_pause: Delay between scrolls
             max_scrolls: Maximum scroll attempts
 
@@ -1214,7 +1214,7 @@ class InstagramOrchestrator:
 
         Example:
             >>> orch = InstagramOrchestrator()
-            >>> result = orch.scrape_tagged_posts("mondayswimwear", max_posts=100)
+            >>> result = orch.scrape_tagged_posts("mondayswimwear", target_count=100)
             >>> for post in result.tagged_posts:
             ...     print(f"{post.owner.username} tagged you")
         """
@@ -1227,7 +1227,7 @@ class InstagramOrchestrator:
 
             result = scraper.scrape(
                 username,
-                max_posts=max_posts,
+                target_count=target_count,
                 scroll_pause=scroll_pause,
                 max_scrolls=max_scrolls
             )

@@ -174,7 +174,8 @@ class ErrorHandler:
         element_name: str,
         default: Any = None,
         url: Optional[str] = None,
-        selector: Optional[str] = None
+        selector: Optional[str] = None,
+        critical: bool = False
     ) -> Any:
         """
         Safely extract data with error handling
@@ -185,9 +186,13 @@ class ErrorHandler:
             default: Default value if extraction fails
             url: URL being scraped (for logging)
             selector: Selector being used (for logging)
+            critical: If True, raise HTMLStructureChangedError on failure
 
         Returns:
             Extracted value or default
+
+        Raises:
+            HTMLStructureChangedError: If critical=True and extraction fails
         """
         context = ErrorContext(
             timestamp=datetime.now().strftime(self.config.datetime_format),
@@ -215,7 +220,23 @@ class ErrorHandler:
             )
 
             # Track error
-            self.stats.add_error(context, recovered=True)
+            self.stats.add_error(context, recovered=not critical)
+
+            # If critical — raise instead of returning default
+            if critical:
+                from .exceptions import HTMLStructureChangedError
+                msg = (
+                    f"HTML structure changed for '{element_name}'. "
+                    f"Selector '{selector}' no longer works. "
+                    f"Original error: {context.error_type}: {context.error_message}"
+                )
+                if url:
+                    msg += f" | URL: {url}"
+                raise HTMLStructureChangedError(
+                    element_name=element_name,
+                    selector=selector or '',
+                    message=msg
+                ) from e
 
             return default
 

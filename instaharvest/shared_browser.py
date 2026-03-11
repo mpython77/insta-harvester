@@ -249,14 +249,19 @@ class SharedBrowser:
 
 
         # Close browser resources
-        if self.page:
-            self.page.close()
-        if self.context:
-            self.context.close()
-        if self.browser:
-            self.browser.close()
-        if self.playwright:
-            self.playwright.stop()
+        # Close browser resources — each in its own try/except
+        # so a failure in one doesn't prevent cleanup of others
+        for resource, action, name in [
+            (self.page, lambda r: r.close(), 'page'),
+            (self.context, lambda r: r.close(), 'context'),
+            (self.browser, lambda r: r.close(), 'browser'),
+            (self.playwright, lambda r: r.stop(), 'playwright'),
+        ]:
+            if resource:
+                try:
+                    action(resource)
+                except Exception as e:
+                    self.logger.warning(f"Error closing {name}: {e}")
 
         self.logger.info("✅ Browser closed")
 
@@ -753,13 +758,13 @@ class SharedBrowser:
         
         return self.downloader.download_post(post_data, username=username)
 
-    def scrape_tagged_posts(self, username: str, max_posts: int = 50) -> 'TaggedPostsResult':
+    def scrape_tagged_posts(self, username: str, target_count: int = 50) -> 'TaggedPostsResult':
         """
         Scrape posts where a user has been tagged by others.
 
         Args:
             username: Instagram username
-            max_posts: Maximum posts to collect
+            target_count: Maximum posts to collect
 
         Returns:
             TaggedPostsResult with tagged posts
@@ -767,12 +772,9 @@ class SharedBrowser:
         from .tagged_posts import TaggedPostsScraper, TaggedPostsResult
         self._ensure_started()
         
-        scraper = TaggedPostsScraper(config=self.config)
-        scraper.page = self.page
-        scraper.browser = self.browser
-        scraper.context = self.context
+        scraper = self._inject_browser(TaggedPostsScraper(config=self.config))
         
-        result = scraper.scrape(username, max_posts=max_posts)
+        result = scraper.scrape(username, target_count=target_count)
         self.logger.info(
             f"🏷️ Tagged: {result.total_found} posts, "
             f"{len(result.unique_taggers)} unique taggers"
@@ -825,6 +827,30 @@ class SharedBrowser:
         scraper.context = self.context
         return scraper.scrape_all(username, max_slides_per=max_slides_per)
 
+    # ==================== AUTO-START GUARD ====================
+
+    def _ensure_started(self) -> None:
+        """
+        Ensure browser is started before performing operations.
+
+        If the browser is not running, automatically calls start().
+        This makes the library automation-friendly — users can call
+        any method without manually calling start() first.
+
+        Raises:
+            RuntimeError: If browser cannot be started
+        """
+        if self.page is None or self.browser is None:
+            self.logger.info("🔄 Browser not started yet, auto-starting...")
+            try:
+                self.start()
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to auto-start browser: {e}. "
+                    f"Make sure session file exists at '{self.session_file}'. "
+                    f"Run save_session.py first."
+                ) from e
+
     # ==================== CONTEXT MANAGER ====================
 
     def __enter__(self):
@@ -833,7 +859,8 @@ class SharedBrowser:
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit"""
+        """Context manager exit — always closes browser, never suppresses exceptions"""
         self.close()
         if exc_type:
             self.logger.error(f"Error during operations: {exc_val}")
+        return False  # Never suppress exceptions — let them propagate

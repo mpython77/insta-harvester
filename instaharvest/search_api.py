@@ -270,7 +270,7 @@ class SearchAPI(BaseScraper):
                         input_el.fill('')
                         input_el.type(query, delay=80)
                         self.logger.info(f"Typed: '{query}' in {selector}")
-                        time.sleep(2.5)  # Wait for API response
+                        time.sleep(self.config.search_api_response_delay)  # Wait for API response
                         return
                 except Exception:
                     continue

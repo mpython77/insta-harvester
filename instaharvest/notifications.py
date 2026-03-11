@@ -262,7 +262,7 @@ class NotificationReader:
             if not current_url or 'about:blank' in current_url or current_url == '':
                 self.logger.info("📍 Blank page — navigating to instagram.com first...")
                 self.page.goto('https://www.instagram.com/', wait_until='domcontentloaded')
-                time.sleep(3 + random.uniform(0.5, 1.0))
+                time.sleep(self.config.notification_page_load_delay + random.uniform(0.5, 1.0))
             
             # 3. Navigate to activity page
             self.logger.info(f"📍 Navigating to {target_url}")
@@ -293,7 +293,7 @@ class NotificationReader:
             main = self.page.locator('main[role="main"]')
             if main.count() > 0:
                 self.logger.info("🔔 Notification page loaded (main found)")
-                time.sleep(2)
+                time.sleep(self.config.notification_scroll_delay)
                 return True
             
             # 5. Fallback — click Notifications icon in sidebar
@@ -301,7 +301,7 @@ class NotificationReader:
             notif_icon = self.page.locator('svg[aria-label="Notifications"]')
             if notif_icon.count() > 0:
                 notif_icon.first.click()
-                time.sleep(3)
+                time.sleep(self.config.notification_page_load_delay)
                 
                 # Recheck for notification elements
                 try:
@@ -316,7 +316,7 @@ class NotificationReader:
                 # Icon click sometimes opens panel, sometimes redirects to page
                 if 'accounts/activity' in (self.page.url or ''):
                     self.logger.info("🔔 Redirected to activity page ✅")
-                    time.sleep(2)
+                    time.sleep(self.config.notification_scroll_delay)
                     return True
             
             self.logger.warning("⚠️ Failed to load notification page")

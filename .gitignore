@@ -52,3 +52,13 @@ Thumbs.db
 debug_snapshot_*.html
 full_comment_html_code.html
 debug_snapshots/
+comments_dom*.html
+comments_out*.json
+*_debug_output.*
+tests/debug_*.py
+tests/fail_output.txt
+tests/real_test_output.log
+
+# Temp scrape output
+scraped_*/
+followers_snapshot.json

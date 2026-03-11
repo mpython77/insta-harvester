@@ -205,6 +205,9 @@ class SessionManager:
         """
         Get the next healthy session data with rotation.
 
+        Uses iterative retry (not recursive) to avoid stack overflow
+        when multiple sessions fail to load.
+
         Returns:
             Session data dict (cookies, etc.) or None if no healthy sessions
         """
@@ -212,35 +215,45 @@ class SessionManager:
             self.logger.warning("No sessions in pool")
             return None
 
-        healthy = [s for s in self._sessions if s.is_healthy and not s.is_expired]
-        if not healthy:
-            self.logger.error("No healthy sessions available!")
-            return None
+        # Iterative retry — bounded by total session count (no stack overflow)
+        max_attempts = len(self._sessions)
 
-        # Apply rotation strategy
-        session = self._select_session(healthy)
-        if session is None:
-            return None
+        for attempt in range(max_attempts):
+            healthy = [s for s in self._sessions if s.is_healthy and not s.is_expired]
+            if not healthy:
+                self.logger.error("No healthy sessions available!")
+                return None
 
-        # Load session data
-        try:
-            with open(session.path, 'r') as f:
-                data = json.load(f)
+            # Apply rotation strategy
+            session = self._select_session(healthy)
+            if session is None:
+                return None
 
-            session.last_used = time.time()
-            session.requests += 1
-            self._current_session = session
+            # Load session data
+            try:
+                with open(session.path, 'r') as f:
+                    data = json.load(f)
 
-            self.logger.info(
-                f"Using session: {Path(session.path).name} "
-                f"(#{session.requests}, {session.status})"
-            )
-            return data
+                session.last_used = time.time()
+                session.requests += 1
+                self._current_session = session
 
-        except Exception as e:
-            self.logger.error(f"Failed to load session {session.path}: {e}")
-            session.is_healthy = False
-            return self.get_session()  # Try next
+                self.logger.info(
+                    f"Using session: {Path(session.path).name} "
+                    f"(#{session.requests}, {session.status})"
+                )
+                return data
+
+            except Exception as e:
+                self.logger.error(f"Failed to load session {session.path}: {e}")
+                session.is_healthy = False
+                self.logger.warning(
+                    f"Session marked unhealthy, trying next... "
+                    f"(attempt {attempt + 1}/{max_attempts})"
+                )
+
+        self.logger.error("All session load attempts exhausted!")
+        return None
 
     def _select_session(self, healthy: List[SessionStats]) -> Optional[SessionStats]:
         """Select session based on rotation strategy"""

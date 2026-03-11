@@ -150,7 +150,7 @@ Quick Start:
 
     config = ScraperConfig()
     scraper = TaggedPostsScraper(config=config)
-    result = scraper.scrape('mondayswimwear', max_posts=100)
+    result = scraper.scrape('mondayswimwear', target_count=100)
     for post in result.tagged_posts:
         print(f"{post.owner} tagged @mondayswimwear → {post.url}")
 
@@ -235,7 +235,7 @@ from .session_manager import SessionManager, SessionRotationStrategy
 from .captcha_solver import CaptchaSolver, CaptchaProvider
 
 
-__version__ = '2.13.0'
+__version__ = '2.14.0'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'

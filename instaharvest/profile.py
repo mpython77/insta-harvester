@@ -534,8 +534,8 @@ class ProfileScraper(BaseScraper):
                 posts_element.wait_for(timeout=1500)
                 posts_text = posts_element.locator(self.config.selector_html_span).first.inner_text(timeout=1000)
                 return self.parse_number(posts_text)
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Primary posts count extraction failed: {e}")
                 
             try:
                 # Fallback: look for generic list item containing "post"
@@ -545,15 +545,16 @@ class ProfileScraper(BaseScraper):
                 if span.count() > 0:
                     return self.parse_number(span.inner_text(timeout=1000))
                 return self.parse_number(fallback.inner_text(timeout=1000).lower().replace('posts', '').replace('post', ''))
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Fallback posts count extraction failed: {e}")
             return 0
 
         result = self.safe_extract(
             extract,
             element_name='posts_count',
             selector=selector,
-            default=0
+            default=0,
+            critical=True
         )
 
         return result
@@ -582,8 +583,8 @@ class ProfileScraper(BaseScraper):
                 # Fallback to visible text
                 text = followers_link.locator(self.config.selector_html_span).first.inner_text(timeout=1000)
                 return self.parse_number(text)
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Primary followers count extraction failed: {e}")
             
             try:
                 # Fallback: generic list item
@@ -593,15 +594,16 @@ class ProfileScraper(BaseScraper):
                 if span.count() > 0:
                     return self.parse_number(span.inner_text(timeout=1000))
                 return self.parse_number(fallback.inner_text(timeout=1000).lower().replace('followers', '').replace('follower', ''))
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Fallback followers count extraction failed: {e}")
             return 0
 
         result = self.safe_extract(
             extract,
             element_name='followers_count',
             selector=selector,
-            default=0
+            default=0,
+            critical=True
         )
 
         return result
@@ -621,8 +623,8 @@ class ProfileScraper(BaseScraper):
                 following_link.wait_for(timeout=1500)
                 text = following_link.locator(self.config.selector_html_span).first.inner_text(timeout=1000)
                 return self.parse_number(text)
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Primary following count extraction failed: {e}")
                 
             try:
                 # Fallback: generic list item (might just be text if 0 following)
@@ -632,15 +634,16 @@ class ProfileScraper(BaseScraper):
                 if span.count() > 0:
                     return self.parse_number(span.inner_text(timeout=1000))
                 return self.parse_number(fallback.inner_text(timeout=1000).lower().replace('following', '').strip())
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Fallback following count extraction failed: {e}")
             return 0
 
         result = self.safe_extract(
             extract,
             element_name='following_count',
             selector=selector,
-            default=0
+            default=0,
+            critical=True
         )
 
         return result

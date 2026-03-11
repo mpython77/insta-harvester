@@ -11,7 +11,7 @@ long_description = (this_directory / "README.md").read_text(encoding='utf-8')
 
 setup(
     name="instaharvest",
-    version='2.13.0',
+    version='2.14.0',
     author="Muydinov Doston",
     author_email="kelajak054@gmail.com",
     description="Professional Instagram data collection toolkit with automation features",
@@ -78,6 +78,9 @@ setup(
         "Bug Reports": "https://github.com/mpython77/insta-harvester/issues",
         "Source": "https://github.com/mpython77/insta-harvester",
         "Documentation": "https://github.com/mpython77/insta-harvester#readme",
+    },
+    package_data={
+        "instaharvest": ["py.typed"],
     },
     include_package_data=True,
     zip_safe=False,
