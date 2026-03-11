@@ -36,14 +36,20 @@ class ReelLinksScraper(BaseScraper):
     def scrape(
         self,
         username: str,
+        target_count: Optional[int] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         save_to_file: bool = True,
         output_file: Optional[str] = None
     ) -> List[str]:
         """
-        Scrape all REEL links from {username}/reels/ page
+        Scrape REEL links from {username}/reels/ page
 
         Args:
             username: Instagram username
+            target_count: Maximum number of reels to collect (None = all)
+            date_from: Filter start date 'YYYY-MM-DD' (inclusive)
+            date_to: Filter end date 'YYYY-MM-DD' (inclusive)
             save_to_file: Save links to file
             output_file: Optional path to save file (overrides default)
 
@@ -78,15 +84,26 @@ class ReelLinksScraper(BaseScraper):
             time.sleep(self.config.reel_open_delay)
 
             # Scroll and collect reel links
-            reel_links = self._scroll_and_collect()
+            if target_count is not None:
+                self.logger.info(f"Target: {target_count} reels")
+            reel_links = self._scroll_and_collect(target_count=target_count)
 
             # Save to file (uses full dict with metadata)
             if save_to_file:
                 self._save_links(reel_links, username, output_file)
 
+            # Truncate to target_count if set
+            if target_count is not None and len(reel_links) > target_count:
+                reel_links = reel_links[:target_count]
+
+            # ═══ DATE RANGE FILTER ═══
+            if date_from or date_to:
+                reel_links = self._filter_by_date_range(reel_links, date_from, date_to, url_key='url')
+
             # Return only URL strings (as declared in return type)
             urls = [item['url'] for item in reel_links]
-            self.logger.info(f"✅ Collected {len(urls)} REEL links")
+
+            self.logger.info(f"✅ Final: {len(urls)} REEL links")
             return urls
 
         finally:
@@ -189,16 +206,22 @@ class ReelLinksScraper(BaseScraper):
             self.logger.error(f"Error extracting reel links: {e}")
             return []
 
-    def _scroll_and_collect(self) -> List[Dict[str, str]]:
+    def _scroll_and_collect(self, target_count: Optional[int] = None) -> List[Dict[str, str]]:
         """
-        Scroll through reels page and collect all reel links (IMPROVED for Instagram lazy loading)
+        Scroll through reels page and collect reel links (IMPROVED for Instagram lazy loading)
 
-        Smart stopping: If 5 scrolls with NO new reels → DONE
+        Smart stopping:
+        - If target_count reached → DONE
+        - If 5 scrolls with NO new reels → DONE
+
+        Args:
+            target_count: Maximum reels to collect (None = all)
 
         Returns:
             List of dicts with 'url', 'thumbnail', 'stats'
         """
-        self.logger.info(f"🎬 Starting reel link collection...")
+        target_msg = f" (target: {target_count})" if target_count else " (all)"
+        self.logger.info(f"🎬 Starting reel link collection...{target_msg}")
 
         all_reel_links = {}  # Dict[url, dict]
         scroll_attempts = 0
@@ -233,7 +256,14 @@ class ReelLinksScraper(BaseScraper):
                     # Reset counter if new reels found
                     no_new_reels_count = 0
 
-                # Stopping condition: 5 scrolls with no new reels
+                # Stopping condition 1: target_count reached
+                if target_count is not None and new_count >= target_count:
+                    self.logger.info(
+                        f"✓ Target reached! Collected {new_count}/{target_count} reels"
+                    )
+                    break
+
+                # Stopping condition 2: 5 scrolls with no new reels
                 if no_new_reels_count >= MAX_NO_NEW_REELS:
                     self.logger.info(
                         f"✓ Finished! No new reels after {MAX_NO_NEW_REELS} scroll attempts. "

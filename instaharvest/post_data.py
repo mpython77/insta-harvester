@@ -23,26 +23,113 @@ from .performance import PerformanceMonitor
 
 
 @dataclass
+class PostLocation:
+    """Post location data extracted from JSON"""
+    name: str = ''
+    pk: str = ''
+    latitude: float = 0.0
+    longitude: float = 0.0
+    address: str = ''
+    city: str = ''
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class PostOwner:
+    """Post owner/author data extracted from JSON"""
+    username: str = ''
+    full_name: str = ''
+    pk: str = ''
+    is_verified: bool = False
+    profile_pic_url: str = ''
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class CarouselSlide:
+    """Per-slide data for carousel posts"""
+    slide_index: int = 0
+    media_type: str = 'image'  # 'image' or 'video'
+    width: int = 0
+    height: int = 0
+    tagged_accounts: List[str] = None
+    tag_positions: List[Dict[str, float]] = None  # [{username, x, y}]
+    image_url: str = ''
+    video_url: str = ''
+    video_duration: float = 0.0
+    has_audio: bool = False
+    accessibility_caption: str = ''
+
+    def __post_init__(self):
+        if self.tagged_accounts is None:
+            self.tagged_accounts = []
+        if self.tag_positions is None:
+            self.tag_positions = []
+
+    @property
+    def has_tags(self) -> bool:
+        return len(self.tagged_accounts) > 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class PostData:
-    """Post/Reel data structure"""
+    """Post/Reel data structure — JSON-First Architecture"""
     url: str
     tagged_accounts: List[str]
     likes: str
     timestamp: str
-    media_urls: List[str] = None  # [NEW] Direct CDN links
-    is_video: bool = False  # [NEW] Is it a video/reel?
+    media_urls: List[str] = None  # Direct CDN links
+    is_video: bool = False  # Is it a video/reel?
     content_type: str = 'Post'  # 'Post' or 'Reel'
-    tagged_users_per_media: List[List[str]] = None # [NEW] Tags per slide
+    tagged_users_per_media: List[List[str]] = None  # Tags per slide
+
+    # ── JSON-First Enriched Fields ──────────────────────────────
+    caption: str = ''  # Full post caption text
+    comment_count: int = 0  # Total comments
+    like_count: int = 0  # Exact like count (integer)
+    location: PostLocation = None  # GPS + name
+    owner: PostOwner = None  # Post author info
+    taken_at: int = 0  # Unix timestamp (raw)
+    taken_at_human: str = ''  # Human-readable timestamp
+    shortcode: str = ''  # Post shortcode (e.g. DVs7LK-iO0C)
+    pk: str = ''  # Post unique ID
+    media_type: int = 0  # 1=image, 2=video, 8=carousel
+    product_type: str = ''  # feed, carousel_container, clips
+    width: int = 0  # Original width
+    height: int = 0  # Original height
+    accessibility_caption: str = ''  # AI-generated image description
+    top_likers: List[str] = None  # Notable accounts that liked
+    has_audio: bool = False  # Has audio track
+    video_duration: float = 0.0  # Video length in seconds
+    carousel_media_count: int = 0  # Number of carousel slides
+    carousel_slides: List[CarouselSlide] = None  # Per-slide details
+    tag_positions: List[Dict[str, Any]] = None  # Tag positions on image
+    has_liked: bool = False  # Current user liked this
+    json_extracted: bool = False  # Whether data came from JSON
 
     def __post_init__(self):
         if self.media_urls is None:
             self.media_urls = []
         if self.tagged_users_per_media is None:
             self.tagged_users_per_media = []
+        if self.top_likers is None:
+            self.top_likers = []
+        if self.carousel_slides is None:
+            self.carousel_slides = []
+        if self.tag_positions is None:
+            self.tag_positions = []
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return asdict(self)
+
 
 
 class PostDataScraper(BaseScraper):
@@ -146,36 +233,13 @@ class PostDataScraper(BaseScraper):
         # [NEW] Initialize run-specific attributes
         self.tags_per_media = []
         self.detected_video_count = 0
-        # [MODIFIED] Strict scoping to avoid "Related Posts"
-        self.main_scope = None
-        try:
-            # 1. Try Article (Standard Post View) - Best for isolating main post
-            if self.page.locator('article').count() > 0:
-                self.main_scope = self.page.locator('article').first
-            
-            # 2. Try Dialog (Modal View)
-            elif self.page.locator('div[role="dialog"]').count() > 0:
-                self.main_scope = self.page.locator('div[role="dialog"]').first
 
-            # 3. Try Main (Fallback, but be careful)
-            elif self.page.locator('main[role="main"]').count() > 0:
-                # Main often includes related posts at bottom, but better than full page
-                self.main_scope = self.page.locator('main[role="main"]').first
-
-            # 4. Try Media Container (Specific for partial HTML dumps)
-            elif self.page.locator('div._aa1z').count() > 0:
-                # This explicitly targets the media container seen in user's post.html
-                # We use the parent of _aa1z to be safe as it might be tight on the image
-                self.main_scope = self.page.locator('div._aa1z').first
-
-            # 5. FAIL SAFE - Do NOT use self.page
-            if not self.main_scope:
-                self.logger.warning("⚠️ Could not find strict post scope (article/dialog/main). Skipping full page scan to avoid noise.")
-                # Create a dummy locator that finds nothing
-                self.main_scope = self.page.locator('nonexistent_scope_strict_mode')
-        except Exception as e:
-            self.logger.debug(f"Scope determination error: {e}")
-            self.main_scope = self.page.locator('nonexistent_scope_strict_mode')
+        # ═══════ AUTO BROWSER SETUP (like ProfileScraper) ═══════
+        is_shared_browser = self.page is not None and self.browser is not None
+        if not is_shared_browser:
+            self.logger.debug("Setting up new browser session (standalone mode)")
+            session_data = self.load_session()
+            self.setup_browser(session_data)
 
         # Start performance monitoring
         with self.performance_monitor.measure(f"scrape_{self._get_content_type(post_url)}"):
@@ -194,6 +258,34 @@ class PostDataScraper(BaseScraper):
 
             # CRITICAL: Wait for content to load
             time.sleep(self.config.post_open_delay)
+
+            # [FIXED] Strict scoping to avoid "Related Posts"
+            # MUST be AFTER goto_url() — page needs content before locator queries
+            self.main_scope = None
+            try:
+                # 1. Try Article (Standard Post View) - Best for isolating main post
+                if self.page.locator('article').count() > 0:
+                    self.main_scope = self.page.locator('article').first
+                
+                # 2. Try Dialog (Modal View)
+                elif self.page.locator('div[role="dialog"]').count() > 0:
+                    self.main_scope = self.page.locator('div[role="dialog"]').first
+
+                # 3. Try Main (Fallback, but be careful)
+                elif self.page.locator('main[role="main"]').count() > 0:
+                    self.main_scope = self.page.locator('main[role="main"]').first
+
+                # 4. Try Media Container (Specific for partial HTML dumps)
+                elif self.page.locator('div._aa1z').count() > 0:
+                    self.main_scope = self.page.locator('div._aa1z').first
+
+                # 5. FAIL SAFE - Do NOT use self.page
+                if not self.main_scope:
+                    self.logger.warning("⚠️ Could not find strict post scope (article/dialog/main). Skipping full page scan to avoid noise.")
+                    self.main_scope = self.page.locator('nonexistent_scope_strict_mode')
+            except Exception as e:
+                self.logger.debug(f"Scope determination error: {e}")
+                self.main_scope = self.page.locator('nonexistent_scope_strict_mode')
 
             # Initialize diagnostics if page is ready
             if self.enable_diagnostics and self.diagnostics is None:
@@ -220,6 +312,62 @@ class PostDataScraper(BaseScraper):
                 except Exception as e:
                     self.logger.debug(f"Diagnostics failed: {e}")
 
+            # ═══════ JSON-FIRST FULL EXTRACTION ═══════
+            json_data = self._extract_all_from_json()
+            
+            if json_data:
+                # JSON extraction successful — build PostData from JSON
+                tagged_accounts = json_data.get('tagged_accounts', []) if get_tags else []
+                likes = json_data.get('likes', 'N/A') if get_likes else 'N/A'
+                timestamp = json_data.get('timestamp', 'N/A') if get_timestamp else 'N/A'
+                media_urls = json_data.get('media_urls', []) if get_media else []
+                is_video = json_data.get('is_video', is_reel)
+                
+                data = PostData(
+                    url=post_url,
+                    tagged_accounts=tagged_accounts or [],
+                    likes=likes,
+                    timestamp=timestamp,
+                    media_urls=media_urls,
+                    is_video=is_video,
+                    content_type=content_type,
+                    tagged_users_per_media=json_data.get('tagged_users_per_media', []),
+                    # JSON-First enriched fields
+                    caption=json_data.get('caption', ''),
+                    comment_count=json_data.get('comment_count', 0),
+                    like_count=json_data.get('like_count', 0),
+                    location=json_data.get('location'),
+                    owner=json_data.get('owner'),
+                    taken_at=json_data.get('taken_at', 0),
+                    taken_at_human=json_data.get('taken_at_human', ''),
+                    shortcode=json_data.get('shortcode', ''),
+                    pk=json_data.get('pk', ''),
+                    media_type=json_data.get('media_type', 0),
+                    product_type=json_data.get('product_type', ''),
+                    width=json_data.get('width', 0),
+                    height=json_data.get('height', 0),
+                    accessibility_caption=json_data.get('accessibility_caption', ''),
+                    top_likers=json_data.get('top_likers', []),
+                    has_audio=json_data.get('has_audio', False),
+                    video_duration=json_data.get('video_duration', 0.0),
+                    carousel_media_count=json_data.get('carousel_media_count', 0),
+                    carousel_slides=json_data.get('carousel_slides', []),
+                    tag_positions=json_data.get('tag_positions', []),
+                    has_liked=json_data.get('has_liked', False),
+                    json_extracted=True
+                )
+                
+                self.logger.info(
+                    f"✅ JSON-FIRST [{content_type}]: {len(data.tagged_accounts)} tags, "
+                    f"{data.likes} likes, {data.comment_count} comments, "
+                    f"📍 {data.location.name if data.location else 'N/A'}"
+                )
+                
+                return data
+            
+            # ═══════ DOM FALLBACK (if JSON failed) ═══════
+            self.logger.warning("⚠️ JSON extraction failed, using DOM fallback...")
+            
             # Extract data based on type with error recovery
             if is_reel:
                 tagged_accounts = self._extract_with_recovery(
@@ -246,7 +394,7 @@ class PostDataScraper(BaseScraper):
                     self.get_timestamp, 'post_timestamp', default='N/A'
                 ) if get_timestamp else 'N/A'
 
-            # [NEW] Extract Media URLs (Images/Videos/Carousels)
+            # Extract Media URLs (Images/Videos/Carousels)
             media_urls = []
             is_video = is_reel
             if get_media:
@@ -264,11 +412,11 @@ class PostDataScraper(BaseScraper):
                 media_urls=media_urls,
                 is_video=is_video,
                 content_type=content_type,
-                tagged_users_per_media=self.tags_per_media # [NEW] Return detected tags
+                tagged_users_per_media=self.tags_per_media
             )
 
             self.logger.info(
-                f"✅ Extracted [{content_type}]: {len(data.tagged_accounts)} tags, "
+                f"✅ DOM-Extracted [{content_type}]: {len(data.tagged_accounts)} tags, "
                 f"{data.likes} likes, {data.timestamp}"
             )
 
@@ -853,9 +1001,13 @@ class PostDataScraper(BaseScraper):
         self.logger.info(f"📦 Scraping {len(post_urls)} posts/reels...")
         self.performance_monitor.log_system_info()
 
-        # Load session and setup browser
-        session_data = self.load_session()
-        self.setup_browser(session_data)
+        # SharedBrowser check — skip setup if browser already injected
+        is_shared_browser = self.page is not None and self.browser is not None
+        if not is_shared_browser:
+            session_data = self.load_session()
+            self.setup_browser(session_data)
+        else:
+            self.logger.debug("Using existing browser session (SharedBrowser mode)")
 
         results = []
         start_time = time.time()
@@ -931,6 +1083,296 @@ class PostDataScraper(BaseScraper):
         finally:
             self.close()
 
+    # ==================== JSON-FIRST TAG EXTRACTION ====================
+
+    def _extract_tags_from_json(self) -> tuple:
+        """Backward compatible: Extract just tags from JSON."""
+        result = self._extract_all_from_json()
+        if result and result.get('tagged_accounts'):
+            return result['tagged_accounts'], result.get('tagged_users_per_media', [])
+        return [], []
+
+    # ==================== JSON-FIRST FULL EXTRACTION ====================
+
+    def _extract_all_from_json(self) -> Optional[Dict[str, Any]]:
+        """
+        JSON-FIRST: Extract ALL available data from embedded JSON scripts.
+        
+        Instagram pre-loads full post data in <script type="application/json">.
+        Path: xdt_api__v1__media__shortcode__web_info.items[0]
+        
+        Returns dict with ALL extracted fields, or None if not found.
+        """
+        import json
+        from datetime import datetime, timezone
+        
+        try:
+            scripts = self.page.locator('script[type="application/json"]').all()
+            self.logger.debug(f"JSON full extraction: checking {len(scripts)} scripts")
+            
+            for script in scripts:
+                try:
+                    content = script.inner_text(timeout=1000)
+                    if len(content) < 500:
+                        continue
+                    
+                    data = json.loads(content)
+                    item = self._find_media_item(data, depth=0)
+                    
+                    if item:
+                        result = self._parse_media_item(item)
+                        if result:
+                            self.logger.info(
+                                f"✅ JSON-FIRST: Extracted full data "
+                                f"({result.get('like_count', 0)} likes, "
+                                f"{result.get('comment_count', 0)} comments, "
+                                f"{len(result.get('tagged_accounts', []))} tags)"
+                            )
+                            return result
+                        
+                except Exception:
+                    continue
+                    
+        except Exception as e:
+            self.logger.debug(f"JSON full extraction error: {e}")
+        
+        return None
+
+    def _find_media_item(self, obj, depth: int = 0) -> Optional[dict]:
+        """
+        Recursively find the media item object in JSON.
+        
+        Handles two Instagram JSON structures:
+        - Posts: xdt_api__v1__media__shortcode__web_info.items[0]  
+        - Reels: xdt_api__v1__clips__home__connection_v2.edges[0].node.media
+        """
+        if depth > 20 or not obj:
+            return None
+        
+        if isinstance(obj, dict):
+            # Pattern 1: Post — items[] array with media objects
+            if 'items' in obj and isinstance(obj['items'], list):
+                for item in obj['items']:
+                    if isinstance(item, dict) and ('pk' in item or 'media_type' in item):
+                        return item
+            
+            # Pattern 2: Reel — edges[].node.media structure
+            if 'edges' in obj and isinstance(obj['edges'], list):
+                for edge in obj['edges']:
+                    if isinstance(edge, dict) and 'node' in edge:
+                        node = edge['node']
+                        if isinstance(node, dict):
+                            # Try node.media first
+                            media = node.get('media')
+                            if isinstance(media, dict) and ('pk' in media or 'media_type' in media):
+                                return media
+                            # Or node itself might be the media
+                            if 'pk' in node or 'media_type' in node:
+                                return node
+            
+            for value in obj.values():
+                if isinstance(value, (dict, list)):
+                    result = self._find_media_item(value, depth + 1)
+                    if result:
+                        return result
+        
+        elif isinstance(obj, list):
+            for item in obj:
+                if isinstance(item, (dict, list)):
+                    result = self._find_media_item(item, depth + 1)
+                    if result:
+                        return result
+        
+        return None
+
+    def _parse_media_item(self, item: dict) -> Optional[Dict[str, Any]]:
+        """Parse a media item dict into comprehensive result"""
+        from datetime import datetime, timezone
+        
+        if not isinstance(item, dict):
+            return None
+        
+        result = {}
+        
+        # ── Basic Info ──
+        result['pk'] = str(item.get('pk', ''))
+        result['shortcode'] = item.get('code', '')
+        result['media_type'] = item.get('media_type', 0)
+        result['product_type'] = item.get('product_type', '')
+        
+        # ── Timestamp ──
+        taken_at = item.get('taken_at', 0)
+        result['taken_at'] = taken_at
+        if taken_at:
+            try:
+                dt = datetime.fromtimestamp(taken_at, tz=timezone.utc)
+                result['taken_at_human'] = dt.strftime('%Y-%m-%d %H:%M:%S UTC')
+                result['timestamp'] = dt.strftime('%b %d, %Y')
+            except Exception:
+                result['taken_at_human'] = ''
+                result['timestamp'] = ''
+        
+        # ── Engagement ──
+        result['like_count'] = item.get('like_count', 0)
+        result['likes'] = str(result['like_count'])
+        result['comment_count'] = item.get('comment_count', 0)
+        result['has_liked'] = item.get('has_liked', False)
+        result['top_likers'] = item.get('top_likers', []) or []
+        
+        # ── Caption ──
+        caption_obj = item.get('caption')
+        if isinstance(caption_obj, dict):
+            result['caption'] = caption_obj.get('text', '')
+        elif isinstance(caption_obj, str):
+            result['caption'] = caption_obj
+        else:
+            result['caption'] = ''
+        
+        # ── Location ──
+        loc = item.get('location')
+        if isinstance(loc, dict):
+            result['location'] = PostLocation(
+                name=loc.get('name', ''),
+                pk=str(loc.get('pk', '')),
+                latitude=loc.get('lat', 0.0) or 0.0,
+                longitude=loc.get('lng', 0.0) or 0.0,
+                address=loc.get('address', ''),
+                city=loc.get('city', '')
+            )
+        else:
+            result['location'] = None
+        
+        # ── Owner / User ──
+        user = item.get('user')
+        if isinstance(user, dict):
+            result['owner'] = PostOwner(
+                username=user.get('username', ''),
+                full_name=user.get('full_name', ''),
+                pk=str(user.get('pk', '')),
+                is_verified=user.get('is_verified', False),
+                profile_pic_url=user.get('profile_pic_url', '')
+            )
+        else:
+            result['owner'] = None
+        
+        # ── Dimensions ──
+        result['width'] = item.get('original_width', 0)
+        result['height'] = item.get('original_height', 0)
+        result['accessibility_caption'] = item.get('accessibility_caption', '')
+        
+        # ── Video fields ──
+        result['video_duration'] = item.get('video_duration', 0.0) or 0.0
+        result['has_audio'] = item.get('has_audio', False)
+        result['is_video'] = item.get('media_type', 0) == 2
+        
+        # ── Tags (single post) ──
+        tagged_accounts = []
+        tag_positions = []
+        per_slide_tags = []
+        
+        usertags = item.get('usertags')
+        if isinstance(usertags, dict) and 'in' in usertags:
+            for entry in usertags['in']:
+                if isinstance(entry, dict) and 'user' in entry:
+                    u = entry['user']
+                    if isinstance(u, dict) and 'username' in u:
+                        uname = u['username']
+                        if uname not in tagged_accounts:
+                            tagged_accounts.append(uname)
+                        pos = entry.get('position', [0, 0])
+                        tag_positions.append({
+                            'username': uname,
+                            'x': pos[0] if isinstance(pos, list) and len(pos) > 0 else 0,
+                            'y': pos[1] if isinstance(pos, list) and len(pos) > 1 else 0
+                        })
+        
+        # ── Carousel ──
+        carousel_media = item.get('carousel_media', [])
+        carousel_slides = []
+        result['carousel_media_count'] = item.get('carousel_media_count', 0)
+        
+        if isinstance(carousel_media, list) and carousel_media:
+            for i, slide in enumerate(carousel_media):
+                if not isinstance(slide, dict):
+                    continue
+                
+                # Slide tags
+                slide_tags = []
+                slide_tag_positions = []
+                slide_usertags = slide.get('usertags')
+                if isinstance(slide_usertags, dict) and 'in' in slide_usertags:
+                    for entry in slide_usertags['in']:
+                        if isinstance(entry, dict) and 'user' in entry:
+                            u = entry['user']
+                            if isinstance(u, dict) and 'username' in u:
+                                uname = u['username']
+                                slide_tags.append(uname)
+                                if uname not in tagged_accounts:
+                                    tagged_accounts.append(uname)
+                                pos = entry.get('position', [0, 0])
+                                slide_tag_positions.append({
+                                    'username': uname,
+                                    'x': pos[0] if isinstance(pos, list) and len(pos) > 0 else 0,
+                                    'y': pos[1] if isinstance(pos, list) and len(pos) > 1 else 0
+                                })
+                
+                per_slide_tags.append(slide_tags)
+                
+                # Slide media type
+                s_media_type = slide.get('media_type', 1)
+                s_type_str = 'video' if s_media_type == 2 else 'image'
+                
+                # Slide image URL
+                s_image_url = ''
+                img_versions = slide.get('image_versions2', {})
+                if isinstance(img_versions, dict):
+                    candidates = img_versions.get('candidates', [])
+                    if isinstance(candidates, list) and candidates:
+                        s_image_url = candidates[0].get('url', '')
+                
+                # Slide video URL
+                s_video_url = ''
+                vid_versions = slide.get('video_versions', [])
+                if isinstance(vid_versions, list) and vid_versions:
+                    s_video_url = vid_versions[0].get('url', '')
+                
+                carousel_slides.append(CarouselSlide(
+                    slide_index=i,
+                    media_type=s_type_str,
+                    width=slide.get('original_width', 0),
+                    height=slide.get('original_height', 0),
+                    tagged_accounts=slide_tags,
+                    tag_positions=slide_tag_positions,
+                    image_url=s_image_url,
+                    video_url=s_video_url,
+                    video_duration=slide.get('video_duration', 0.0) or 0.0,
+                    has_audio=slide.get('has_audio', False),
+                    accessibility_caption=slide.get('accessibility_caption', '')
+                ))
+        
+        # ── Image / Video URLs (single post) ──
+        media_urls = []
+        img_versions = item.get('image_versions2', {})
+        if isinstance(img_versions, dict):
+            candidates = img_versions.get('candidates', [])
+            if isinstance(candidates, list) and candidates:
+                media_urls.append(candidates[0].get('url', ''))
+        
+        vid_versions = item.get('video_versions', [])
+        if isinstance(vid_versions, list) and vid_versions:
+            media_urls.append(vid_versions[0].get('url', ''))
+        
+        result['tagged_accounts'] = tagged_accounts
+        result['tag_positions'] = tag_positions
+        result['tagged_users_per_media'] = per_slide_tags
+        result['carousel_slides'] = carousel_slides
+        result['media_urls'] = media_urls
+        result['json_extracted'] = True
+        
+        return result
+
+
+
     def get_tagged_accounts(self) -> List[str]:
         """
         Extract tagged accounts from posts (handles both IMAGE and VIDEO posts)
@@ -944,7 +1386,19 @@ class PostDataScraper(BaseScraper):
         """
         tagged = []
 
-        # Check if this post has tags (look for Tags SVG)
+        # STEP 0: JSON-FIRST extraction (fastest, no clicks needed)
+        try:
+            json_tags, json_per_slide = self._extract_tags_from_json()
+            if json_tags:
+                # Also populate tags_per_media for carousel support
+                if json_per_slide:
+                    self.tags_per_media = json_per_slide
+                self.logger.info(f"✅ JSON-FIRST tags: {json_tags}")
+                return json_tags
+        except Exception as e:
+            self.logger.debug(f"JSON-first failed, falling back to DOM: {e}")
+
+        # STEP 0.5: Check if this post has tags (look for Tags SVG)
         try:
             has_tags = self.page.locator(self.config.selector_tag_button.replace('button:has(', '').replace(')', '')).count() > 0
             if not has_tags:
@@ -1316,6 +1770,15 @@ class PostDataScraper(BaseScraper):
             List of usernames (without @)
         """
         tagged = []
+
+        # STEP 0: JSON-FIRST extraction (works for reels too!)
+        try:
+            json_tags, _ = self._extract_tags_from_json()
+            if json_tags:
+                self.logger.info(f"✅ JSON-FIRST reel tags: {json_tags}")
+                return json_tags
+        except Exception as e:
+            self.logger.debug(f"JSON-first failed for reel, falling back to DOM: {e}")
 
         try:
             # Step 1: Find and click tag button

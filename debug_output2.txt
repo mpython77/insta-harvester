@@ -1,0 +1,128 @@
+Found 40 <time> tags
+
+======== Comment Node 1 ========
+
+--- Parent Depth 0 (time) ---
+Class: xdwrcjd
+Text: ['1d']
+
+--- Parent Depth 1 (span) ---
+Class: x193iq5w.xeuugli.x1fj9vlw.x13faqbe.x1vvkbs.xt0psk2.x1i0vuye.xvs91rp.xo1l8bm.x1roi4f4.x10wh9bi.xpm28yp.x8viiok.x1o7cslx
+Text: ['1d']
+
+--- Parent Depth 2 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.x1q0g3np.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['instagram', 'Verified', '1d']
+
+--- Parent Depth 3 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['instagram', 'Verified', '1d', '@skyenewman__', '(Skye Newman) + the', '@brits', '(BRIT Awards) = iconic 💙✨', 'Ahead of the recent awards show, the singer-songwriter shared her excitement over her new song “Walk” and her two nominations for Breakthrough Artist and Song of the Year.', '“I feel like I’ve waited for this for a very long time. To now have that recognized by such a large group of people, so many amazing writers and musicians, is just incredible.”', 'Here’s', '#10Things', 'with Skye as she breaks down her latest track and gives us a BTS look at her red carpet fit. (Peep the 👠 !!!)']
+
+--- Parent Depth 4 (span) ---
+Class: x1lliihq.x1plvlek.xryxfnj.x1n2onr6.xyejjpt.x15dsfln.x193iq5w.xeuugli.x1fj9vlw.x13faqbe.x1vvkbs.x1s928wv.xhkezso.x1gmr53x.x1cpjm7i.x1fgarty.x1943h6x.x1i0vuye.xvs91rp.xo1l8bm.x5n08af.x10wh9bi.xpm28yp.x8viiok.x1o7cslx
+Text: ['instagram', 'Verified', '1d', '@skyenewman__', '(Skye Newman) + the', '@brits', '(BRIT Awards) = iconic 💙✨', 'Ahead of the recent awards show, the singer-songwriter shared her excitement over her new song “Walk” and her two nominations for Breakthrough Artist and Song of the Year.', '“I feel like I’ve waited for this for a very long time. To now have that recognized by such a large group of people, so many amazing writers and musicians, is just incredible.”', 'Here’s', '#10Things', 'with Skye as she breaks down her latest track and gives us a BTS look at her red carpet fit. (Peep the 👠 !!!)']
+
+--- Parent Depth 5 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1iyjqo2.x2lwn1j.xeuugli.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['instagram', 'Verified', '1d', '@skyenewman__', '(Skye Newman) + the', '@brits', '(BRIT Awards) = iconic 💙✨', 'Ahead of the recent awards show, the singer-songwriter shared her excitement over her new song “Walk” and her two nominations for Breakthrough Artist and Song of the Year.', '“I feel like I’ve waited for this for a very long time. To now have that recognized by such a large group of people, so many amazing writers and musicians, is just incredible.”', 'Here’s', '#10Things', 'with Skye as she breaks down her latest track and gives us a BTS look at her red carpet fit. (Peep the 👠 !!!)']
+
+--- Parent Depth 6 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1iyjqo2.x2lwn1j.xeuugli.x1q0g3np.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['instagram', 'Verified', '1d', '@skyenewman__', '(Skye Newman) + the', '@brits', '(BRIT Awards) = iconic 💙✨', 'Ahead of the recent awards show, the singer-songwriter shared her excitement over her new song “Walk” and her two nominations for Breakthrough Artist and Song of the Year.', '“I feel like I’ve waited for this for a very long time. To now have that recognized by such a large group of people, so many amazing writers and musicians, is just incredible.”', 'Here’s', '#10Things', 'with Skye as she breaks down her latest track and gives us a BTS look at her red carpet fit. (Peep the 👠 !!!)']
+
+--- Parent Depth 7 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xyri2b.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.xsag5q8.xz9dl7a.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.x1q0g3np.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['instagram', 'Verified', '1d', '@skyenewman__', '(Skye Newman) + the', '@brits', '(BRIT Awards) = iconic 💙✨', 'Ahead of the recent awards show, the singer-songwriter shared her excitement over her new song “Walk” and her two nominations for Breakthrough Artist and Song of the Year.', '“I feel like I’ve waited for this for a very long time. To now have that recognized by such a large group of people, so many amazing writers and musicians, is just incredible.”', 'Here’s', '#10Things', 'with Skye as she breaks down her latest track and gives us a BTS look at her red carpet fit. (Peep the 👠 !!!)']
+
+--- Parent Depth 8 (div) ---
+Class: 
+Text: ['instagram', 'Verified', '1d', '@skyenewman__', '(Skye Newman) + the', '@brits', '(BRIT Awards) = iconic 💙✨', 'Ahead of the recent awards show, the singer-songwriter shared her excitement over her new song “Walk” and her two nominations for Breakthrough Artist and Song of the Year.', '“I feel like I’ve waited for this for a very long time. To now have that recognized by such a large group of people, so many amazing writers and musicians, is just incredible.”', 'Here’s', '#10Things', 'with Skye as she breaks down her latest track and gives us a BTS look at her red carpet fit. (Peep the 👠 !!!)']
+
+--- Parent Depth 9 (div) ---
+Class: x9f619.x78zum5.xdt5ytf.x5yr21d.xexx8yu.xv54qhq.x1l90r2v.xf7dkkf.x10l6tqk.xh8yej3
+Text: ['instagram', 'Verified', '1d', '@skyenewman__', '(Skye Newman) + the', '@brits', '(BRIT Awards) = iconic 💙✨', 'Ahead of the recent awards show, the singer-songwriter shared her excitement over her new song “Walk” and her two nominations for Breakthrough Artist and Song of the Year.', '“I feel like I’ve waited for this for a very long time. To now have that recognized by such a large group of people, so many amazing writers and musicians, is just incredible.”', 'Here’s', '#10Things', 'with Skye as she breaks down her latest track and gives us a BTS look at her red carpet fit. (Peep the 👠 !!!)', 'harvindersingh2336', '19h', 'Fantastic', '9 likes', 'Reply', 'Like', 'daniel255w', '1d', '😍😍😍', '14 likes', 'Reply', 'Like', '_iamhridoy_', 'Verified', '1d', 'So gorgeous ✨', '41 likes', 'Reply', 'Like', 'Hide all replies', 'instagram', 'Verified', '1d', '@_iamhridoy_', 'indeed', '40 likes', 'Reply', 'Like', 'jeferson_oficial319', '1d', '@_iamhridoy_', 'Me siga', '@Jeferson_oficial319', '❤️❤️', 'Reply', 'Like', 'jeferson_oficial319', '1d', '@instagram', 'Instagram', '@Jeferson_oficial319', '❤️❤️', 'Reply', 'Like', 'dua42108', '1d', '@instagram', '❤️❤️', 'Reply', 'Like', 'rangbaaz_prince_jatav_ll.302', '1d', '@instagram', '❤️🥰', 'Reply', 'Like', 'official.lilcr.uise', '1d', '@instagram', 'amazing 😍😍😍 how can leave instagram 😍🔥❤️', 'Reply', 'Like', 'rabbit.7448365', '1d', '@instagram', 'Reply', 'Like', 'math.ewgwer', '6h', '@_iamhridoy_', 'hello inbox 📬 me now', 'Reply', 'Like', 'laugh_with_sony', '1d', '❤️❤️', '8 likes', 'Reply', 'Like', 'canvaswithemmy', '20h', 'Welcome to my little art corner. I’m not the best artist, but I love creating anyways. This page is just me sharing what I make, learning as I go, and enjoying the process.', '2 likes', 'Reply', 'Like', 'puppycollective2q', '1d', '🎤🎶🌟', '6 likes', 'Reply', 'Like', '___mr__rehan___45', '19h', 'Nice pic ❤️', '1 like', 'Reply', 'Like', 'geetasaroj226', '18h', '❤️❤️', '7 likes', 'Reply', 'Like', 'elqant.boutique', '1d', '❤️❤️❤️❤️❤️❤️🔥🔥🔥🔥🔥', '7 likes', 'Reply', 'Like', 'jahariastono1gmail.com1', '1d', 'Wao😍😍😍hi', '5 likes', 'Reply', 'Like', 'sadam.editz', '11h', '❤️', '4 likes', 'Reply', 'Like', 'kevchino', 'Verified', '1d', '❤️❤️❤️🔥 loveee', '47 likes', 'Reply', 'Like', 'View all 11 replies', 'sutterboy.56328', '21h', 'So sweet 😍', '3 likes', 'Reply', 'Like', 'anil_rathore_comedian', '1d', 'O teri😍❤️', '47 likes', 'Reply', 'Like', 'Hide all replies', 'paravapetsandaquarium', '1d', '@anil_rathore_comedian', '🔥', 'Reply', 'Like', 'indrjitray73', '1d', '@anil_rathore_comedian', '❤️', 'Reply', 'Like', 'math.ewgwer', '6h', '@anil_rathore_comedian', 'hello', '1 like', 'Reply', 'Like', 'shahidkhatiik', 'Verified', '18h', 'Collaborate with me too, Nallo', '3 likes', 'Reply', 'Like', 'talliaking__', '1d', 'she IS the girl she thinks she is 🔥', '17 likes', 'Reply', 'Like', 'View all 3 replies', 'mohd_qamar_malik_vfx', '18h', 'Nice but soooooo cute nice mem', '3 likes', 'Reply', 'Like', 'momentsbymetha', '1d', 'The outfit is stunning but those heels deserve their own spotlight✨😍', '55 likes', 'Reply', 'Like', 'View all 10 replies', 'abhissek_mhaajn', '20h', '@intagram', 'Hi Abhishek Mahajan', '4 likes', 'Reply', 'Like', 'khubaibmalik777', '18h', 'Which Asian destination type is most popular among international tourists?https://pollpedia.com/poll/HC9C3Z', '3 likes', 'Reply', 'Like', 'marvellous_boy.rahul.714655', '20h', 'Lovely ❤️🔥🔥🔥', '6 likes', 'Reply', 'Like', 'ikaeb', '1d', 'Stunning, this is beautiful, love this', '3 likes', 'Reply', 'Like', 'View all 1 replies', 'chemsyebmogar', '18h', '❤️❤️', '5 likes', 'Reply', 'Like', 'sarahhall99dt83p995', '18h', '🥺😘', '8 likes', 'Reply', 'Like', 'shaan014', '1d', '@alinashapoo_', 'Ditto uh 🤭', '2 likes', 'Reply', 'Like', 'View all 1 replies', 'all_promotion_ai', '19h', 'Check your inbox', '1 like', 'Reply', 'Like', 'abhinav_live__', '1d', '❤️❤️', '27 likes', 'Reply', 'Like', 'View all 4 replies']
+>>> STOPPING: Found multiple time tags in this parent (it's a container of multiple comments)
+
+======== Comment Node 2 ========
+
+--- Parent Depth 0 (time) ---
+Class: x1ejq31n.x18oe1m7.x1sy0etr.xstzfhl.x1roi4f4.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x1n2onr6
+Text: ['19h']
+
+--- Parent Depth 1 (a) ---
+Class: x1i10hfl.xjbqb8w.x1ejq31n.x18oe1m7.x1sy0etr.xstzfhl.x972fbf.x10w94by.x1qhh985.x14e42zd.x9f619.x1ypdohk.xt0psk2.x3ct3a4.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x16tdsg8.x1hl2dhg.xggy1nq.x1a2a7pz._a6hd
+Text: ['19h']
+
+--- Parent Depth 2 (span) ---
+Class: x1lliihq.x1plvlek.xryxfnj.x1n2onr6.xyejjpt.x15dsfln.x193iq5w.xeuugli.x1fj9vlw.x13faqbe.x1vvkbs.x1s928wv.xhkezso.x1gmr53x.x1cpjm7i.x1fgarty.x1943h6x.x1i0vuye.xvs91rp.xo1l8bm.x1roi4f4.x10wh9bi.xpm28yp.x8viiok.x1o7cslx
+Text: ['19h']
+
+--- Parent Depth 3 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.x1q0g3np.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['harvindersingh2336', '19h']
+
+--- Parent Depth 4 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['harvindersingh2336', '19h', 'Fantastic']
+
+--- Parent Depth 5 (div) ---
+Class: 
+Text: ['harvindersingh2336', '19h', 'Fantastic']
+
+--- Parent Depth 6 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1iyjqo2.x2lwn1j.xeuugli.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['harvindersingh2336', '19h', 'Fantastic', '9 likes', 'Reply']
+
+--- Parent Depth 7 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1iyjqo2.x2lwn1j.xeuugli.x1q0g3np.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['harvindersingh2336', '19h', 'Fantastic', '9 likes', 'Reply', 'Like']
+
+--- Parent Depth 8 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xyri2b.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.xsag5q8.xz9dl7a.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.x1q0g3np.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['harvindersingh2336', '19h', 'Fantastic', '9 likes', 'Reply', 'Like']
+
+--- Parent Depth 9 (div) ---
+Class: 
+Text: ['harvindersingh2336', '19h', 'Fantastic', '9 likes', 'Reply', 'Like']
+
+======== Comment Node 3 ========
+
+--- Parent Depth 0 (time) ---
+Class: x1ejq31n.x18oe1m7.x1sy0etr.xstzfhl.x1roi4f4.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x1n2onr6
+Text: ['1d']
+
+--- Parent Depth 1 (a) ---
+Class: x1i10hfl.xjbqb8w.x1ejq31n.x18oe1m7.x1sy0etr.xstzfhl.x972fbf.x10w94by.x1qhh985.x14e42zd.x9f619.x1ypdohk.xt0psk2.x3ct3a4.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x16tdsg8.x1hl2dhg.xggy1nq.x1a2a7pz._a6hd
+Text: ['1d']
+
+--- Parent Depth 2 (span) ---
+Class: x1lliihq.x1plvlek.xryxfnj.x1n2onr6.xyejjpt.x15dsfln.x193iq5w.xeuugli.x1fj9vlw.x13faqbe.x1vvkbs.x1s928wv.xhkezso.x1gmr53x.x1cpjm7i.x1fgarty.x1943h6x.x1i0vuye.xvs91rp.xo1l8bm.x1roi4f4.x10wh9bi.xpm28yp.x8viiok.x1o7cslx
+Text: ['1d']
+
+--- Parent Depth 3 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.x1q0g3np.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['daniel255w', '1d']
+
+--- Parent Depth 4 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['daniel255w', '1d', '😍😍😍']
+
+--- Parent Depth 5 (div) ---
+Class: 
+Text: ['daniel255w', '1d', '😍😍😍']
+
+--- Parent Depth 6 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1iyjqo2.x2lwn1j.xeuugli.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['daniel255w', '1d', '😍😍😍', '14 likes', 'Reply']
+
+--- Parent Depth 7 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.x1uhb9sk.x1plvlek.xryxfnj.x1iyjqo2.x2lwn1j.xeuugli.x1q0g3np.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['daniel255w', '1d', '😍😍😍', '14 likes', 'Reply', 'Like']
+
+--- Parent Depth 8 (div) ---
+Class: html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xyri2b.x1c1uobl.x9f619.xjbqb8w.x78zum5.x15mokao.x1ga7v0g.x16uus16.xbiv7yw.xsag5q8.xz9dl7a.x1uhb9sk.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.x1q0g3np.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1
+Text: ['daniel255w', '1d', '😍😍😍', '14 likes', 'Reply', 'Like']
+
+--- Parent Depth 9 (div) ---
+Class: 
+Text: ['daniel255w', '1d', '😍😍😍', '14 likes', 'Reply', 'Like']

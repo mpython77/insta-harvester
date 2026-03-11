@@ -657,3 +657,133 @@ class BaseScraper(ABC):
     def scrape(self, *args, **kwargs):
         """Abstract method - must be implemented by subclasses"""
         pass
+
+    # ═══════════════════════════════════════════════════════════
+    # DATE RANGE FILTERING HELPERS
+    # ═══════════════════════════════════════════════════════════
+
+    def _extract_post_date(self, post_url: str) -> Optional[str]:
+        """
+        Extract publication date from a post/reel page by reading <time datetime="...">
+
+        Args:
+            post_url: Full URL to the post/reel
+
+        Returns:
+            ISO date string 'YYYY-MM-DD' or None if extraction fails
+        """
+        try:
+            self.goto_url(post_url)
+            time.sleep(1.5)
+            # Instagram posts have <time datetime="2025-03-07T12:00:00.000Z">
+            time_el = self.page.locator('time[datetime]').first
+            if time_el.count() > 0:
+                dt_str = time_el.get_attribute('datetime')
+                if dt_str:
+                    # Parse ISO datetime → date only
+                    from datetime import datetime as dt_cls
+                    parsed = dt_cls.fromisoformat(dt_str.replace('Z', '+00:00'))
+                    return parsed.strftime('%Y-%m-%d')
+        except Exception as e:
+            self.logger.debug(f"Date extraction failed for {post_url}: {e}")
+        return None
+
+    def _filter_by_date_range(
+        self,
+        links: list,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        url_key: str = 'url'
+    ) -> list:
+        """
+        Filter collected links by date range.
+
+        Instagram posts are displayed newest-first, so we can stop early
+        when we encounter a post older than date_from.
+
+        Args:
+            links: List of link dicts (must have url_key) or list of URL strings
+            date_from: Start date 'YYYY-MM-DD' (inclusive)
+            date_to: End date 'YYYY-MM-DD' (inclusive)
+            url_key: Key name for URL in dict (use None if links are strings)
+
+        Returns:
+            Filtered list of links within date range
+        """
+        if not date_from and not date_to:
+            return links
+
+        self.logger.info(
+            f"📅 Date filter: {date_from or 'any'} → {date_to or 'any'} "
+            f"({len(links)} links to check)"
+        )
+
+        filtered = []
+        checked = 0
+        skipped_future = 0
+        stopped_early = False
+
+        for item in links:
+            # Get URL from dict, object attribute, or directly from string
+            if url_key and isinstance(item, dict):
+                url = item.get(url_key)
+            elif url_key and hasattr(item, url_key):
+                url = getattr(item, url_key)
+            else:
+                url = item
+
+            # Extract date from the post page
+            post_date = self._extract_post_date(url)
+            checked += 1
+
+            if post_date is None:
+                # Can't extract date — include for safety
+                self.logger.debug(f"  [{checked}] {url[:50]}... → date unknown, including")
+                filtered.append(item)
+                continue
+
+            # Check date_to (future boundary) — skip posts newer than date_to
+            if date_to and post_date > date_to:
+                skipped_future += 1
+                self.logger.debug(f"  [{checked}] {post_date} > {date_to} — skipping (too new)")
+                continue
+
+            # Check date_from (past boundary) — posts are newest-first,
+            # so if this post is before date_from, ALL remaining are older → stop
+            if date_from and post_date < date_from:
+                # IMPORTANT: Pinned posts are at the top regardless of date.
+                # If it's a pinned post, its old date shouldn't trigger an early stop
+                # for the rest of the unpinned (and potentially newer) posts.
+                is_pinned = False
+                if isinstance(item, dict):
+                    is_pinned = item.get('is_pinned', False)
+                elif hasattr(item, 'is_pinned'):
+                    is_pinned = getattr(item, 'is_pinned')
+                if is_pinned:
+                    self.logger.debug(
+                        f"  [{checked}] {post_date} < {date_from} — "
+                        f"skipping (too old) BUT NOT STOPPING because it's a PINNED post"
+                    )
+                    continue
+                else:
+                    self.logger.info(
+                        f"  [{checked}] {post_date} < {date_from} — "
+                        f"stopping (posts are chronological, rest are older)"
+                    )
+                    stopped_early = True
+                    break
+
+            # Within range
+            self.logger.info(f"  [{checked}] ✅ {post_date} — in range")
+            filtered.append(item)
+
+        summary = (
+            f"📅 Date filter complete: {len(filtered)} in range, "
+            f"{skipped_future} too new, checked {checked}/{len(links)}"
+        )
+        if stopped_early:
+            summary += f" (stopped early — remaining {len(links) - checked} are older)"
+        self.logger.info(summary)
+
+        return filtered
+

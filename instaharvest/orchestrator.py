@@ -14,15 +14,19 @@ from pathlib import Path
 from .config import ScraperConfig
 from .profile import ProfileScraper, ProfileData
 from .post_links import PostLinksScraper
-from .post_data import PostDataScraper, PostData
+from .post_data import PostDataScraper, PostData, PostLocation, PostOwner, CarouselSlide
 from .reel_links import ReelLinksScraper
 from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
+from .tagged_posts import TaggedPostsScraper, TaggedPostData, TaggedPostsResult
+from .highlight_scraper import HighlightsScraper, HighlightResult, HighlightsListResult
 from .comment_scraper import CommentScraper, PostCommentsData
 from .models import CommentData
 from .exporters import CommentsExporter, export_comments_to_json, export_comments_to_excel, ExcelExporter
 from .logging_config import get_logger
-from .interactions import InteractionManager # [NEW] Interaction Support
+from .interactions import InteractionManager
+from .story_scraper import StoryScraper, StoryResult, StorySlideInfo
+from .shared_browser import SharedBrowser
 
 
 class InstagramOrchestrator:
@@ -36,26 +40,32 @@ class InstagramOrchestrator:
     4. Scrape data from posts (tags, likes, timestamp)
     5. Scrape data from reels (tags, likes, timestamp - SEPARATE!)
     6. (Optional) Scrape comments with full data (text, likes, replies, author info)
+    7. (Optional) Scrape stories with tag extraction (JSON-first architecture)
+    8. (Optional) Scrape tagged posts — who tags this account
+    9. (Optional) Scrape highlights — full slide data with stickers
 
     Features:
     - Complete end-to-end scraping
     - Separate handling of posts and reels (no mixing!)
     - Full comment scraping with replies
+    - Story scraping with per-slide tag mapping
     - Progress tracking
     - Error resilience
     - Real-time data export (JSON + Excel)
     - Data export with Type column (Post/Reel)
     """
 
-    def __init__(self, config: Optional[ScraperConfig] = None):
+    def __init__(self, config: Optional[ScraperConfig] = None, shared_browser: Optional[SharedBrowser] = None):
         """
         Initialize orchestrator
 
         Args:
             config: Scraper configuration
+            shared_browser: Optional SharedBrowser instance for reusing a single browser
         """
         self.config = config or ScraperConfig()
         self.logger = get_logger("InstagramOrchestrator")
+        self.shared_browser = shared_browser
 
         # Graceful shutdown tracking
         self.shutdown_requested = False
@@ -70,8 +80,9 @@ class InstagramOrchestrator:
         # Register cleanup on exit
         atexit.register(self._cleanup)
 
+        mode = "SharedBrowser" if shared_browser else "Standalone"
         self.logger.info("=" * 60)
-        self.logger.info("Instagram Scraper Orchestrator Initialized")
+        self.logger.info(f"Instagram Scraper Orchestrator Initialized ({mode})")
         self.logger.info("=" * 60)
 
     def scrape_complete_profile(
@@ -206,12 +217,14 @@ class InstagramOrchestrator:
         Args:
             post_links: List of dictionaries with 'url' and 'type' keys
         """
-        scraper = PostDataScraper(self.config)
-        # Extract URLs from dictionaries
         urls = [link['url'] for link in post_links]
+        if self.shared_browser:
+            return self.shared_browser.post_data_scraper.scrape_multiple(
+                urls, delay_between_posts=True
+            )
+        scraper = PostDataScraper(self.config)
         return scraper.scrape_multiple(
-            urls,
-            delay_between_posts=True
+            urls, delay_between_posts=True
         )
 
     def _scrape_reels_data(self, reel_links: List[str]) -> List[ReelData]:
@@ -221,10 +234,13 @@ class InstagramOrchestrator:
         Args:
             reel_links: List of reel URLs
         """
+        if self.shared_browser:
+            return self.shared_browser.reel_data_scraper.scrape_multiple(
+                reel_links, delay_between_reels=True
+            )
         scraper = ReelDataScraper(self.config)
         return scraper.scrape_multiple(
-            reel_links,
-            delay_between_reels=True
+            reel_links, delay_between_reels=True
         )
 
     def scrape_complete_profile_advanced(
@@ -235,7 +251,9 @@ class InstagramOrchestrator:
         export_json: bool = True,
         scrape_comments: bool = False,
         max_comments_per_post: Optional[int] = None,
-        include_replies: bool = True
+        include_replies: bool = True,
+        scrape_stories: bool = False,
+        story_challenge_delay: int = 10
     ) -> Dict[str, Any]:
         """
         Advanced complete scraping with parallel processing and Excel export
@@ -248,6 +266,8 @@ class InstagramOrchestrator:
             scrape_comments: Enable full comment scraping
             max_comments_per_post: Max comments per post (None = all)
             include_replies: Include replies in comment scraping
+            scrape_stories: Enable story scraping with tag extraction
+            story_challenge_delay: Seconds to wait for challenge solving (default: 10)
 
         Returns:
             Dictionary with all scraped data
@@ -259,6 +279,7 @@ class InstagramOrchestrator:
             ...     parallel=3,
             ...     save_excel=True,
             ...     scrape_comments=True,
+            ...     scrape_stories=True,
             ...     max_comments_per_post=100
             ... )
         """
@@ -268,6 +289,7 @@ class InstagramOrchestrator:
         self.logger.info(f"Parallel: {parallel if parallel else 'Sequential'}")
         self.logger.info(f"Excel Export: {save_excel}")
         self.logger.info(f"Comment Scraping: {scrape_comments}")
+        self.logger.info(f"Story Scraping: {scrape_stories}")
         self.logger.info(f"{'='*60}\n")
 
         results = {
@@ -277,7 +299,8 @@ class InstagramOrchestrator:
             'reel_links': [],
             'posts_data': [],
             'reels_data': [],
-            'comments_data': []  # NEW: Comments data
+            'comments_data': [],
+            'story_data': None  # Story scraping result
         }
 
         # Track current state for graceful shutdown
@@ -440,6 +463,37 @@ class InstagramOrchestrator:
             if comments_exporter:
                 comments_exporter.finalize()
 
+        # STEP 5: Scrape stories (if enabled)
+        if scrape_stories:
+            self.logger.info(f"\nSTEP 5: Scraping stories for @{username}...")
+            try:
+                story_result = self._scrape_stories(
+                    username,
+                    challenge_delay=story_challenge_delay
+                )
+                results['story_data'] = story_result.to_dict()
+                self.current_results = results
+
+                if story_result.has_stories:
+                    self.logger.info(
+                        f"✅ Stories: {story_result.story_count} slides, "
+                        f"{len(story_result.all_tagged_accounts)} tags"
+                    )
+                    if story_result.all_tagged_accounts:
+                        self.logger.info(f"   Tags: {story_result.all_tagged_accounts}")
+                    if story_result.slides:
+                        tagged_slides = [s for s in story_result.slides if s.has_tags]
+                        self.logger.info(
+                            f"   {len(story_result.slides)} slide, "
+                            f"{len(tagged_slides)} tasida tag bor"
+                        )
+                else:
+                    self.logger.info(f"ℹ️ @{username} has no active stories")
+
+            except Exception as e:
+                self.logger.error(f"Story scraping failed: {e}")
+                results['story_data'] = {'error': str(e), 'has_stories': False}
+
         # Finalize Excel
         if excel_exporter:
             excel_exporter.finalize()
@@ -468,6 +522,10 @@ class InstagramOrchestrator:
         if scrape_comments:
             self.logger.info(f"Comments scraped: {total_comments_scraped}")
             self.logger.info(f"Replies scraped: {total_replies_scraped}")
+        if scrape_stories and results.get('story_data'):
+            story_d = results['story_data']
+            self.logger.info(f"Story slides: {story_d.get('story_count', 0)}")
+            self.logger.info(f"Story tags: {story_d.get('all_tagged_accounts', [])}")
         self.logger.info(f"{'='*60}\n")
 
         return results
@@ -493,12 +551,15 @@ class InstagramOrchestrator:
         self.logger.info(f"📊 Real-time Excel writing: {'ENABLED' if excel_exporter else 'DISABLED'}")
 
         scraper = ParallelPostDataScraper(self.config)
-        # Pass full link dictionaries (with content_type info)
+        if self.shared_browser:
+            scraper.page = self.shared_browser.page
+            scraper.browser = self.shared_browser.browser
+            scraper.context = self.shared_browser.context
         posts_data = scraper.scrape_multiple(
-            post_links,  # Changed: Now passing full dictionaries!
+            post_links,
             parallel=parallel,
             session_file=self.config.session_file,
-            excel_exporter=excel_exporter  # Pass to enable real-time writing!
+            excel_exporter=excel_exporter
         )
 
         # NO need to save to Excel here - already done in real-time!
@@ -524,9 +585,12 @@ class InstagramOrchestrator:
         """
         posts_data = []
 
-        scraper = PostDataScraper(self.config)
-        session_data = scraper.load_session()
-        scraper.setup_browser(session_data)
+        if self.shared_browser:
+            scraper = self.shared_browser.post_data_scraper
+        else:
+            scraper = PostDataScraper(self.config)
+            session_data = scraper.load_session()
+            scraper.setup_browser(session_data)
 
         try:
             for i, link_data in enumerate(post_links, 1):
@@ -680,11 +744,15 @@ class InstagramOrchestrator:
 
         # Use ParallelPostDataScraper (it handles both posts and reels!)
         scraper = ParallelPostDataScraper(self.config)
+        if self.shared_browser:
+            scraper.page = self.shared_browser.page
+            scraper.browser = self.shared_browser.browser
+            scraper.context = self.shared_browser.context
         results = scraper.scrape_multiple(
-            reel_links_dict,  # Pass as dictionaries with type='Reel'
+            reel_links_dict,
             parallel=parallel,
             session_file=self.config.session_file,
-            excel_exporter=excel_exporter  # Pass to enable real-time writing!
+            excel_exporter=excel_exporter
         )
 
         # Convert PostData to ReelData (they have same structure)
@@ -741,7 +809,7 @@ class InstagramOrchestrator:
                 try:
                     post_comments = scraper.scrape(
                         url,
-                        max_comments=max_comments_per_post,
+                        target_count=max_comments_per_post,
                         include_replies=include_replies
                     )
                     comments_data.append(post_comments)
@@ -848,15 +916,19 @@ class InstagramOrchestrator:
         """
         self.logger.info(f"❤️/💬 Interacting with: {url}")
         
-        # Use PostDataScraper just to setup browser, then use InteractionManager
-        scraper = PostDataScraper(self.config)
-        session_data = scraper.load_session()
-        scraper.setup_browser(session_data)
+        if self.shared_browser:
+            scraper = self.shared_browser.post_data_scraper
+            need_close = False
+        else:
+            scraper = PostDataScraper(self.config)
+            session_data = scraper.load_session()
+            scraper.setup_browser(session_data)
+            need_close = True
         
         try:
             interaction = InteractionManager(scraper.page, self.logger, self.config)
             scraper.goto_url(url)
-            time.sleep(3) # Wait for load
+            time.sleep(3)
             
             success = True
             if like:
@@ -869,7 +941,8 @@ class InstagramOrchestrator:
                     
             return success
         finally:
-            scraper.close()
+            if need_close:
+                scraper.close()
 
     def run_reels_interaction_flow(
         self,
@@ -1008,6 +1081,261 @@ class InstagramOrchestrator:
                 self.excel_exporter.finalize()
             except Exception:
                 pass
+
+    # ───────────────────────────────────────────────────────────
+    # Story Scraping
+    # ───────────────────────────────────────────────────────────
+
+    def _scrape_stories(
+        self,
+        username: str,
+        challenge_delay: int = 10
+    ) -> StoryResult:
+        """
+        Internal: Scrape stories for a user.
+
+        Uses JSON-first architecture for tag extraction.
+        Returns StoryResult with per-slide tag mapping.
+        """
+        if self.shared_browser:
+            return self.shared_browser.story_scraper.scrape(
+                username,
+                extract_tags=True,
+                challenge_delay=challenge_delay
+            )
+        scraper = StoryScraper(self.config)
+        return scraper.scrape(
+            username,
+            extract_tags=True,
+            challenge_delay=challenge_delay
+        )
+
+    def scrape_stories_only(
+        self,
+        username: str,
+        challenge_delay: int = 10,
+        export_json: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Standalone story scraping with full tag extraction.
+
+        Uses JSON-first architecture to extract ALL tagged accounts
+        from ALL story slides in a single page load.
+
+        Args:
+            username: Instagram username
+            challenge_delay: Seconds to wait for challenge solving (default: 10)
+            export_json: Export results to JSON file
+
+        Returns:
+            Dictionary with story data including per-slide tag mapping
+
+        Example:
+            >>> orchestrator = InstagramOrchestrator(config)
+            >>> result = orchestrator.scrape_stories_only('username')
+            >>> print(result['all_tagged_accounts'])
+            >>> for slide in result['slides']:
+            ...     print(f"Slide {slide['slide_index']}: {slide['tagged_accounts']}")
+        """
+        username = username.strip().lstrip('@')
+        self.logger.info(f"\n{'='*60}")
+        self.logger.info(f"📸 STORY SCRAPING: @{username}")
+        self.logger.info(f"{'='*60}\n")
+
+        try:
+            story_result = self._scrape_stories(
+                username,
+                challenge_delay=challenge_delay
+            )
+            results = story_result.to_dict()
+
+            # Summary
+            self.logger.info(f"\n{'='*60}")
+            self.logger.info("STORY SCRAPING COMPLETE!")
+            self.logger.info(f"{'='*60}")
+            self.logger.info(f"Has stories: {story_result.has_stories}")
+            self.logger.info(f"Story count: {story_result.story_count}")
+            self.logger.info(f"Tagged accounts: {story_result.all_tagged_accounts}")
+
+            if story_result.slides:
+                tagged = [s for s in story_result.slides if s.has_tags]
+                self.logger.info(f"Slides with tags: {len(tagged)}/{len(story_result.slides)}")
+                for s in story_result.slides:
+                    tag_str = ', '.join(s.tagged_accounts) if s.tagged_accounts else '(no tags)'
+                    self.logger.info(
+                        f"  Slide {s.slide_index + 1}: [{s.media_type}] "
+                        f"{s.timestamp} → {tag_str}"
+                    )
+
+            self.logger.info(f"{'='*60}\n")
+
+            # Export
+            if export_json:
+                import json
+                filename = f"story_tags_{username}.json"
+                if self.config.base_output_dir:
+                    base_dir = Path(self.config.base_output_dir)
+                    base_dir.mkdir(parents=True, exist_ok=True)
+                    filepath = base_dir / filename
+                else:
+                    filepath = Path(filename)
+
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(results, f, indent=2, ensure_ascii=False)
+                self.logger.info(f"📁 Results saved: {filepath}")
+
+            return results
+
+        except Exception as e:
+            self.logger.error(f"Story scraping failed: {e}")
+            return {'username': username, 'error': str(e), 'has_stories': False}
+
+    def scrape_tagged_posts(
+        self,
+        username: str,
+        max_posts: int = 50,
+        scroll_pause: float = 2.0,
+        max_scrolls: int = 20
+    ) -> TaggedPostsResult:
+        """
+        Scrape posts where a user has been tagged by others.
+
+        Uses JSON-First architecture + DOM extraction.
+        Automatically scrolls to collect more posts.
+
+        Args:
+            username: Instagram username (without @)
+            max_posts: Maximum posts to collect
+            scroll_pause: Delay between scrolls
+            max_scrolls: Maximum scroll attempts
+
+        Returns:
+            TaggedPostsResult with tagged posts and tagger info
+
+        Example:
+            >>> orch = InstagramOrchestrator()
+            >>> result = orch.scrape_tagged_posts("mondayswimwear", max_posts=100)
+            >>> for post in result.tagged_posts:
+            ...     print(f"{post.owner.username} tagged you")
+        """
+        self.logger.info(f"🏷️ Starting tagged posts scrape for @{username}")
+
+        try:
+            scraper = TaggedPostsScraper(config=self.config)
+            session_data = scraper.load_session()
+            scraper.setup_browser(session_data)
+
+            result = scraper.scrape(
+                username,
+                max_posts=max_posts,
+                scroll_pause=scroll_pause,
+                max_scrolls=max_scrolls
+            )
+
+            scraper.close()
+
+            self.logger.info(
+                f"✅ Tagged posts complete: {result.total_found} posts, "
+                f"{len(result.unique_taggers)} unique taggers"
+            )
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Tagged posts scraping failed: {e}")
+            return TaggedPostsResult(username=username)
+
+    def scrape_highlight(
+        self,
+        highlight_id: str,
+        max_slides: int = 500,
+        challenge_delay: int = 5
+    ) -> HighlightResult:
+        """
+        Scrape all slides from an Instagram highlight.
+
+        Args:
+            highlight_id: Highlight ID or full URL
+            max_slides: Maximum slides to collect
+            challenge_delay: Seconds to wait after page load
+
+        Returns:
+            HighlightResult with all slides, stickers, music, etc.
+
+        Example:
+            >>> orch = InstagramOrchestrator()
+            >>> result = orch.scrape_highlight("18092082532805201")
+            >>> for slide in result.slides:
+            ...     print(f"Slide {slide.slide_index}: {slide.mentions}")
+        """
+        self.logger.info(f"🌟 Starting highlight scrape: {highlight_id}")
+
+        try:
+            scraper = HighlightsScraper(config=self.config)
+            session_data = scraper.load_session()
+            scraper.setup_browser(session_data)
+
+            result = scraper.scrape(
+                highlight_id,
+                max_slides=max_slides,
+                challenge_delay=challenge_delay
+            )
+
+            scraper.close()
+
+            self.logger.info(
+                f"✅ Highlight complete: {result.slide_count} slides, "
+                f"{len(result.all_mentions)} mentions"
+            )
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Highlight scraping failed: {e}")
+            return HighlightResult(highlight_id=highlight_id)
+
+    def scrape_all_highlights(
+        self,
+        username: str,
+        max_slides_per: int = 200,
+        challenge_delay: int = 5,
+        delay_between: float = 3.0
+    ) -> HighlightsListResult:
+        """
+        List and scrape ALL highlights for a user.
+
+        Args:
+            username: Instagram username
+            max_slides_per: Maximum slides per highlight
+            challenge_delay: Seconds to wait after page load
+            delay_between: Seconds between highlights
+
+        Returns:
+            HighlightsListResult with all highlights
+
+        Example:
+            >>> orch = InstagramOrchestrator()
+            >>> result = orch.scrape_all_highlights("mondayswimwear")
+            >>> print(f"{result.total_highlights} highlights, {result.total_slides} slides")
+        """
+        self.logger.info(f"🚀 Scraping all highlights for @{username}")
+
+        try:
+            scraper = HighlightsScraper(config=self.config)
+            session_data = scraper.load_session()
+            scraper.setup_browser(session_data)
+
+            result = scraper.scrape_all(
+                username,
+                max_slides_per=max_slides_per,
+                challenge_delay=challenge_delay,
+                delay_between=delay_between
+            )
+
+            scraper.close()
+            return result
+
+        except Exception as e:
+            self.logger.error(f"All highlights scraping failed: {e}")
+            return HighlightsListResult(username=username)
 
 
 def quick_scrape(username: str, config: Optional[ScraperConfig] = None) -> Dict[str, Any]:

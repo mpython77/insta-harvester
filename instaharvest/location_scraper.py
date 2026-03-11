@@ -54,30 +54,39 @@ class LocationScraper(BaseScraper):
     def scrape(
         self,
         location_id: str,
-        max_posts: int = 50,
+        target_count: Optional[int] = 50,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
     ) -> LocationResult:
         """
         Scrape posts from a location page.
 
         Args:
             location_id: Instagram location ID
-            max_posts: Maximum number of posts to collect
+            target_count: Maximum number of posts to collect (None = all)
+            date_from: Filter start date 'YYYY-MM-DD' (inclusive)
+            date_to: Filter end date 'YYYY-MM-DD' (inclusive)
 
         Returns:
             LocationResult with location data and posts
         """
-        self.logger.info(f"Scraping location: {location_id} (max {max_posts})")
+        limit_str = str(target_count) if target_count else "all"
+        self.logger.info(f"Scraping location: {location_id} (target: {limit_str} posts)")
         result = LocationResult(location_id=str(location_id))
 
         try:
-            session_data = self._load_session()
-            self.setup_browser(session_data)
+            # ═══════ AUTO BROWSER SETUP ═══════
+            is_shared_browser = self.page is not None and self.browser is not None
+            if not is_shared_browser:
+                session_data = self._load_session()
+                self.setup_browser(session_data)
 
-            # Warm-up: visit home first to activate session
+                # Warm-up: visit home first to activate session (only standalone)
+                base = self.config.instagram_base_url.rstrip('/')
+                self.goto_url(base)
+                time.sleep(2.0)
+
             base = self.config.instagram_base_url.rstrip('/')
-            self.goto_url(base)
-            time.sleep(2.0)
-
             # Now navigate to location page
             url = f"{base}/explore/locations/{location_id}/"
             self.goto_url(url)
@@ -94,7 +103,12 @@ class LocationScraper(BaseScraper):
             )
 
             # Collect posts
-            posts = self._scroll_and_collect(max_posts)
+            posts = self._scroll_and_collect(target_count=target_count)
+            
+            # ═══ DATE RANGE FILTER ═══
+            if date_from or date_to:
+                posts = self._filter_by_date_range(posts, date_from, date_to, url_key='url')
+                
             result.posts = posts
 
             self.logger.info(f"Collected {len(posts)} posts from location")
@@ -103,7 +117,8 @@ class LocationScraper(BaseScraper):
             self.logger.error(f"Location scraping failed: {e}")
             raise
         finally:
-            self.close()
+            if not is_shared_browser:
+                self.close()
 
         return result
 

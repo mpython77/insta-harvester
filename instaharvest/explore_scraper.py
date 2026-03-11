@@ -50,38 +50,55 @@ class ExploreScraper(BaseScraper):
     def __init__(self, config: Optional[ScraperConfig] = None):
         super().__init__(config)
 
-    def scrape(self, max_posts: int = 50) -> ExploreResult:
+    def scrape(
+        self,
+        target_count: Optional[int] = 50,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
+    ) -> ExploreResult:
         """
         Scrape posts from the explore page.
 
         Args:
-            max_posts: Maximum posts to collect
+            target_count: Maximum posts to collect (None = all)
+            date_from: Filter start date 'YYYY-MM-DD' (inclusive)
+            date_to: Filter end date 'YYYY-MM-DD' (inclusive)
 
         Returns:
             ExploreResult with trending posts
         """
-        self.logger.info(f"Scraping explore page (max {max_posts} posts)")
+        limit_str = str(target_count) if target_count else "all"
+        self.logger.info(f"Scraping explore page (target: {limit_str} posts)")
 
         result = ExploreResult(
             timestamp=datetime.now().isoformat()
         )
 
         try:
-            session_data = self._load_session()
-            self.setup_browser(session_data)
+            # ═══════ AUTO BROWSER SETUP ═══════
+            is_shared_browser = self.page is not None and self.browser is not None
+            if not is_shared_browser:
+                session_data = self._load_session()
+                self.setup_browser(session_data)
 
-            # Warm-up: visit home first to activate session
+                # Warm-up: visit home first to activate session (only standalone)
+                base = self.config.instagram_base_url.rstrip('/')
+                self.goto_url(base)
+                time.sleep(2.0)
+
             base = self.config.instagram_base_url.rstrip('/')
-            self.goto_url(base)
-            time.sleep(2.0)
-
             # Navigate to explore
             url = f"{base}/explore/"
             self.goto_url(url)
             time.sleep(self.config.page_stability_delay + 1.0)  # Extra wait for explore grid
 
             # Collect posts
-            posts = self._scroll_and_collect(max_posts)
+            posts = self._scroll_and_collect(target_count=target_count)
+
+            # ═══ DATE RANGE FILTER ═══
+            if date_from or date_to:
+                posts = self._filter_by_date_range(posts, date_from, date_to, url_key='url')
+
             result.posts = posts
             result.total_collected = len(posts)
 
@@ -91,22 +108,32 @@ class ExploreScraper(BaseScraper):
             self.logger.error(f"Explore scraping failed: {e}")
             raise
         finally:
-            self.close()
+            if not is_shared_browser:
+                self.close()
 
         return result
 
-    def scrape_topic(self, topic_id: str, max_posts: int = 50) -> ExploreResult:
+    def scrape_topic(
+        self,
+        topic_id: str,
+        target_count: Optional[int] = 50,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
+    ) -> ExploreResult:
         """
         Scrape posts from a specific explore topic/category.
 
         Args:
             topic_id: Explore topic ID
-            max_posts: Maximum posts to collect
+            target_count: Maximum posts to collect (None = all)
+            date_from: Filter start date 'YYYY-MM-DD' (inclusive)
+            date_to: Filter end date 'YYYY-MM-DD' (inclusive)
 
         Returns:
             ExploreResult
         """
-        self.logger.info(f"Scraping explore topic: {topic_id}")
+        limit_str = str(target_count) if target_count else "all"
+        self.logger.info(f"Scraping explore topic: {topic_id} (target: {limit_str} posts)")
 
         result = ExploreResult(timestamp=datetime.now().isoformat())
 
@@ -118,7 +145,12 @@ class ExploreScraper(BaseScraper):
             self.goto_url(url)
             time.sleep(self.config.page_stability_delay)
 
-            posts = self._scroll_and_collect(max_posts)
+            posts = self._scroll_and_collect(target_count=target_count)
+            
+            # ═══ DATE RANGE FILTER ═══
+            if date_from or date_to:
+                posts = self._filter_by_date_range(posts, date_from, date_to, url_key='url')
+                
             result.posts = posts
             result.total_collected = len(posts)
 
@@ -130,18 +162,23 @@ class ExploreScraper(BaseScraper):
 
         return result
 
-    def _scroll_and_collect(self, max_posts: int) -> List[Dict[str, str]]:
+    def _scroll_and_collect(self, target_count: Optional[int]) -> List[Dict[str, str]]:
         """Scroll explore grid and collect post links"""
         all_posts = []
         seen_urls = set()
         no_new_count = 0
 
-        while len(all_posts) < max_posts and no_new_count < 5:
+        while target_count is None or len(all_posts) < target_count:
+            if no_new_count >= 5:
+                break
+                
             current = self._extract_post_links()
             new_count = 0
 
             for post in current:
-                if post['url'] not in seen_urls and len(all_posts) < max_posts:
+                if target_count is not None and len(all_posts) >= target_count:
+                    break
+                if post['url'] not in seen_urls:
                     seen_urls.add(post['url'])
                     all_posts.append(post)
                     new_count += 1

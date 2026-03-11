@@ -15,7 +15,16 @@ from .followers import FollowersCollector
 from .profile import ProfileScraper
 from .post_links import PostLinksScraper
 from .reel_links import ReelLinksScraper
-from .downloader import MediaDownloader # [NEW]
+from .downloader import MediaDownloader
+from .post_data import PostDataScraper, PostData
+from .reel_data import ReelDataScraper, ReelData
+from .story_scraper import StoryScraper, StoryResult
+from .comment_scraper import CommentScraper
+from .search_api import SearchAPI
+from .hashtag_scraper import HashtagScraper
+from .location_scraper import LocationScraper
+from .explore_scraper import ExploreScraper
+from .notifications import NotificationReader
 
 
 class SharedBrowser:
@@ -71,7 +80,17 @@ class SharedBrowser:
         self._profile_scraper: Optional[ProfileScraper] = None
         self._post_links_scraper: Optional[PostLinksScraper] = None
         self._reel_links_scraper: Optional[ReelLinksScraper] = None
-        self._downloader: Optional[MediaDownloader] = None # [NEW]
+        self._downloader: Optional[MediaDownloader] = None
+        # Phase 2: New scrapers
+        self._post_data_scraper: Optional[PostDataScraper] = None
+        self._reel_data_scraper: Optional[ReelDataScraper] = None
+        self._story_scraper: Optional[StoryScraper] = None
+        self._comment_scraper: Optional[CommentScraper] = None
+        self._search_api: Optional[SearchAPI] = None
+        self._hashtag_scraper: Optional[HashtagScraper] = None
+        self._location_scraper: Optional[LocationScraper] = None
+        self._explore_scraper: Optional[ExploreScraper] = None
+        self._notification_reader: Optional[NotificationReader] = None
 
         self.logger.info("✨ SharedBrowser initialized")
 
@@ -212,7 +231,21 @@ class SharedBrowser:
             self._reel_links_scraper.page = None
             self._reel_links_scraper = None
 
-        self._downloader = None
+        if self._downloader:
+            self._downloader = None
+
+        # Phase 2 scrapers cleanup
+        for attr in [
+            '_post_data_scraper', '_reel_data_scraper', '_story_scraper',
+            '_comment_scraper', '_search_api', '_hashtag_scraper',
+            '_location_scraper', '_explore_scraper', '_notification_reader'
+        ]:
+            instance = getattr(self, attr, None)
+            if instance:
+                for component in ['playwright', 'browser', 'context', 'page']:
+                    if hasattr(instance, component):
+                        setattr(instance, component, None)
+                setattr(self, attr, None)
 
 
         # Close browser resources
@@ -348,6 +381,79 @@ class SharedBrowser:
         if self._downloader is None:
             self._downloader = MediaDownloader()
         return self._downloader
+
+    # ==================== PHASE 2: NEW SCRAPER PROPERTIES ====================
+
+    def _inject_browser(self, scraper):
+        """Inject shared browser components into any scraper instance"""
+        scraper.playwright = self.playwright
+        scraper.browser = self.browser
+        scraper.context = self.context
+        scraper.page = self.page
+        return scraper
+
+    @property
+    def post_data_scraper(self) -> PostDataScraper:
+        """Get PostDataScraper instance (lazy loading)"""
+        if self._post_data_scraper is None:
+            self._post_data_scraper = self._inject_browser(PostDataScraper(self.config))
+        return self._post_data_scraper
+
+    @property
+    def reel_data_scraper(self) -> ReelDataScraper:
+        """Get ReelDataScraper instance (lazy loading)"""
+        if self._reel_data_scraper is None:
+            self._reel_data_scraper = self._inject_browser(ReelDataScraper(self.config))
+        return self._reel_data_scraper
+
+    @property
+    def story_scraper(self) -> StoryScraper:
+        """Get StoryScraper instance (lazy loading)"""
+        if self._story_scraper is None:
+            self._story_scraper = self._inject_browser(StoryScraper(self.config))
+        return self._story_scraper
+
+    @property
+    def comment_scraper(self) -> CommentScraper:
+        """Get CommentScraper instance (lazy loading)"""
+        if self._comment_scraper is None:
+            self._comment_scraper = self._inject_browser(CommentScraper(self.config))
+        return self._comment_scraper
+
+    @property
+    def search_api(self) -> SearchAPI:
+        """Get SearchAPI instance (lazy loading)"""
+        if self._search_api is None:
+            self._search_api = self._inject_browser(SearchAPI(self.config))
+        return self._search_api
+
+    @property
+    def hashtag_scraper(self) -> HashtagScraper:
+        """Get HashtagScraper instance (lazy loading)"""
+        if self._hashtag_scraper is None:
+            self._hashtag_scraper = self._inject_browser(HashtagScraper(self.config))
+        return self._hashtag_scraper
+
+    @property
+    def location_scraper(self) -> LocationScraper:
+        """Get LocationScraper instance (lazy loading)"""
+        if self._location_scraper is None:
+            self._location_scraper = self._inject_browser(LocationScraper(self.config))
+        return self._location_scraper
+
+    @property
+    def explore_scraper(self) -> ExploreScraper:
+        """Get ExploreScraper instance (lazy loading)"""
+        if self._explore_scraper is None:
+            self._explore_scraper = self._inject_browser(ExploreScraper(self.config))
+        return self._explore_scraper
+
+    @property
+    def notification_reader(self) -> NotificationReader:
+        """Get NotificationReader instance (lazy loading)"""
+        if self._notification_reader is None:
+            self._notification_reader = self._inject_browser(NotificationReader(self.config))
+        return self._notification_reader
 
     # ==================== CONVENIENCE METHODS ====================
 
@@ -500,6 +606,130 @@ class SharedBrowser:
         """
         return self.reel_links_scraper.scrape(username, save_to_file=save_to_file)
 
+    # ==================== PHASE 2: NEW CONVENIENCE METHODS ====================
+
+    def scrape_post(self, url: str, **kwargs) -> PostData:
+        """
+        Scrape data from a single post
+
+        Args:
+            url: Post URL
+            **kwargs: Additional args (get_tags, get_likes, get_timestamp)
+
+        Returns:
+            PostData object with all extracted data
+        """
+        self._ensure_started()
+        return self.post_data_scraper.scrape(url, **kwargs)
+
+    def scrape_posts(self, urls: list, **kwargs) -> list:
+        """
+        Scrape data from multiple posts sequentially
+
+        Args:
+            urls: List of post URLs
+            **kwargs: Additional args
+
+        Returns:
+            List of PostData objects
+        """
+        self._ensure_started()
+        return self.post_data_scraper.scrape_multiple(urls, **kwargs)
+
+    def scrape_reel(self, url: str, **kwargs) -> ReelData:
+        """
+        Scrape data from a single reel
+
+        Args:
+            url: Reel URL
+            **kwargs: Additional args
+
+        Returns:
+            ReelData object
+        """
+        self._ensure_started()
+        return self.reel_data_scraper.scrape(url, **kwargs)
+
+    def scrape_reels(self, urls: list, **kwargs) -> list:
+        """
+        Scrape data from multiple reels
+
+        Args:
+            urls: List of reel URLs
+            **kwargs: Additional args
+
+        Returns:
+            List of ReelData objects
+        """
+        self._ensure_started()
+        return self.reel_data_scraper.scrape_multiple(urls, **kwargs)
+
+    def scrape_stories(self, username: str, **kwargs) -> StoryResult:
+        """
+        Scrape stories from a user
+
+        Args:
+            username: Instagram username
+            **kwargs: Additional args (extract_tags, challenge_delay)
+
+        Returns:
+            StoryResult object
+        """
+        self._ensure_started()
+        return self.story_scraper.scrape(username, **kwargs)
+
+    def scrape_comments(self, post_url: str, **kwargs):
+        """
+        Scrape comments from a post
+
+        Args:
+            post_url: Post URL
+            **kwargs: Additional args (target_count, etc.)
+
+        Returns:
+            Comment data
+        """
+        self._ensure_started()
+        return self.comment_scraper.scrape(post_url, **kwargs)
+
+    def search(self, query: str, search_type: str = 'all'):
+        """
+        Search Instagram
+
+        Args:
+            query: Search query
+            search_type: Type of search (all, users, hashtags, places)
+
+        Returns:
+            SearchResult object
+        """
+        self._ensure_started()
+        return self.search_api.scrape(query, search_type=search_type)
+
+    def scrape_hashtag(self, hashtag: str, **kwargs):
+        """
+        Scrape posts from a hashtag
+
+        Args:
+            hashtag: Hashtag name (without #)
+            **kwargs: Additional args
+
+        Returns:
+            HashtagResult object
+        """
+        self._ensure_started()
+        return self.hashtag_scraper.scrape(hashtag, **kwargs)
+
+    def read_notifications(self, **kwargs):
+        """
+        Read Instagram notifications
+
+        Returns:
+            List of NotificationItem objects
+        """
+        self._ensure_started()
+        return self.notification_reader.scrape(**kwargs)
+
     def download_post(self, url: str) -> list:
         """
         Download all media (images/videos) from a post URL.
@@ -512,36 +742,88 @@ class SharedBrowser:
             List of saved file paths
         """
         self.logger.info(f"📥 Starting download for: {url}")
+        self._ensure_started()
         
-        # 1. Scrape metadata & media URLs
-        # We need to temporarily use the PostDataScraper
-        scraper = self.post_links_scraper # reused just for property access or create new
-        # Wait, PostDataScraper is not exposed as property directly? Handled.
-        # Actually I need PostDataScraper, shared_browser has no property for it yet.
-        # It has _post_links_scraper.. wait.
+        # Use the shared PostDataScraper
+        post_data = self.post_data_scraper.scrape(url, get_media=True)
         
-        # Let's create a temporary PostDataScraper with the SHARED browser context
-        from .post_data import PostDataScraper
+        username = "unknown"
+        if hasattr(post_data, 'owner') and post_data.owner:
+            username = post_data.owner.username or "unknown"
         
-        # We need to inject the context manually or use a proper property
-        scraper = PostDataScraper(self.config)
-        scraper.playwright = self.playwright
+        return self.downloader.download_post(post_data, username=username)
+
+    def scrape_tagged_posts(self, username: str, max_posts: int = 50) -> 'TaggedPostsResult':
+        """
+        Scrape posts where a user has been tagged by others.
+
+        Args:
+            username: Instagram username
+            max_posts: Maximum posts to collect
+
+        Returns:
+            TaggedPostsResult with tagged posts
+        """
+        from .tagged_posts import TaggedPostsScraper, TaggedPostsResult
+        self._ensure_started()
+        
+        scraper = TaggedPostsScraper(config=self.config)
+        scraper.page = self.page
         scraper.browser = self.browser
         scraper.context = self.context
+        
+        result = scraper.scrape(username, max_posts=max_posts)
+        self.logger.info(
+            f"🏷️ Tagged: {result.total_found} posts, "
+            f"{len(result.unique_taggers)} unique taggers"
+        )
+        return result
+
+    def scrape_highlight(self, highlight_id: str, max_slides: int = 500) -> 'HighlightResult':
+        """
+        Scrape all slides from an Instagram highlight.
+
+        Args:
+            highlight_id: Highlight ID or full URL
+            max_slides: Maximum slides to collect
+
+        Returns:
+            HighlightResult with slides, stickers, music, etc.
+        """
+        from .highlight_scraper import HighlightsScraper, HighlightResult
+        self._ensure_started()
+        
+        scraper = HighlightsScraper(config=self.config)
         scraper.page = self.page
-        scraper.sync_network_client() # Important for cookies!
+        scraper.browser = self.browser
+        scraper.context = self.context
         
-        # Scrape
-        post_data = scraper.scrape(url, get_media=True)
-        
-        # 2. Extract username from data or URL for folder name
-        username = "unknown"
-        if post_data.tagged_accounts:
-             # simple heuristic, or we could scrape owner. For now 'unknown' or maybe infer from previous calls
-             pass
-        
-        # 3. Download
-        return self.downloader.download_post(post_data, username=username)
+        result = scraper.scrape(highlight_id, max_slides=max_slides)
+        self.logger.info(
+            f"🌟 Highlight: {result.slide_count} slides, "
+            f"{len(result.all_mentions)} mentions"
+        )
+        return result
+
+    def list_highlights(self, username: str) -> list:
+        """List all highlights for a user. Returns List[HighlightInfo]."""
+        from .highlight_scraper import HighlightsScraper
+        self._ensure_started()
+        scraper = HighlightsScraper(config=self.config)
+        scraper.page = self.page
+        scraper.browser = self.browser
+        scraper.context = self.context
+        return scraper.list_highlights(username)
+
+    def scrape_all_highlights(self, username: str, max_slides_per: int = 200) -> 'HighlightsListResult':
+        """Scrape ALL highlights for a user sequentially."""
+        from .highlight_scraper import HighlightsScraper, HighlightsListResult
+        self._ensure_started()
+        scraper = HighlightsScraper(config=self.config)
+        scraper.page = self.page
+        scraper.browser = self.browser
+        scraper.context = self.context
+        return scraper.scrape_all(username, max_slides_per=max_slides_per)
 
     # ==================== CONTEXT MANAGER ====================
 

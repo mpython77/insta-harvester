@@ -47,7 +47,9 @@ class CommentScraper(BaseScraper):
         self,
         post_url: str,
         *,
-        max_comments: Optional[int] = None,
+        target_count: Optional[int] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         include_replies: bool = True
     ):
         """
@@ -56,13 +58,26 @@ class CommentScraper(BaseScraper):
         """
         self.logger.info(f"Starting Stream Scrape: {post_url}")
         
+        # ═══════ AUTO BROWSER SETUP (standalone mode) ═══════
+        is_shared_browser = self.page is not None and self.browser is not None
+        if not is_shared_browser:
+            self.logger.debug("Setting up new browser session (standalone mode)")
+            session_data = self.load_session()
+            self.setup_browser(session_data)
+
         self.goto_url(post_url)
         time.sleep(3) # Initial load
+
+        # ═══════ OPEN COMMENTS DIALOG (Feed View Detection) ═══════
+        # Instagram sometimes shows posts in feed view where comments
+        # are hidden. We need to click "View all X comments" to open
+        # the comments dialog/panel.
+        self._open_comments_dialog()
 
         seen_ids = set()
         last_height = 0
         no_change_count = 0
-        max_retries = 20
+        max_retries = 8
         total_yielded = 0
 
         # Loop until max reached or no new content
@@ -86,6 +101,8 @@ class CommentScraper(BaseScraper):
             html = self.page.content()
             current_batch = self.parser.parse_html(html)
             
+            self.logger.debug(f"DEBUG: parser returned {len(current_batch)} comments.")
+            
             # 4. Filter and Yield New Comments
             new_comments_in_batch = []
             for comment in current_batch:
@@ -104,7 +121,7 @@ class CommentScraper(BaseScraper):
                     yield c
                     total_yielded += 1
                     
-                    if max_comments and total_yielded >= max_comments:
+                    if target_count is not None and total_yielded >= target_count:
                         self.logger.info("Reached max comments limit via stream.")
                         return
 
@@ -115,18 +132,18 @@ class CommentScraper(BaseScraper):
                 if no_change_count > max_retries:
                     break
 
-            # Check total count for exit condition (HTML count vs Seen count)
-            current_dom_count = self.page.locator('a[href*="/c/"]').count()
-            if max_comments and current_dom_count >= max_comments:
-                 # Double check if we yielded everything
-                 if total_yielded >= max_comments:
-                     return
+            # Check total count for exit condition
+            # Use time tags as proxy since /c/ permalinks no longer exist
+            if target_count is not None and total_yielded >= target_count:
+                return
 
     def scrape(
         self, 
         post_url: str, 
         *, 
-        max_comments: Optional[int] = None,
+        target_count: Optional[int] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         include_replies: bool = True,
         max_replies_per_comment: Optional[int] = None,
         progress_callback: Optional[Callable] = None
@@ -138,7 +155,13 @@ class CommentScraper(BaseScraper):
         comments = []
         
         # Consume the stream
-        for comment in self.scrape_stream(post_url, max_comments=max_comments, include_replies=include_replies):
+        for comment in self.scrape_stream(
+            post_url, 
+            target_count=target_count, 
+            date_from=date_from,
+            date_to=date_to,
+            include_replies=include_replies
+        ):
             comments.append(comment)
             
         duration = time.time() - start_time
@@ -187,6 +210,78 @@ class CommentScraper(BaseScraper):
                     
             time.sleep(2.5)
         except Exception: pass
+
+    def _open_comments_dialog(self):
+        """
+        Detects if the post is in feed view (no comments visible) and clicks
+        'View all X comments' to open the comments dialog.
+        
+        Instagram sometimes loads posts in a feed layout where comments
+        are hidden behind a 'View all X comments' link.
+        """
+        try:
+            # Check if comments dialog is already open
+            dialog = self.page.locator('div[role="dialog"]')
+            if dialog.count() > 0 and dialog.first.is_visible():
+                self.logger.info("Comments dialog already open.")
+                return
+
+            # Strategy 1: Click "View all X comments" link 
+            # This appears in feed view as a clickable text
+            view_all_selectors = [
+                # XPath: any element containing "View all" and "comments"
+                '//a[contains(text(), "View all") and contains(text(), "comment")]',
+                '//span[contains(text(), "View all") and contains(text(), "comment")]',
+                '//div[@role="button"][contains(., "View all") and contains(., "comment")]',
+                # Direct text match
+                'a:has-text("View all")',
+                'span:has-text("View all")',
+            ]
+            
+            clicked = False
+            for selector in view_all_selectors:
+                try:
+                    el = self.page.locator(selector)
+                    if el.count() > 0:
+                        for i in range(el.count()):
+                            txt = el.nth(i).text_content() or ""
+                            if "comment" in txt.lower():
+                                self.logger.info(f"Found 'View all comments' button: '{txt.strip()}'")
+                                el.nth(i).click()
+                                clicked = True
+                                break
+                    if clicked:
+                        break
+                except Exception:
+                    continue
+            
+            if clicked:
+                self.logger.info("Clicked 'View all comments'. Waiting for dialog to load...")
+                time.sleep(4)  # Wait for comments dialog to open and load
+                
+                # Verify dialog opened
+                try:
+                    self.page.wait_for_selector('div[role="dialog"]', timeout=5000)
+                    self.logger.info("Comments dialog opened successfully.")
+                except Exception:
+                    # Dialog might not appear, comments might load inline
+                    self.logger.debug("No dialog appeared, comments may load inline.")
+            else:
+                # Strategy 2: Click the comment icon (speech bubble SVG)
+                # This also opens the comments section
+                try:
+                    comment_icon = self.page.locator('svg[aria-label="Comment"]')
+                    if comment_icon.count() > 0:
+                        self.logger.info("Clicking comment icon to open comments...")
+                        comment_icon.first.click()
+                        time.sleep(3)
+                except Exception:
+                    pass
+                    
+                self.logger.debug("No 'View all comments' button found. Post may already show comments or have none.")
+                
+        except Exception as e:
+            self.logger.error(f"Error opening comments dialog: {e}")
 
     def _extract_post_id(self, url: str) -> str:
         match = re.search(r'/(?:p|reel)/([A-Za-z0-9_-]+)/?', url)

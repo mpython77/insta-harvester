@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup, NavigableString
 import re
+import hashlib
 from typing import List, Optional, Set, Any, Tuple
 from .models import Comment, CommentAuthor
 
@@ -14,12 +15,16 @@ class CommentParser:
         processed_ids: Set[str] = set()
 
         # 1. Broad Search for Comments
-        # We rely on permanent links (/c/ID/) as the most reliable anchor
-        comment_links = soup.find_all('a', href=re.compile(r'/c/\d+'))
+        # Instagram removed /c/ permalinks, so we anchor on <time> tags
+        time_tags = soup.find_all('time')
         
-        for link in comment_links:
+        for t in time_tags:
+            # Skip if not inside a typical comment list wrapper
+            if not t.find_parent('ul'):
+                continue
+                
             # Find the semantic row container for this comment
-            container = self._find_comment_container(link)
+            container = self._find_comment_container(t)
             if container:
                 data = self._extract_data_from_node(container)
                 if data and data.id not in processed_ids:
@@ -111,8 +116,8 @@ class CommentParser:
                 # Timestamp alone is often just in the header, so it's NOT sufficient.
                 # The "Like" button (heart) or "Reply" action are effectively always present at the bottom of the row.
                 
-                has_reply = current.find(string=re.compile(r'Reply', re.IGNORECASE))
-                has_like = current.find('svg', attrs={'aria-label': 'Like'}) or current.find('svg', attrs={'aria-label': 'Unlike'})
+                has_reply = current.find(string=re.compile(r'Reply|Odpovědět|Responder|Répondre', re.IGNORECASE))
+                has_like = current.find('svg', attrs={'aria-label': re.compile(r'Like|Unlike', re.IGNORECASE)})
                 
                 # If we have the Like button or Reply text, we definitely have the full row.
                 if has_like or has_reply:
@@ -121,15 +126,17 @@ class CommentParser:
 
     def _extract_data_from_node(self, node) -> Optional[Comment]:
         try:
-            # 1. ID & Permalink
+            # 1. ID & Permalink (Optional now)
             link_tag = node.find('a', href=re.compile(r'/c/\d+'))
-            if not link_tag: return None
+            comment_id = ""
+            permalink = ""
             
-            href = link_tag['href']
-            match = re.search(r'/c/(\d+)', href)
-            if not match: return None
-            comment_id = match.group(1)
-            permalink = f"https://www.instagram.com{href}"
+            if link_tag:
+                href = link_tag['href']
+                match = re.search(r'/c/(\d+)', href)
+                if match:
+                    comment_id = match.group(1)
+                    permalink = f"https://www.instagram.com{href}"
 
             # 2. Timestamp
             time_tag = node.find('time')
@@ -143,8 +150,6 @@ class CommentParser:
             pic_url = ""
             
             if user_link:
-                # Extract clean username from href
-                # href is like /username/
                 parts = [p for p in user_link['href'].split('/') if p]
                 if parts:
                     username = parts[0]
@@ -237,12 +242,8 @@ class CommentParser:
                      if match:
                          reply_count = int(match.group(1))
             
-            # Also check siblings if not found inside (button might be outside container)
+            # Also check siblings if not found inside 
             if reply_count == 0:
-                 pass # Logic preserved from before? Or rely on parents for nested counts?
-                 # Actually, usually "View replies" is a SIBLING of the node.
-                 # Since we capture a larger container now (User+Replies toggle?), it might be inside stripping.
-                 # If we don't find it, we check siblings.
                  curr = node.next_sibling
                  for _ in range(3):
                      if not curr: break
@@ -256,6 +257,11 @@ class CommentParser:
                                     break
                      if reply_count > 0: break
                      curr = curr.next_sibling
+
+            # Generate stable ID if missing
+            if not comment_id:
+                raw_id = f"{username}_{display_time}_{text[:30]}"
+                comment_id = hashlib.md5(raw_id.encode('utf-8')).hexdigest()[:15]
 
             author = CommentAuthor(
                 username=username,

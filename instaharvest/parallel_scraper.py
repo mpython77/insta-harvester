@@ -330,33 +330,142 @@ def _worker_scrape_batch(args: Dict[str, Any]) -> List[Dict[str, Any]]:
                     html_content = page.content()
                     soup = BeautifulSoup(html_content, 'lxml')
 
-                    # Extract data based on content type
-                    if is_reel:
-                        # REEL-specific extraction
-                        tagged_accounts = _extract_reel_tags(soup, page, url, worker_id, config)
-                        likes = _extract_reel_likes(soup, page, worker_id, config)
-                        timestamp = _extract_reel_timestamp(soup, page, worker_id, config)
+                    # ═══════ JSON-FIRST FULL EXTRACTION ═══════
+                    json_result = None
+                    try:
+                        import json as json_lib
+                        from datetime import datetime as dt_class, timezone as tz_class
+                        scripts = page.locator('script[type="application/json"]').all()
+                        for script_el in scripts:
+                            try:
+                                script_content = script_el.inner_text(timeout=1000)
+                                if len(script_content) < 500:
+                                    continue
+                                parsed_json = json_lib.loads(script_content)
+                                
+                                # Find items[0] recursively
+                                def find_item(o, d=0):
+                                    if d > 15 or not o: return None
+                                    if isinstance(o, dict):
+                                        if 'items' in o and isinstance(o['items'], list):
+                                            for it in o['items']:
+                                                if isinstance(it, dict) and ('pk' in it or 'media_type' in it):
+                                                    return it
+                                        for v in o.values():
+                                            if isinstance(v, (dict, list)):
+                                                r = find_item(v, d+1)
+                                                if r: return r
+                                    elif isinstance(o, list):
+                                        for it in o:
+                                            if isinstance(it, (dict, list)):
+                                                r = find_item(it, d+1)
+                                                if r: return r
+                                    return None
+                                
+                                item = find_item(parsed_json)
+                                if item:
+                                    # Extract all fields from JSON
+                                    j_tags = []
+                                    j_usertags = item.get('usertags')
+                                    if isinstance(j_usertags, dict) and 'in' in j_usertags:
+                                        for entry in j_usertags['in']:
+                                            if isinstance(entry, dict) and 'user' in entry:
+                                                u = entry['user']
+                                                if isinstance(u, dict) and 'username' in u:
+                                                    uname = u['username']
+                                                    if uname not in j_tags:
+                                                        j_tags.append(uname)
+                                    
+                                    # Carousel tags
+                                    carousel = item.get('carousel_media', [])
+                                    if isinstance(carousel, list):
+                                        for slide in carousel:
+                                            if isinstance(slide, dict):
+                                                s_ut = slide.get('usertags')
+                                                if isinstance(s_ut, dict) and 'in' in s_ut:
+                                                    for entry in s_ut['in']:
+                                                        if isinstance(entry, dict) and 'user' in entry:
+                                                            u = entry['user']
+                                                            if isinstance(u, dict) and 'username' in u:
+                                                                uname = u['username']
+                                                                if uname not in j_tags:
+                                                                    j_tags.append(uname)
+                                    
+                                    j_likes = item.get('like_count', 0)
+                                    j_ts = ''
+                                    taken_at = item.get('taken_at', 0)
+                                    if taken_at:
+                                        try:
+                                            j_ts = dt_class.fromtimestamp(taken_at, tz=tz_class.utc).strftime('%b %d, %Y')
+                                        except Exception:
+                                            j_ts = 'N/A'
+                                    
+                                    j_caption = ''
+                                    cap = item.get('caption')
+                                    if isinstance(cap, dict):
+                                        j_caption = cap.get('text', '')
+                                    
+                                    j_comment_count = item.get('comment_count', 0)
+                                    
+                                    # Location
+                                    j_location = ''
+                                    loc = item.get('location')
+                                    if isinstance(loc, dict):
+                                        j_location = loc.get('name', '')
+                                    
+                                    json_result = {
+                                        'url': url,
+                                        'tagged_accounts': j_tags,
+                                        'likes': j_likes,
+                                        'timestamp': j_ts,
+                                        'content_type': content_type,
+                                        'caption': j_caption,
+                                        'comment_count': j_comment_count,
+                                        'location': j_location,
+                                        'json_extracted': True
+                                    }
+                                    
+                                    logger.info(
+                                        f"[{idx}/{total_in_batch}] ✅ JSON-FIRST: "
+                                        f"{len(j_tags)} tags, {j_likes} likes"
+                                    )
+                                    break
+                            except Exception:
+                                continue
+                    except Exception as je:
+                        logger.debug(f"JSON extraction failed: {je}")
+                    
+                    if json_result:
+                        result = json_result
                     else:
-                        # POST extraction (original logic)
-                        # Try to wait for tag elements specifically
-                        try:
-                            # Use config selector for waiting
-                            page.wait_for_selector(config.selector_post_tag_container, timeout=config.post_tag_wait_timeout, state='attached')
-                            logger.debug(f"[{idx}/{total_in_batch}] ✓ Tag elements detected")
-                        except Exception:
-                            logger.debug(f"[{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
+                        # ═══════ DOM FALLBACK ═══════
+                        logger.debug(f"[{idx}/{total_in_batch}] JSON failed, using DOM...")
+                        
+                        # Extract data based on content type
+                        if is_reel:
+                            # REEL-specific extraction
+                            tagged_accounts = _extract_reel_tags(soup, page, url, worker_id, config)
+                            likes = _extract_reel_likes(soup, page, worker_id, config)
+                            timestamp = _extract_reel_timestamp(soup, page, worker_id, config)
+                        else:
+                            # POST extraction (original logic)
+                            try:
+                                page.wait_for_selector(config.selector_post_tag_container, timeout=config.post_tag_wait_timeout, state='attached')
+                                logger.debug(f"[{idx}/{total_in_batch}] ✓ Tag elements detected")
+                            except Exception:
+                                logger.debug(f"[{idx}/{total_in_batch}] ⚠️ No tag elements (might be normal)")
 
-                        tagged_accounts = _extract_tags_robust(soup, page, url, worker_id, config)
-                        likes = _extract_likes_bs4(soup, page, worker_id, config)
-                        timestamp = _extract_timestamp_bs4(soup)
+                            tagged_accounts = _extract_tags_robust(soup, page, url, worker_id, config)
+                            likes = _extract_likes_bs4(soup, page, worker_id, config)
+                            timestamp = _extract_timestamp_bs4(soup)
 
-                    result = {
-                        'url': url,
-                        'tagged_accounts': tagged_accounts,
-                        'likes': likes,
-                        'timestamp': timestamp,
-                        'content_type': content_type  # Include content type in result
-                    }
+                        result = {
+                            'url': url,
+                            'tagged_accounts': tagged_accounts,
+                            'likes': likes,
+                            'timestamp': timestamp,
+                            'content_type': content_type
+                        }
 
                     batch_results.append(result)
 
@@ -582,6 +691,10 @@ class ParallelPostDataScraper:
         """Initialize parallel scraper"""
         self.config = config or ScraperConfig()
         self.logger = get_logger('ParallelPostDataScraper')
+        # SharedBrowser support
+        self.page = None
+        self.browser = None
+        self.context = None
 
     def scrape_multiple(
         self,
@@ -634,6 +747,14 @@ class ParallelPostDataScraper:
         # Note: If called from scrape_multiple, post_links is actually list of urls
         
         scraper = PostDataScraper(self.config)
+
+        # SharedBrowser injection — reuse existing browser if available
+        if self.page is not None and self.browser is not None:
+            scraper.page = self.page
+            scraper.browser = self.browser
+            scraper.context = self.context
+            self.logger.debug("SharedBrowser injected into PostDataScraper")
+
         results = scraper.scrape_multiple(
             post_links,
             delay_between_posts=True

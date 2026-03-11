@@ -263,16 +263,19 @@ if LIBRARY_AVAILABLE:
             self,
             username: str,
             target_count: Optional[int] = None,
+            date_from: Optional[str] = None,
+            date_to: Optional[str] = None,
             save_to_file: bool = True,
             output_file: Optional[str] = None
         ) -> List[Dict[str, str]]:
             """
-            Scrape all POST and REEL links from profile using USER'S PROVEN METHOD
+            Scrape POST and REEL links from profile using USER'S PROVEN METHOD
 
             Args:
                 username: Instagram username
                 target_count: Target number of links (None = scrape all)
-                target_count: Target number of links (None = scrape all)
+                date_from: Filter start date 'YYYY-MM-DD' (inclusive)
+                date_to: Filter end date 'YYYY-MM-DD' (inclusive)
                 save_to_file: Save links to file
                 output_file: Optional path to save file (overrides default)
 
@@ -315,6 +318,15 @@ if LIBRARY_AVAILABLE:
                     self._save_links(links, output_file)
 
                 self.logger.info(f"Collected {len(links)} post links")
+
+                # ═══ DATE RANGE FILTER ═══
+                if date_from or date_to:
+                    links = self._filter_by_date_range(links, date_from, date_to, url_key='url')
+
+                # Truncate to target_count if set
+                if target_count is not None and len(links) > target_count:
+                    links = links[:target_count]
+                    self.logger.info(f"Trimmed to target: {len(links)} links")
                 return links
 
             finally:

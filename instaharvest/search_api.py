@@ -85,13 +85,16 @@ class SearchAPI(BaseScraper):
         self._search_responses = []
 
         try:
-            session_data = self._load_session()
-            self.setup_browser(session_data)
+            # ═══════ AUTO BROWSER SETUP ═══════
+            is_shared_browser = self.page is not None and self.browser is not None
+            if not is_shared_browser:
+                session_data = self._load_session()
+                self.setup_browser(session_data)
 
-            # Navigate to Instagram home first (session warm-up)
-            base = self.config.instagram_base_url.rstrip('/')
-            self.goto_url(base)
-            time.sleep(self.config.page_stability_delay)
+                # Navigate to Instagram home first (session warm-up, only standalone)
+                base = self.config.instagram_base_url.rstrip('/')
+                self.goto_url(base)
+                time.sleep(self.config.page_stability_delay)
 
             # PRIMARY: Direct API via fetch()
             result = self._direct_api_search(query, search_type)
@@ -113,7 +116,8 @@ class SearchAPI(BaseScraper):
             self.logger.error(f"Search failed: {e}")
             raise
         finally:
-            self.close()
+            if not is_shared_browser:
+                self.close()
 
         return result
 

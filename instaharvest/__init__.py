@@ -77,7 +77,7 @@ Quick Start:
     scraper.setup_browser(session_data)
     comments = scraper.scrape(
         'https://www.instagram.com/p/ABC123/',
-        max_comments=100,
+        target_count=100,
         include_replies=True
     )
     # comments.total_comments_scraped
@@ -133,8 +133,50 @@ Quick Start:
     if not check_session_exists():
         save_session()
 
+    # Story scraping with per-slide tag mapping
+    from instaharvest import StoryScraper, StorySlideInfo
+    from instaharvest.config import ScraperConfig
+
+    config = ScraperConfig()
+    scraper = StoryScraper(config=config)
+    result = scraper.scrape('username', extract_tags=True)
+    print(result.all_tagged_accounts)
+    for slide in result.slides:
+        print(f"Slide {slide.slide_index + 1}: {slide.timestamp} → {slide.tagged_accounts}")
+
+    # Tagged Posts scraping — who tags this account
+    from instaharvest import TaggedPostsScraper
+    from instaharvest.config import ScraperConfig
+
+    config = ScraperConfig()
+    scraper = TaggedPostsScraper(config=config)
+    result = scraper.scrape('mondayswimwear', max_posts=100)
+    for post in result.tagged_posts:
+        print(f"{post.owner} tagged @mondayswimwear → {post.url}")
+
+    # Highlights scraping — full slide data with stickers
+    from instaharvest import HighlightsScraper
+    from instaharvest.config import ScraperConfig
+
+    config = ScraperConfig()
+    scraper = HighlightsScraper(config=config)
+
+    # Single highlight
+    result = scraper.scrape('18092082532805201')
+    print(f"{result.highlight_title}: {result.slide_count} slides")
+    print(f"Mentions: {result.all_mentions}")
+    print(f"Music: {[m.title for m in result.all_music]}")
+
+    # List all highlights for a user
+    highlights = scraper.list_highlights('mondayswimwear')
+
+    # Scrape ALL highlights sequentially
+    full = scraper.scrape_all('mondayswimwear', max_slides_per=100)
+    for r in full.full_results:
+        print(f"  {r.highlight_title}: {r.slide_count} slides")
+
 Author: Muydinov Doston
-Version: 2.10.0
+Version: 2.2.2
 License: MIT
 """
 
@@ -151,7 +193,7 @@ from .exceptions import (
 from .base import BaseScraper
 from .profile import ProfileScraper, ProfileData
 from .post_links import InstagramPostLinksScraper, PostLinksScraper
-from .post_data import PostDataScraper, PostData
+from .post_data import PostDataScraper, PostData, PostLocation, PostOwner, CarouselSlide
 from .reel_links import ReelLinksScraper
 from .reel_data import ReelDataScraper, ReelData
 from .parallel_scraper import ParallelPostDataScraper
@@ -182,16 +224,18 @@ from .webhooks import EventEmitter, FollowerWatcher, Event, EventTypes
 from .batch_downloader import BatchDownloader, DownloadTask, DownloadResult, BatchResult, ProgressTracker
 from .async_engine import AsyncBaseScraper, AsyncProfileScraper, AsyncBatchScraper
 from .hashtag_scraper import HashtagScraper, HashtagResult
-from .story_scraper import StoryScraper, StoryResult, StoryItem
+from .story_scraper import StoryScraper, StoryResult, StoryItem, StorySlideInfo
 from .location_scraper import LocationScraper, LocationResult
 from .search_api import SearchAPI, SearchResult
 from .explore_scraper import ExploreScraper, ExploreResult
 from .data_export import DataExporter
+from .tagged_posts import TaggedPostsScraper, TaggedPostData, TaggedPostsResult
+from .highlight_scraper import HighlightsScraper, HighlightResult, HighlightSlide, HighlightSticker, HighlightMusic, HighlightInfo, HighlightsListResult
 from .session_manager import SessionManager, SessionRotationStrategy
 from .captcha_solver import CaptchaSolver, CaptchaProvider
 
 
-__version__ = '2.12.0'
+__version__ = '2.2.2'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
@@ -225,15 +269,28 @@ __all__ = [
     'MessageManager',
     'FollowersCollector',
     'SharedBrowser',
+    'TaggedPostsScraper',
+    'HighlightsScraper',
 
     # Data structures
     'ProfileData',
     'PostData',
+    'PostLocation',
+    'PostOwner',
+    'CarouselSlide',
     'ReelData',
     'CommentData',
     'CommentAuthor',
     'PostCommentsData',
     'Collaborator',
+    'TaggedPostData',
+    'TaggedPostsResult',
+    'HighlightResult',
+    'HighlightSlide',
+    'HighlightSticker',
+    'HighlightMusic',
+    'HighlightInfo',
+    'HighlightsListResult',
 
     # Export
     'ExcelExporter',
@@ -298,6 +355,7 @@ __all__ = [
     'StoryScraper',
     'StoryResult',
     'StoryItem',
+    'StorySlideInfo',
 
     # Location Scraper
     'LocationScraper',

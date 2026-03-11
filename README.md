@@ -39,6 +39,10 @@
 - 🔍 **HTML Detection** - Automatic structure change detection
 - 📝 **Professional Logging** - Comprehensive logging system
 - 🔔 **Notification Reader** - Read, filter, and analyze activity feed notifications
+- 📸 **Story Scraper** - Extract tagged accounts from stories with per-slide mapping & timestamps
+- 🏷️ **Tagged Posts Scraper** - Discover who tags an account: owner, thumbnail, type per post
+- 🌟 **Highlights Scraper** - Full highlight slide extraction with mentions, links, music, locations
+- 🧬 **JSON-First Architecture** - Instant data extraction from pre-loaded JSON (30+ fields: location, caption, owner, carousel slides, engagement)
 
 ---
 
@@ -280,21 +284,56 @@ collector.close()
 from instaharvest import SharedBrowser
 from instaharvest.config import ScraperConfig
 
-# Create config for better reliability
 config = ScraperConfig()
 
 # One browser for everything!
 with SharedBrowser(config=config) as browser:
-    # Follow users
+    # ── Social Actions ──
     browser.follow("user1")
-    browser.follow("user2")
-
-    # Send messages
     browser.send_message("user1", "Thanks for the follow!")
-
-    # Collect followers
     followers = browser.get_followers("my_account", limit=50)
-    print(f"Followers: {len(followers)}")
+
+    # ── Profile ──
+    profile = browser.scrape_profile("username")
+    print(f"{profile.full_name}: {profile.followers} followers")
+
+    # ── Post Data (NEW) ──
+    post = browser.scrape_post("https://www.instagram.com/p/DVld0u9iN3K/")
+    print(f"Likes: {post.like_count}, Tags: {post.tagged_accounts}")
+
+    # ── Multiple Posts (NEW) ──
+    posts = browser.scrape_posts([
+        "https://www.instagram.com/p/ABC/",
+        "https://www.instagram.com/p/XYZ/",
+    ])
+
+    # ── Reel Data (NEW) ──
+    reel = browser.scrape_reel("https://www.instagram.com/reel/DVxyz/")
+    print(f"Views: {reel.view_count}, Plays: {reel.play_count}")
+
+    # ── Stories (NEW) ──
+    stories = browser.scrape_stories("username")
+    print(f"Stories: {stories.story_count}, Tags: {stories.all_tagged_accounts}")
+
+    # ── Comments (NEW) ──
+    comments = browser.scrape_comments("https://www.instagram.com/p/ABC/")
+    print(f"Comments: {len(comments.comments)}")
+
+    # ── Search (NEW) ──
+    results = browser.search("fashion")
+    print(f"Found {results.total_count} results")
+
+    # ── Hashtag (NEW) ──
+    hashtag = browser.scrape_hashtag("travel")
+    print(f"#travel: {hashtag.post_count} posts")
+
+    # ── Notifications (NEW) ──
+    notifs = browser.read_notifications()
+    print(f"Notifications: {len(notifs)}")
+
+    # ── Download Media ──
+    files = browser.download_post("https://www.instagram.com/p/ABC/")
+    print(f"Downloaded {len(files)} files")
 ```
 
 </details>
@@ -552,39 +591,87 @@ messenger.close()
 
 ### 5. Shared Browser (Recommended!)
 
-**Use one browser for all operations** - Much faster!
+**Use one browser for all operations** — Much faster! Supports **15 lazy properties** and **20+ convenience methods**.
 
 ```python
 from instaharvest import SharedBrowser
 from instaharvest.config import ScraperConfig
 
-# Create config
 config = ScraperConfig()
 
 with SharedBrowser(config=config) as browser:
-    # All operations use the same browser instance
+    # ── Social Actions ──
     browser.follow('user1')
     browser.send_message('user1', 'Hello!')
     followers = browser.get_followers('user2', limit=100)
     profile = browser.scrape_profile('user3')
 
+    # ── Data Scraping (NEW) ──
+    post = browser.scrape_post('https://www.instagram.com/p/ABC/')
+    reel = browser.scrape_reel('https://www.instagram.com/reel/XYZ/')
+    stories = browser.scrape_stories('username')
+    comments = browser.scrape_comments('https://www.instagram.com/p/ABC/')
+
+    # ── Discovery (NEW) ──
+    results = browser.search('fashion brands')
+    hashtag = browser.scrape_hashtag('streetwear')
+    notifs = browser.read_notifications()
+
+    # ── Batch Operations (NEW) ──
+    posts = browser.scrape_posts(['url1', 'url2', 'url3'])
+    reels = browser.scrape_reels(['reel1', 'reel2'])
+
+    # ── Download ──
+    files = browser.download_post('https://www.instagram.com/p/ABC/')
+
     # No browser reopening! Fast and efficient!
+```
+
+**SharedBrowser + Orchestrator (NEW!):**
+
+```python
+from instaharvest import SharedBrowser, InstagramOrchestrator, ScraperConfig
+
+config = ScraperConfig(headless=True)
+
+with SharedBrowser(config=config) as browser:
+    # Orchestrator reuses the same browser!
+    orch = InstagramOrchestrator(config, shared_browser=browser)
+
+    # Full profile scrape with parallel processing — 1 browser!
+    results = orch.scrape_complete_profile_advanced(
+        'username',
+        parallel=3,
+        save_excel=True,
+        scrape_comments=True,
+        scrape_stories=True
+    )
 ```
 
 ### 6. Advanced: Parallel Processing
 
 ```python
-from instaharvest import InstagramOrchestrator, ScraperConfig
+from instaharvest import InstagramOrchestrator, SharedBrowser, ScraperConfig
 
 config = ScraperConfig(headless=True)
-orchestrator = InstagramOrchestrator(config)
 
-# Scrape with 3 parallel workers + Excel export
+# Option A: Standalone (opens new browser)
+orchestrator = InstagramOrchestrator(config)
 results = orchestrator.scrape_complete_profile_advanced(
     'username',
-    parallel=3,        # 3 parallel browser tabs
-    save_excel=True    # Real-time Excel export
+    parallel=3,
+    save_excel=True
 )
+
+# Option B: With SharedBrowser (reuses existing browser — faster!)
+with SharedBrowser(config=config) as browser:
+    orch = InstagramOrchestrator(config, shared_browser=browser)
+    results = orch.scrape_complete_profile_advanced(
+        'username',
+        parallel=3,
+        save_excel=True,
+        scrape_stories=True
+    )
 
 print(f"Scraped {len(results['posts_data'])} posts")
 ```
@@ -725,6 +812,279 @@ with sync_playwright() as pw:
 
 </details>
 
+### 10. Story Scraper 📸
+
+Extract tagged accounts from Instagram stories using **JSON-first architecture** — all tags from all slides in a single page load, no slide navigation needed.
+
+```python
+from instaharvest import StoryScraper, StorySlideInfo
+from instaharvest.config import ScraperConfig
+from instaharvest.session_utils import find_session_file
+
+# 1. Setup
+config = ScraperConfig(headless=False)
+config.session_file = find_session_file()
+scraper = StoryScraper(config=config)
+
+# 2. Scrape stories
+result = scraper.scrape(
+    'username',
+    extract_tags=True,       # Extract tagged accounts
+    challenge_delay=10       # Seconds to wait for challenge
+)
+
+# 3. Access data
+print(f"Has stories: {result.has_stories}")
+print(f"All tags: {result.all_tagged_accounts}")
+
+# 4. Per-slide mapping (which tag on which story + timestamp)
+for slide in result.slides:
+    print(f"Slide {slide.slide_index + 1}: "
+          f"[{slide.media_type}] {slide.timestamp} → "
+          f"{slide.tagged_accounts}")
+
+# Output:
+# Slide 1: [image] 2026-03-10 23:58:45 UTC → []
+# Slide 2: [video] 2026-03-10 00:24:42 UTC → []
+# Slide 3: [video] 2026-03-10 10:41:20 UTC → ['d_24_erkinovna']
+# Slide 4: [video] 2026-03-10 12:44:56 UTC → []
+# Slide 5: [video] 2026-03-10 15:44:28 UTC → ['___noooza', 'isfira_saphir']
+```
+
+**Using Orchestrator (standalone):**
+
+```python
+from instaharvest import InstagramOrchestrator
+from instaharvest.config import ScraperConfig
+
+orchestrator = InstagramOrchestrator(ScraperConfig())
+result = orchestrator.scrape_stories_only('username')
+# Auto-exports to story_tags_username.json
+```
+
+**Using Orchestrator (integrated with full profile scrape):**
+
+```python
+results = orchestrator.scrape_complete_profile_advanced(
+    'username',
+    parallel=3,
+    scrape_stories=True,          # Enable story scraping
+    story_challenge_delay=10,     # Challenge wait time
+    save_excel=True
+)
+# results['story_data'] contains full story data with per-slide mapping
+```
+
+**StoryResult data structure:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `has_stories` | `bool` | Whether user has active stories |
+| `story_count` | `int` | Number of story items |
+| `items` | `List[StoryItem]` | Story media items |
+| `slides` | `List[StorySlideInfo]` | Per-slide tag mapping |
+| `all_tagged_accounts` | `List[str]` | All unique tagged usernames |
+
+**StorySlideInfo fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `slide_index` | `int` | Slide position (0-based) |
+| `timestamp` | `str` | When story was posted (UTC) |
+| `media_type` | `str` | `image` or `video` |
+| `tagged_accounts` | `List[str]` | Tags on this specific slide |
+| `has_tags` | `bool` | Quick check if slide has tags |
+
+---
+
+### 11. JSON-First Post Data 🧬
+
+Instagram embeds full post data in `<script type="application/json">` tags. Our library now extracts **30+ fields** from this JSON automatically — no DOM clicks needed.
+
+```python
+from instaharvest import PostDataScraper
+from instaharvest.config import ScraperConfig
+from instaharvest.session_utils import find_session_file
+
+config = ScraperConfig(headless=True)
+config.session_file = find_session_file()
+
+scraper = PostDataScraper(config=config)
+session = scraper.load_session()
+scraper.setup_browser(session)
+
+result = scraper.scrape("https://www.instagram.com/p/DVs7LK-iO0C/")
+
+# ── Basic ──
+print(result.shortcode)           # "DVs7LK-iO0C"
+print(result.json_extracted)      # True (came from JSON)
+print(result.content_type)        # "Post" / "Reel"
+
+# ── Engagement ──
+print(result.like_count)          # 1234 (exact integer)
+print(result.comment_count)       # 56
+print(result.top_likers)          # ['famous_user1', 'brand_x']
+
+# ── Caption ──
+print(result.caption)             # Full caption text with hashtags
+
+# ── Location (GPS) ──
+if result.location:
+    print(result.location.name)      # "Tashkent, Uzbekistan"
+    print(result.location.latitude)  # 41.2995
+    print(result.location.longitude) # 69.2401
+
+# ── Owner ──
+if result.owner:
+    print(result.owner.username)     # "raykhana_nasillayeva"
+    print(result.owner.full_name)    # "Raykhana"
+    print(result.owner.is_verified)  # False
+
+# ── Tags with Positions ──
+print(result.tagged_accounts)     # ['brand_a', 'brand_b']
+print(result.tag_positions)       # [{'username': 'brand_a', 'x': 0.5, 'y': 0.7}]
+
+# ── Carousel Slides ──
+for slide in result.carousel_slides:
+    print(f"Slide {slide.slide_index}: {slide.media_type} "
+          f"({slide.width}x{slide.height}) "
+          f"tags={slide.tagged_accounts}")
+
+# ── Timestamp ──
+print(result.taken_at_human)      # "2025-03-10 15:30:00 UTC"
+print(result.taken_at)            # 1741617000 (Unix)
+
+scraper.close()
+```
+
+**All Enriched Fields:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `json_extracted` | `bool` | Whether data came from JSON |
+| `shortcode` | `str` | Post shortcode (URL segment) |
+| `pk` | `str` | Post unique numeric ID |
+| `media_type` | `int` | 1=image, 2=video, 8=carousel |
+| `product_type` | `str` | `feed`, `clips`, `carousel_container` |
+| `like_count` | `int` | Exact integer like count |
+| `comment_count` | `int` | Total comments |
+| `top_likers` | `List[str]` | Notable users who liked |
+| `has_liked` | `bool` | Current user has liked |
+| `caption` | `str` | Full caption text |
+| `location` | `PostLocation` | `.name`, `.latitude`, `.longitude`, `.city` |
+| `owner` | `PostOwner` | `.username`, `.full_name`, `.is_verified` |
+| `taken_at` | `int` | Unix timestamp |
+| `taken_at_human` | `str` | Human-readable UTC timestamp |
+| `width` / `height` | `int` | Original media dimensions |
+| `accessibility_caption` | `str` | AI-generated image description |
+| `video_duration` | `float` | Video length in seconds |
+| `has_audio` | `bool` | Has audio track |
+| `carousel_media_count` | `int` | Number of carousel slides |
+| `carousel_slides` | `List[CarouselSlide]` | Per-slide details |
+| `tag_positions` | `List[Dict]` | Tag coordinates on image |
+
+> **Architecture**: JSON extraction is the primary method. DOM-based extraction is only used as fallback when JSON is unavailable. This works in both `PostDataScraper` and `ParallelPostDataScraper`.
+
+---
+
+### 🏷️ Tagged Posts Scraper
+
+Discover which accounts tag a specific user. Scrapes `/{username}/tagged/` with infinite scroll.
+
+```python
+from instaharvest import TaggedPostsScraper
+from instaharvest.config import ScraperConfig
+
+config = ScraperConfig()
+scraper = TaggedPostsScraper(config=config)
+session = scraper.load_session()
+scraper.setup_browser(session)
+
+result = scraper.scrape('mondayswimwear', max_posts=100)
+
+print(f"Total: {result.total_found} tagged posts")
+print(f"Unique taggers: {result.unique_taggers}")
+
+for post in result.tagged_posts:
+    print(f"  @{post.owner} → {post.url} ({post.media_type})")
+
+scraper.close()
+```
+
+**Available via:**
+```python
+# Orchestrator
+orch = InstagramOrchestrator(config)
+result = orch.scrape_tagged_posts('username')
+
+# Shared Browser
+with SharedBrowser(config=config) as browser:
+    result = browser.scrape_tagged_posts('username', max_posts=50)
+```
+
+---
+
+### 🌟 Highlights Scraper
+
+Extract ALL slides from Instagram highlights with rich metadata — mentions, links, music, locations, hashtags.
+
+```python
+from instaharvest import HighlightsScraper
+from instaharvest.config import ScraperConfig
+
+config = ScraperConfig()
+scraper = HighlightsScraper(config=config)
+session = scraper.load_session()
+scraper.setup_browser(session)
+
+# ── Single highlight ──
+result = scraper.scrape('18092082532805201', max_slides=200)
+print(f"{result.highlight_title}: {result.slide_count} slides")
+print(f"Mentions: {result.all_mentions}")
+print(f"Links: {result.all_links}")
+for slide in result.slides:
+    print(f"Slide {slide.slide_index}: {slide.media_type}, {slide.mentions}")
+
+# ── List ALL highlights for a user ──
+highlights = scraper.list_highlights('mondayswimwear')
+for h in highlights:
+    print(f"🌟 {h.highlight_id} — {h.title}")
+
+# ── Scrape ALL highlights sequentially ──
+full = scraper.scrape_all('mondayswimwear', max_slides_per=100)
+print(f"{full.total_highlights} highlights, {full.total_slides} total slides")
+for r in full.full_results:
+    print(f"  {r.highlight_title}: {r.slide_count} slides")
+
+scraper.close()
+```
+
+**Per-slide data:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `media_type` | `str` | `image` or `video` |
+| `image_url` | `str` | HD image URL |
+| `video_url` | `str` | Video URL (if video) |
+| `taken_at_human` | `str` | `2026-01-20 02:37:13 UTC` |
+| `mentions` | `List[str]` | @usernames from stickers |
+| `link_stickers` | `List[str]` | URLs from link stickers |
+| `location_stickers` | `List[Dict]` | Location name, pk, address |
+| `music` | `HighlightMusic` | title, artist, album |
+| `hashtag_stickers` | `List[str]` | #hashtags |
+
+**Available via:**
+```python
+# Orchestrator
+orch.scrape_highlight('18092082532805201')
+orch.scrape_all_highlights('mondayswimwear')
+
+# Shared Browser
+browser.scrape_highlight('18092082532805201')
+browser.list_highlights('mondayswimwear')
+browser.scrape_all_highlights('mondayswimwear')
+```
+
 ---
 
 ## 🎯 Complete Workflow Example
@@ -733,26 +1093,54 @@ with sync_playwright() as pw:
 <summary><b>🔄 Full Automation Workflow</b> - Click to expand</summary>
 
 ```python
-from instaharvest import SharedBrowser
+from instaharvest import SharedBrowser, InstagramOrchestrator
 from instaharvest.config import ScraperConfig
 
-# Create config
 config = ScraperConfig()
 
 with SharedBrowser(config=config) as browser:
-    # 1. Collect followers from target user
-    followers = browser.get_followers('target_user', limit=50)
-    print(f"Collected {len(followers)} followers")
+    # 1. Profile analysis
+    profile = browser.scrape_profile('target_user')
+    print(f"📊 {profile.full_name}: {profile.followers} followers")
 
-    # 2. Follow them
-    for follower in followers[:10]:  # Follow first 10
+    # 2. Collect followers
+    followers = browser.get_followers('target_user', limit=50)
+    print(f"👥 Collected {len(followers)} followers")
+
+    # 3. Follow them
+    for follower in followers[:10]:
         result = browser.follow(follower)
-        if result['success']:  # Check success key
+        if result['success']:
             print(f"✓ Followed {follower}")
 
-    # 3. Send welcome message
+    # 4. Send welcome message
     for follower in followers[:5]:
         browser.send_message(follower, "Thanks for following!")
+
+    # 5. Scrape user's latest posts
+    post_links = browser.get_post_links('target_user')
+    posts = browser.scrape_posts([l['url'] for l in post_links[:5]])
+    for post in posts:
+        print(f"📸 {post.shortcode}: {post.like_count} likes")
+
+    # 6. Check stories
+    stories = browser.scrape_stories('target_user')
+    if stories.has_stories:
+        print(f"📖 {stories.story_count} stories, tags: {stories.all_tagged_accounts}")
+
+    # 7. Read notifications
+    notifs = browser.read_notifications()
+    print(f"🔔 {len(notifs)} notifications")
+
+    # 8. Full orchestrated scrape (same browser!)
+    orch = InstagramOrchestrator(config, shared_browser=browser)
+    results = orch.scrape_complete_profile_advanced(
+        'target_user',
+        parallel=3,
+        save_excel=True,
+        scrape_stories=True
+    )
+    print(f"✅ Total: {len(results['posts_data'])} posts scraped")
 ```
 
 </details>
@@ -813,12 +1201,31 @@ instaharvest/
 │   ├── followers.py       # Followers collection
 │   ├── follow.py          # Follow/unfollow
 │   ├── message.py         # Direct messaging
-│   ├── post_data.py       # Post data extraction
-│   ├── shared_browser.py  # Shared browser manager
+│   ├── post_data.py       # Post data extraction (JSON-first)
+│   ├── reel_data.py       # Reel data extraction
+│   ├── post_links.py      # Post link collection
+│   ├── reel_links.py      # Reel link collection
+│   ├── story_scraper.py   # Story scraping with tag mapping
+│   ├── comment_scraper.py # Comment extraction with replies
+│   ├── search_api.py      # Instagram search
+│   ├── hashtag_scraper.py # Hashtag post collection
+│   ├── location_scraper.py # Location-based scraping
+│   ├── explore_scraper.py # Explore page scraping
 │   ├── notifications.py   # Notification reader
+│   ├── highlight_scraper.py # Highlight slides extraction
+│   ├── tagged_posts.py    # Tagged posts scraping
+│   ├── shared_browser.py  # SharedBrowser (15 lazy properties)
+│   ├── orchestrator.py    # Full workflow orchestrator
+│   ├── parallel_scraper.py # Parallel processing
+│   ├── interactions.py    # Like/comment interactions
+│   ├── downloader.py      # Media download (images/videos)
 │   └── ...                # More modules
 ├── examples/              # Example scripts
-│   ├── example_notifications.py  # Notification reader example
+│   ├── save_session.py    # Session setup
+│   ├── all_in_one.py      # Interactive demo
+│   ├── main_advanced.py   # Production scraping
+│   └── example_custom_config.py
+├── tests/                 # Unit tests (87 tests)
 ├── README.md              # This file
 ├── setup.py               # Package setup
 └── LICENSE                # MIT License
@@ -855,11 +1262,13 @@ config = ScraperConfig(
 <details>
 <summary><b>✅ Recommended Practices</b> - Click to expand</summary>
 
-1. **Use SharedBrowser** - Reuses browser instance, much faster
-2. **Rate Limiting** - Built-in delays to avoid Instagram bans
-3. **Session Management** - Auto-refreshes session to prevent expiration
-4. **Error Handling** - Comprehensive exception handling
-5. **Logging** - Professional logging for debugging
+1. **Use SharedBrowser** - Reuses browser instance, much faster (15 modules, 1 browser)
+2. **Use SharedBrowser + Orchestrator** - Pass `shared_browser` to `InstagramOrchestrator` for maximum efficiency
+3. **Rate Limiting** - Built-in delays to avoid Instagram bans
+4. **Session Management** - Auto-refreshes session to prevent expiration
+5. **Error Handling** - Comprehensive exception handling
+6. **JSON-First Architecture** - 30+ fields extracted from pre-loaded JSON
+7. **Logging** - Professional logging for debugging
 
 </details>
 

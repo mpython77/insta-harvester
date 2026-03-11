@@ -47,25 +47,37 @@ class HashtagScraper(BaseScraper):
     def __init__(self, config: Optional[ScraperConfig] = None):
         super().__init__(config)
 
-    def scrape(self, hashtag: str, max_posts: int = 50) -> HashtagResult:
+    def scrape(
+        self,
+        hashtag: str,
+        target_count: Optional[int] = 50,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
+    ) -> HashtagResult:
         """
         Scrape posts from a hashtag page.
 
         Args:
             hashtag: Hashtag name (without #)
-            max_posts: Maximum number of posts to collect
+            target_count: Maximum number of posts to collect (None = all)
+            date_from: Filter start date 'YYYY-MM-DD' (inclusive)
+            date_to: Filter end date 'YYYY-MM-DD' (inclusive)
 
         Returns:
             HashtagResult with post data
         """
         hashtag = hashtag.strip().lstrip('#').lower()
-        self.logger.info(f"Scraping hashtag: #{hashtag} (max {max_posts} posts)")
+        limit_str = str(target_count) if target_count else "all"
+        self.logger.info(f"Scraping hashtag: #{hashtag} (target: {limit_str} posts)")
 
         result = HashtagResult(hashtag=hashtag)
 
         try:
-            session_data = self._load_session()
-            self.setup_browser(session_data)
+            # ═══════ AUTO BROWSER SETUP ═══════
+            is_shared_browser = self.page is not None and self.browser is not None
+            if not is_shared_browser:
+                session_data = self._load_session()
+                self.setup_browser(session_data)
 
             # Navigate to hashtag page
             url = f"{self.config.instagram_base_url.rstrip('/')}/explore/tags/{hashtag}/"
@@ -77,7 +89,12 @@ class HashtagScraper(BaseScraper):
             self.logger.info(f"#{hashtag}: {result.post_count} total posts")
 
             # Collect post links
-            posts = self._scroll_and_collect(max_posts)
+            posts = self._scroll_and_collect(target_count=target_count)
+            
+            # ═══ DATE RANGE FILTER ═══
+            if date_from or date_to:
+                posts = self._filter_by_date_range(posts, date_from, date_to, url_key='url')
+                
             result.posts = posts
 
             self.logger.info(f"Collected {len(posts)} posts for #{hashtag}")
@@ -86,7 +103,8 @@ class HashtagScraper(BaseScraper):
             self.logger.error(f"Hashtag scraping failed: {e}")
             raise
         finally:
-            self.close()
+            if not is_shared_browser:
+                self.close()
 
         return result
 
@@ -113,19 +131,24 @@ class HashtagScraper(BaseScraper):
             pass
         return 0
 
-    def _scroll_and_collect(self, max_posts: int) -> List[Dict[str, str]]:
+    def _scroll_and_collect(self, target_count: Optional[int]) -> List[Dict[str, str]]:
         """Scroll and collect post links from hashtag grid"""
         all_posts = []
         seen_urls = set()
         no_new_count = 0
 
-        while len(all_posts) < max_posts and no_new_count < 5:
+        while target_count is None or len(all_posts) < target_count:
+            if no_new_count >= 5:
+                break
+                
             # Extract current links
             current = self._extract_post_links()
             new_count = 0
 
             for post in current:
-                if post['url'] not in seen_urls and len(all_posts) < max_posts:
+                if target_count is not None and len(all_posts) >= target_count:
+                    break
+                if post['url'] not in seen_urls:
                     seen_urls.add(post['url'])
                     all_posts.append(post)
                     new_count += 1
@@ -134,6 +157,9 @@ class HashtagScraper(BaseScraper):
                 no_new_count += 1
             else:
                 no_new_count = 0
+
+            if target_count is not None and len(all_posts) >= target_count:
+                break
 
             self.logger.debug(
                 f"Collected: {len(all_posts)}/{max_posts} "

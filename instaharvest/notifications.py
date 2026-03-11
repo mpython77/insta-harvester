@@ -168,15 +168,16 @@ class NotificationReader:
         (r'ha iniziato a seguirti', 'follow'),                  # Italian
         (r'开始关注了你', 'follow'),                              # Chinese
         (r'sizni kuzatishni boshladi', 'follow'),               # Uzbek
-        (r'follow', 'follow'),                                  # Fallback: button-based
         
-        # --- FOLLOW REQUEST ---
+        # --- FOLLOW REQUEST (MUST be before generic 'follow' fallback!) ---
         (r'requested to follow', 'follow_request'),
         (r'запросил.*подписку', 'follow_request'),              # Russian
         
-        # --- FOLLOW ACCEPTED ---
+        # --- FOLLOW ACCEPTED (MUST be before generic 'follow' fallback!) ---
         (r'accepted your follow', 'follow_accepted'),
         (r'принял.*запрос на подписку', 'follow_accepted'),     # Russian
+        
+        (r'follow', 'follow'),                                  # Fallback: button-based (MUST be LAST in follow group)
         
         # --- COMMENT ---
         (r'прокомментировал', 'comment'),                       # Russian

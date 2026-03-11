@@ -61,7 +61,7 @@ def test_comment_scraping_basic():
         # Scrape with limit
         result = scraper.scrape(
             test_url,
-            max_comments=10,
+            target_count=10,
             include_replies=True
         )
 

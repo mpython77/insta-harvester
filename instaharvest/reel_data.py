@@ -1,32 +1,68 @@
 """
 Instagram Scraper - Reel data extractor
-Extract tags, likes, and timestamps from individual reels
+Extract tags, likes, timestamps, location, owner, caption from reels
 
 SEPARATE FILE - FOR REELS ONLY!
+JSON-First Architecture: Extracts 30+ fields from embedded JSON scripts.
 """
 
 import time
+import json
 import random
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
+from dataclasses import dataclass, field, asdict
 
 from .base import BaseScraper
 from .config import ScraperConfig
 from .exceptions import HTMLStructureChangedError
+from .post_data import PostLocation, PostOwner, CarouselSlide
 
 
 @dataclass
 class ReelData:
-    """Reel data structure"""
+    """Reel data structure with JSON-First enriched fields"""
+    # Core fields (backward compatible)
     url: str
-    tagged_accounts: List[str]
-    likes: Optional[int] # Changed to Optional[int]
-    timestamp: str
-    content_type: str = 'Reel'  # Always 'Reel'
+    tagged_accounts: List[str] = field(default_factory=list)
+    likes: Optional[int] = 0
+    timestamp: str = 'N/A'
+    content_type: str = 'Reel'
+    
+    # JSON-First enriched fields
+    caption: str = ''
+    comment_count: int = 0
+    like_count: int = 0
+    location: Optional[PostLocation] = None
+    owner: Optional[PostOwner] = None
+    taken_at: int = 0
+    taken_at_human: str = ''
+    shortcode: str = ''
+    pk: str = ''
+    media_type: int = 0
+    product_type: str = ''
+    width: int = 0
+    height: int = 0
+    accessibility_caption: str = ''
+    top_likers: List[str] = field(default_factory=list)
+    has_audio: bool = False
+    video_duration: float = 0.0
+    tag_positions: List[Dict] = field(default_factory=list)
+    has_liked: bool = False
+    json_extracted: bool = False
+    media_urls: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return asdict(self)
+    
+    @property
+    def has_tags(self) -> bool:
+        return len(self.tagged_accounts) > 0
+    
+    @property
+    def has_location(self) -> bool:
+        return self.location is not None
 
 
 class ReelDataScraper(BaseScraper):
@@ -56,6 +92,10 @@ class ReelDataScraper(BaseScraper):
     ) -> ReelData:
         """
         Scrape data from a single REEL
+        
+        JSON-First Architecture:
+        1. Try extracting all data from embedded JSON scripts (instant)
+        2. Fallback to DOM extraction if JSON not available
 
         Args:
             reel_url: URL of the reel (must contain /reel/)
@@ -64,11 +104,18 @@ class ReelDataScraper(BaseScraper):
             get_timestamp: Extract reel timestamp
 
         Returns:
-            ReelData object
+            ReelData object with 30+ enriched fields
         """
         # Validate it's a reel URL
         if '/reel/' not in reel_url:
             raise ValueError(f"Invalid reel URL: {reel_url} (must contain /reel/)")
+
+        # ═══════ AUTO BROWSER SETUP (standalone mode) ═══════
+        is_shared_browser = self.page is not None and self.browser is not None
+        if not is_shared_browser:
+            self.logger.debug("Setting up new browser session (standalone mode)")
+            session_data = self.load_session()
+            self.setup_browser(session_data)
 
         self.logger.info(f"🎬 Scraping REEL: {reel_url}")
 
@@ -78,7 +125,54 @@ class ReelDataScraper(BaseScraper):
         # CRITICAL: Wait for content to load
         time.sleep(self.config.reel_open_delay)
 
-        # Extract data
+        # ═══════ JSON-FIRST FULL EXTRACTION ═══════
+        json_data = self._extract_all_from_json()
+        
+        if json_data:
+            tagged_accounts = json_data.get('tagged_accounts', []) if get_tags else []
+            likes = json_data.get('likes', 0) if get_likes else 0
+            timestamp = json_data.get('timestamp', 'N/A') if get_timestamp else 'N/A'
+            
+            data = ReelData(
+                url=reel_url,
+                tagged_accounts=tagged_accounts or [],
+                likes=likes,
+                timestamp=timestamp,
+                content_type='Reel',
+                # JSON-First enriched fields
+                caption=json_data.get('caption', ''),
+                comment_count=json_data.get('comment_count', 0),
+                like_count=json_data.get('like_count', 0),
+                location=json_data.get('location'),
+                owner=json_data.get('owner'),
+                taken_at=json_data.get('taken_at', 0),
+                taken_at_human=json_data.get('taken_at_human', ''),
+                shortcode=json_data.get('shortcode', ''),
+                pk=json_data.get('pk', ''),
+                media_type=json_data.get('media_type', 0),
+                product_type=json_data.get('product_type', ''),
+                width=json_data.get('width', 0),
+                height=json_data.get('height', 0),
+                accessibility_caption=json_data.get('accessibility_caption', ''),
+                top_likers=json_data.get('top_likers', []),
+                has_audio=json_data.get('has_audio', False),
+                video_duration=json_data.get('video_duration', 0.0),
+                tag_positions=json_data.get('tag_positions', []),
+                has_liked=json_data.get('has_liked', False),
+                media_urls=json_data.get('media_urls', []),
+                json_extracted=True
+            )
+            
+            self.logger.info(
+                f"✅ JSON-FIRST [Reel]: {len(data.tagged_accounts)} tags, "
+                f"{data.likes} likes, {data.comment_count} comments, "
+                f"📍 {data.location.name if data.location else 'N/A'}"
+            )
+            return data
+        
+        # ═══════ DOM FALLBACK ═══════
+        self.logger.warning("⚠️ JSON extraction failed, using DOM fallback...")
+        
         tagged_accounts = self.get_tagged_accounts() if get_tags else []
         likes = self.get_likes_count() if get_likes else 0
         timestamp = self.get_timestamp() if get_timestamp else 'N/A'
@@ -92,7 +186,7 @@ class ReelDataScraper(BaseScraper):
         )
 
         self.logger.info(
-            f"✅ Extracted [Reel]: {len(data.tagged_accounts)} tags, "
+            f"✅ DOM-Extracted [Reel]: {len(data.tagged_accounts)} tags, "
             f"{data.likes} likes, {data.timestamp}"
         )
 
@@ -122,9 +216,13 @@ class ReelDataScraper(BaseScraper):
         """
         self.logger.info(f"🎬 Scraping {len(reel_urls)} reels...")
 
-        # Load session and setup browser
-        session_data = self.load_session()
-        self.setup_browser(session_data)
+        # SharedBrowser check — skip setup if browser already injected
+        is_shared_browser = self.page is not None and self.browser is not None
+        if not is_shared_browser:
+            session_data = self.load_session()
+            self.setup_browser(session_data)
+        else:
+            self.logger.debug("Using existing browser session (SharedBrowser mode)")
 
         results = []
         start_time = time.time()
@@ -200,9 +298,180 @@ class ReelDataScraper(BaseScraper):
             return results
 
         finally:
-            self.close()
+            if not is_shared_browser:
+                self.close()
+            else:
+                self.logger.debug("Keeping browser open (SharedBrowser mode)")
 
-    # ==================== REEL-SPECIFIC EXTRACTION METHODS ====================
+    # ==================== JSON-FIRST EXTRACTION ====================
+
+    def _extract_all_from_json(self) -> Optional[Dict[str, Any]]:
+        """JSON-FIRST: Extract ALL data from embedded JSON scripts."""
+        try:
+            scripts = self.page.locator('script[type="application/json"]').all()
+            self.logger.debug(f"Reel JSON: checking {len(scripts)} scripts")
+            
+            for script in scripts:
+                try:
+                    content = script.inner_text(timeout=1000)
+                    if len(content) < 500:
+                        continue
+                    
+                    data = json.loads(content)
+                    item = self._find_media_item(data, depth=0)
+                    
+                    if item:
+                        result = self._parse_media_item(item)
+                        if result:
+                            self.logger.info(
+                                f"✅ Reel JSON-FIRST: "
+                                f"{result.get('like_count', 0)} likes, "
+                                f"{len(result.get('tagged_accounts', []))} tags"
+                            )
+                            return result
+                except Exception:
+                    continue
+        except Exception as e:
+            self.logger.debug(f"Reel JSON extraction error: {e}")
+        return None
+
+    def _find_media_item(self, obj, depth: int = 0) -> Optional[dict]:
+        """Find media item: Post items[] or Reel edges[].node.media"""
+        if depth > 20 or not obj:
+            return None
+        if isinstance(obj, dict):
+            if 'items' in obj and isinstance(obj['items'], list):
+                for item in obj['items']:
+                    if isinstance(item, dict) and ('pk' in item or 'media_type' in item):
+                        return item
+            if 'edges' in obj and isinstance(obj['edges'], list):
+                for edge in obj['edges']:
+                    if isinstance(edge, dict) and 'node' in edge:
+                        node = edge['node']
+                        if isinstance(node, dict):
+                            media = node.get('media')
+                            if isinstance(media, dict) and ('pk' in media or 'media_type' in media):
+                                return media
+                            if 'pk' in node or 'media_type' in node:
+                                return node
+            for value in obj.values():
+                if isinstance(value, (dict, list)):
+                    r = self._find_media_item(value, depth + 1)
+                    if r: return r
+        elif isinstance(obj, list):
+            for item in obj:
+                if isinstance(item, (dict, list)):
+                    r = self._find_media_item(item, depth + 1)
+                    if r: return r
+        return None
+
+    def _parse_media_item(self, item: dict) -> Optional[Dict[str, Any]]:
+        """Parse media item dict into comprehensive result."""
+        if not isinstance(item, dict):
+            return None
+        
+        result = {}
+        
+        # Basic
+        result['pk'] = str(item.get('pk', ''))
+        result['shortcode'] = item.get('code', '')
+        result['media_type'] = item.get('media_type', 0)
+        result['product_type'] = item.get('product_type', '')
+        
+        # Timestamp
+        taken_at = item.get('taken_at', 0)
+        result['taken_at'] = taken_at
+        if taken_at:
+            try:
+                dt = datetime.fromtimestamp(taken_at, tz=timezone.utc)
+                result['taken_at_human'] = dt.strftime('%Y-%m-%d %H:%M:%S UTC')
+                result['timestamp'] = dt.strftime('%b %d, %Y')
+            except Exception:
+                result['taken_at_human'] = ''
+                result['timestamp'] = 'N/A'
+        
+        # Engagement
+        result['like_count'] = item.get('like_count', 0)
+        result['likes'] = result['like_count']
+        result['comment_count'] = item.get('comment_count', 0)
+        result['has_liked'] = item.get('has_liked', False)
+        result['top_likers'] = item.get('top_likers', []) or []
+        
+        # Caption
+        cap = item.get('caption')
+        result['caption'] = cap.get('text', '') if isinstance(cap, dict) else ''
+        
+        # Location
+        loc = item.get('location')
+        if isinstance(loc, dict) and loc.get('name'):
+            result['location'] = PostLocation(
+                name=loc.get('name', ''),
+                pk=str(loc.get('pk', '')),
+                latitude=loc.get('lat', loc.get('latitude', 0.0)),
+                longitude=loc.get('lng', loc.get('longitude', 0.0)),
+                address=loc.get('address', ''),
+                city=loc.get('city', '')
+            )
+        else:
+            result['location'] = None
+        
+        # Owner
+        user = item.get('user') or item.get('owner')
+        if isinstance(user, dict):
+            result['owner'] = PostOwner(
+                username=user.get('username', ''),
+                full_name=user.get('full_name', ''),
+                pk=str(user.get('pk', '')),
+                is_verified=user.get('is_verified', False),
+                profile_pic_url=user.get('profile_pic_url', '')
+            )
+        else:
+            result['owner'] = None
+        
+        # Dimensions
+        orig = item.get('original_width', 0)
+        result['width'] = orig if orig else 0
+        result['height'] = item.get('original_height', 0)
+        result['accessibility_caption'] = item.get('accessibility_caption', '')
+        
+        # Video
+        result['has_audio'] = item.get('has_audio', False)
+        result['video_duration'] = item.get('video_duration', 0.0)
+        result['is_video'] = True
+        
+        # Tags
+        tagged_accounts = []
+        tag_positions = []
+        usertags = item.get('usertags')
+        if isinstance(usertags, dict) and 'in' in usertags:
+            for entry in usertags['in']:
+                if isinstance(entry, dict) and 'user' in entry:
+                    u = entry['user']
+                    if isinstance(u, dict) and 'username' in u:
+                        uname = u['username']
+                        if uname not in tagged_accounts:
+                            tagged_accounts.append(uname)
+                        pos = entry.get('position', [0, 0])
+                        tag_positions.append({
+                            'username': uname,
+                            'x': pos[0] if isinstance(pos, list) and len(pos) > 0 else 0,
+                            'y': pos[1] if isinstance(pos, list) and len(pos) > 1 else 0
+                        })
+        
+        result['tagged_accounts'] = tagged_accounts
+        result['tag_positions'] = tag_positions
+        
+        # Media URLs
+        media_urls = []
+        video_versions = item.get('video_versions', [])
+        if isinstance(video_versions, list) and video_versions:
+            best = max(video_versions, key=lambda v: v.get('width', 0) * v.get('height', 0))
+            media_urls.append(best.get('url', ''))
+        result['media_urls'] = media_urls
+        
+        return result
+
+    # ==================== REEL-SPECIFIC DOM EXTRACTION METHODS ====================
 
     def get_likes_count(self) -> int:
         """
