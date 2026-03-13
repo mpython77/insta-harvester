@@ -152,13 +152,18 @@ class StoryScraper(BaseScraper):
 
             base_url = self.config.instagram_base_url.rstrip('/')
 
-            # Activate session on Instagram homepage
-            self.logger.info("Activating session on Instagram...")
-            self.goto_url(base_url + '/')
+            # SharedBrowser + challenge_delay=0: bosh sahifaga borish SHART EMAS
+            # Session allaqachon faol — to'g'ridan-to'g'ri story'ga o'tamiz
+            if is_shared_browser and challenge_delay == 0:
+                self.logger.debug("⚡ SharedBrowser: homepage skip — to'g'ridan-to'g'ri story'ga")
+            else:
+                # Activate session on Instagram homepage (birinchi marta kerak)
+                self.logger.info("Activating session on Instagram...")
+                self.goto_url(base_url + '/')
 
-            if challenge_delay > 0:
-                self.logger.info(f"⏳ {challenge_delay}s kutilmoqda (challenge uchun)...")
-                time.sleep(challenge_delay)
+                if challenge_delay > 0:
+                    self.logger.info(f"⏳ {challenge_delay}s kutilmoqda (challenge uchun)...")
+                    time.sleep(challenge_delay)
 
             # ── Phase 2: Navigate to Stories ──
             self._setup_story_interceptor()
@@ -204,10 +209,17 @@ class StoryScraper(BaseScraper):
                 # FALLBACK: DOM extraction (current visible slide only)
                 dom_tags, caption = self._extract_tags_from_dom()
                 if dom_tags:
-                    new_tags = dom_tags - all_tags
+                    # Validatsiya: faqat haqiqiy username'larni qo'shish
+                    validated_dom_tags = {t for t in dom_tags if self._is_valid_instagram_username(t)}
+                    new_tags = validated_dom_tags - all_tags
                     if new_tags:
                         self.logger.info(f"🔍 DOM'dan {len(new_tags)} ta qo'shimcha tag: {sorted(new_tags)}")
-                    all_tags.update(dom_tags)
+                    if dom_tags - validated_dom_tags:
+                        self.logger.debug(
+                            f"🚫 DOM filtrlangan (noto'g'ri username): "
+                            f"{sorted(dom_tags - validated_dom_tags)}"
+                        )
+                    all_tags.update(validated_dom_tags)
 
             # ── Phase 5: Extract Media ──
             items = self._extract_from_intercepted()
@@ -437,6 +449,68 @@ class StoryScraper(BaseScraper):
             for item in data:
                 if isinstance(item, (dict, list)):
                     self._find_mentions_recursive(item, tags, depth + 1)
+    # ═══════════════════════════════════════════════════════════════
+    # USERNAME VALIDATION
+    # ═══════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _is_valid_instagram_username(username: str) -> bool:
+        """
+        Instagram username validatsiyasi — noto'g'ri tag'larni filtrlash.
+
+        Instagram qoidalari:
+            - 1-30 belgi
+            - Faqat harf, raqam, nuqta (.), pastki chiziq (_)
+            - Nuqta bilan boshlanib/tugamasligi kerak
+            - Ketma-ket nuqtalar yo'q
+
+        Qo'shimcha evristik filtrlash:
+            - 20+ belgili username'da separator (_, .) bo'lmasa → soxta
+              (masalan: dolcegabbanashowroomtoday)
+            - Kichik harfda common so'zlar birikmasi → soxta
+        """
+        if not username or not isinstance(username, str):
+            return False
+
+        u = username.strip().lower()
+
+        # Uzunlik tekshirish
+        if len(u) < 1 or len(u) > 30:
+            return False
+
+        # Faqat ruxsat etilgan belgilar
+        if not re.match(r'^[a-zA-Z0-9_.]+$', u):
+            return False
+
+        # Nuqta bilan boshlanish/tugash
+        if u.startswith('.') or u.endswith('.'):
+            return False
+
+        # Ketma-ket nuqtalar
+        if '..' in u:
+            return False
+
+        # ── Evristik: uzun username separator'siz = soxta ──
+        # Haqiqiy uzun username'lar: dolce_gabbana_official, my.fashion.page
+        # Soxta: dolcegabbanashowroomtoday (img alt mashup)
+        if len(u) > 18 and '_' not in u and '.' not in u:
+            return False
+
+        # ── Evristik: umumiy so'zlar birikmasi ──
+        # "showroom", "today", "official" kabi so'zlar username'da
+        # bo'lishi mumkin, lekin ularsiz ham uzun bo'lsa soxta
+        false_suffixes = [
+            'showroom', 'today', 'tomorrow', 'yesterday',
+            'thankyou', 'giveaway', 'collab', 'lookbook',
+        ]
+        for suffix in false_suffixes:
+            # username oddiy so'z + suffix bo'lsa va separator yo'q
+            if u.endswith(suffix) and len(u) > len(suffix) + 5:
+                base = u[:-len(suffix)]
+                if '_' not in base and '.' not in base and len(base) > 10:
+                    return False
+
+        return True
 
     def _find_story_items_with_tags(
         self, data: Any, slides: List[StorySlideInfo], depth: int = 0

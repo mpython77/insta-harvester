@@ -139,7 +139,7 @@ class SharedBrowser:
 
         # Prepare launch options
         launch_options = {'headless': headless}
-        if self.config.browser_channel and self.config.browser_channel != 'chromium':
+        if self.config.browser_channel:
             launch_options['channel'] = self.config.browser_channel
 
         # Launch browser with retry logic for headless mode
@@ -149,16 +149,10 @@ class SharedBrowser:
             error_msg = str(launch_error)
             
             # RETRY LOGIC: If "Old Headless" error, try launching in NEW HEADLESS mode
-            if "Old Headless mode" in error_msg or "Old Headless" in error_msg:
+            if headless and ("Old Headless mode" in error_msg or "Old Headless" in error_msg):
                 self.logger.warning("System Chrome rejected 'Old Headless' mode. Retrying with 'new' Headless...")
                 launch_options['headless'] = 'new'
-                try:
-                    self.browser = self.playwright.chromium.launch(**launch_options)
-                except Exception as retry_error:
-                    # If New Headless also fails, try HEADFUL as last resort
-                    self.logger.warning("New Headless also failed. Retrying in HEADFUL mode...")
-                    launch_options['headless'] = False
-                    self.browser = self.playwright.chromium.launch(**launch_options)
+                self.browser = self.playwright.chromium.launch(**launch_options)
             else:
                 raise launch_error
         
@@ -275,7 +269,7 @@ class SharedBrowser:
         self.logger.info("✅ Browser closed")
 
     def _update_session(self) -> None:
-        """Update and save session"""
+        """Update and save session (localStorage tozalash bilan)."""
         try:
             import json
             import inspect
@@ -289,10 +283,8 @@ class SharedBrowser:
                 try:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
-                        # Can't await in sync context with running loop
-                        # Fall back to reading existing session file
                         self.logger.debug("⚠ storage_state returned coroutine, skipping update")
-                        result.close()  # Prevent "was never awaited" warning
+                        result.close()
                         return
                     else:
                         result = loop.run_until_complete(result)
@@ -301,6 +293,25 @@ class SharedBrowser:
                     return
             
             storage_state = result
+
+            # ── localStorage tozalash — keraksiz entry'larni olib tashlash ──
+            # falco_queue_log, ods_web_batch kabi entry'lar har visit da
+            # to'planadi va session faylni haddan tashqari kattalashtiradi
+            origins = storage_state.get('origins', [])
+            for origin in origins:
+                ls = origin.get('localStorage', [])
+                original_count = len(ls)
+                # Faqat muhim entry'larni saqlash
+                cleaned = [
+                    entry for entry in ls
+                    if not entry.get('name', '').startswith('falco_queue_log')
+                ]
+                if len(cleaned) < original_count:
+                    origin['localStorage'] = cleaned
+                    removed = original_count - len(cleaned)
+                    self.logger.debug(
+                        f"🧹 Session cleanup: {removed} ta falco_queue_log o'chirildi"
+                    )
 
             with open(self.session_file, 'w', encoding='utf-8') as f:
                 json.dump(storage_state, f, indent=2)

@@ -164,6 +164,7 @@ class FeedPost:
     usertags: List[str] = field(default_factory=list)
     carousel_media: List[Dict[str, Any]] = field(default_factory=list)
     is_paid_partnership: bool = False
+    is_pinned: bool = False
     owner_username: str = ''
     owner_id: str = ''
     def to_dict(self) -> Dict[str, Any]: return asdict(self)
@@ -261,6 +262,9 @@ class StoryMediaItem:
     has_audio: bool = False
     owner_username: str = ''
     owner_id: str = ''
+    # Story tag/mention ma'lumotlari
+    reel_mentions: List[str] = field(default_factory=list)  # @mention qilingan userlar
+    story_hashtags: List[str] = field(default_factory=list)  # #hashtag lar
     def to_dict(self) -> Dict[str, Any]: return asdict(self)
 
 
@@ -853,6 +857,7 @@ class InstagramWebAPI:
             timestamp=item.get('taken_at', 0), image_url=image_url, video_url=video_url,
             is_video=bool(item.get('video_versions')), location=location, usertags=usertags,
             carousel_media=carousel, is_paid_partnership=bool(item.get('is_paid_partnership')),
+            is_pinned=bool(item.get('timeline_pinned_user_ids') or item.get('is_pinned', False)),
             owner_username=owner.get('username', ''), owner_id=str(owner.get('pk', ''))
         )
 
@@ -910,13 +915,41 @@ class InstagramWebAPI:
         for item in items:
             images = item.get('image_versions2', {}).get('candidates', [])
             videos = item.get('video_versions', [])
+
+            # Story mention/tag extraction
+            reel_mentions = []
+            # reel_mentions field — tag qilingan userlar
+            for rm in item.get('reel_mentions', []):
+                u = rm.get('user', {})
+                username = u.get('username', '')
+                if username:
+                    reel_mentions.append(username)
+            # story_bloks_stickers ichida ham mention bo'lishi mumkin
+            for sticker in item.get('story_bloks_stickers', []):
+                sticker_data = sticker.get('bloks_sticker', {}).get('sticker_data', {})
+                # mention sticker — username TO'G'RIDAN-TO'G'RI ig_mention ichida
+                ig_mention = sticker_data.get('ig_mention', {})
+                mention_user = ig_mention.get('username', '')
+                if mention_user and mention_user not in reel_mentions:
+                    reel_mentions.append(mention_user)
+
+            # story_hashtags field
+            story_hashtags = []
+            for sh in item.get('story_hashtags', []):
+                ht = sh.get('hashtag', {})
+                name = ht.get('name', '')
+                if name:
+                    story_hashtags.append(name)
+
             stories.append(StoryMediaItem(
                 story_id=str(item.get('pk', '')), media_type=item.get('media_type', 1),
                 image_url=images[0].get('url', '') if images else '',
                 video_url=videos[0].get('url') if videos else None,
                 timestamp=item.get('taken_at', 0), expiring_at=item.get('expiring_at', 0),
                 has_audio=bool(item.get('has_audio')),
-                owner_username=user.get('username', ''), owner_id=str(user.get('pk', ''))
+                owner_username=user.get('username', ''), owner_id=str(user.get('pk', '')),
+                reel_mentions=reel_mentions,
+                story_hashtags=story_hashtags,
             ))
         return stories
 

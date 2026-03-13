@@ -244,7 +244,7 @@ from .web_api import (
 from .exceptions import WebAPIError
 
 
-__version__ = '2.14.8'
+__version__ = '2.15.1'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
