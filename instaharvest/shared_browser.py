@@ -139,8 +139,14 @@ class SharedBrowser:
 
         # Prepare launch options
         launch_options = {'headless': headless}
-        if self.config.browser_channel:
+        if self.config.executable_path:
+            # Custom binary (e.g. Termux/proot: /usr/lib/chromium/chromium)
+            launch_options['executable_path'] = self.config.executable_path
+            # executable_path va channel birga ishlatib bo'lmaydi
+        elif self.config.browser_channel:
             launch_options['channel'] = self.config.browser_channel
+        if self.config.browser_args:
+            launch_options['args'] = self.config.browser_args
 
         # Launch browser with retry logic for headless mode
         try:

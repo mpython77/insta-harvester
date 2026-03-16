@@ -904,7 +904,7 @@ class TestVersionInfo:
     
     def test_version_updated(self):
         import instaharvest
-        assert instaharvest.__version__ == '2.14.0'
+        assert instaharvest.__version__ == '2.15.1'
 
 
 # ═══════════════════════════════════════════════════════════

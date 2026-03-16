@@ -176,7 +176,7 @@ Quick Start:
         print(f"  {r.highlight_title}: {r.slide_count} slides")
 
 Author: Muydinov Doston
-Version: 2.2.2
+Version: 2.16.0
 License: MIT
 """
 
@@ -244,7 +244,7 @@ from .web_api import (
 from .exceptions import WebAPIError
 
 
-__version__ = '2.15.1'
+__version__ = '2.16.0'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'

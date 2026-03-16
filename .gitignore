@@ -62,3 +62,13 @@ tests/real_test_output.log
 # Temp scrape output
 scraped_*/
 followers_snapshot.json
+
+# Coverage
+.coverage
+coverage_*.txt
+htmlcov/
+
+# Temp test output
+test_phase*.txt
+tagged_*.json
+scrape_*.py

@@ -171,7 +171,7 @@ class StoryScraper(BaseScraper):
             stories_url = f'{base_url}/stories/{username}/'
             self.logger.info(f"Navigating to stories: {stories_url}")
             self.goto_url(stories_url)
-            time.sleep(self.config.page_stability_delay + 1.0)
+            time.sleep(1.5)  # Sahifa barqarorligi (3s→1.5s optimizatsiya)
 
             # Check redirect (no stories = redirect away)
             if '/stories/' not in self.page.url:
@@ -182,10 +182,10 @@ class StoryScraper(BaseScraper):
 
             # ── Phase 3: View Story & Pause ──
             self._handle_view_story_dialog()
-            time.sleep(self.config.story_view_delay)
+            time.sleep(0.5)  # View dialog (2s→0.5s optimizatsiya)
 
             self._pause_story()
-            time.sleep(self.config.story_pause_delay)
+            time.sleep(0.5)  # Pause (1.5s→0.5s optimizatsiya)
 
             # ── Phase 4: Extract Tags (JSON-First Architecture) ──
             all_tags: Set[str] = set()
