@@ -1,0 +1,115 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /app
+plugins: asyncio-1.3.0, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1803 items
+
+tests/test_actions_full.py ............................................. [  2%]
+.......................                                                  [  3%]
+tests/test_base_and_integration.py ....................                  [  4%]
+tests/test_base_scraper_full.py ........................................ [  7%]
+..............                                                           [  7%]
+tests/test_config.py ........................                            [  9%]
+tests/test_core_full.py .............                                    [  9%]
+tests/test_data_export.py ...................                            [ 10%]
+tests/test_data_models.py .............................................. [ 13%]
+......                                                                   [ 13%]
+tests/test_deep_coverage.py ............................................ [ 16%]
+.................................................................        [ 19%]
+tests/test_deep_coverage10.py .......................................    [ 22%]
+tests/test_deep_coverage11.py .......................................... [ 24%]
+...................                                                      [ 25%]
+tests/test_deep_coverage12.py .................................          [ 27%]
+tests/test_deep_coverage13.py ................................           [ 29%]
+tests/test_deep_coverage14.py ......................                     [ 30%]
+tests/test_deep_coverage15.py ................................           [ 32%]
+tests/test_deep_coverage16.py ....................                       [ 33%]
+tests/test_deep_coverage2.py ........................................... [ 35%]
+.....................................................                    [ 38%]
+tests/test_deep_coverage3.py ........................................... [ 40%]
+..........................................................               [ 44%]
+tests/test_deep_coverage4.py ........................................... [ 46%]
+.......................                                                  [ 47%]
+tests/test_deep_coverage5.py ........................................... [ 50%]
+...................                                                      [ 51%]
+tests/test_deep_coverage6.py ........................................... [ 53%]
+............................................                             [ 56%]
+tests/test_deep_coverage7.py ........................................... [ 58%]
+..................                                                       [ 59%]
+tests/test_deep_coverage8.py ........................................... [ 61%]
+.                                                                        [ 61%]
+tests/test_deep_coverage9.py ..........................................  [ 64%]
+tests/test_downloaders_full.py ........                                  [ 64%]
+tests/test_extra_modules.py ............................................ [ 67%]
+........................................ssss                             [ 69%]
+tests/test_high_impact.py .............................................. [ 72%]
+........................................................................ [ 76%]
+.........                                                                [ 76%]
+tests/test_infra_full.py ............................................... [ 79%]
+........................................                                 [ 81%]
+tests/test_network_client_full.py ............                           [ 82%]
+tests/test_notifications.py .....................................        [ 84%]
+tests/test_remaining_modules.py ........................................ [ 86%]
+....................                                                     [ 87%]
+tests/test_scrapers_and_utils.py ...................................     [ 89%]
+tests/test_scrapers_full.py ...............                              [ 90%]
+tests/test_security_logging_errors.py .................................. [ 92%]
+......................                                                   [ 93%]
+tests/test_tagged_and_highlights.py .................................... [ 95%]
+.....................................F.....                              [ 97%]
+tests/test_web_api.py ..........................................         [100%]
+
+=================================== FAILURES ===================================
+_____________________ TestVersionInfo.test_version_updated _____________________
+
+self = <test_tagged_and_highlights.TestVersionInfo object at 0x7fef7f8da990>
+
+    def test_version_updated(self):
+        import instaharvest
+>       assert instaharvest.__version__ == '2.15.1'
+E       AssertionError: assert '2.16.0' == '2.15.1'
+E
+E         - 2.15.1
+E         + 2.16.0
+
+tests/test_tagged_and_highlights.py:907: AssertionError
+=============================== warnings summary ===============================
+instaharvest/exporters.py:18
+  /app/instaharvest/exporters.py:18: DeprecationWarning:
+  Pyarrow will become a required dependency of pandas in the next major release of pandas (pandas 3.0),
+  (to allow more performant data types, such as the Arrow string type, and better interoperability with other libraries)
+  but was not found to be installed on your system.
+  If this would cause problems for you,
+  please provide us feedback at https://github.com/pandas-dev/pandas/issues/54466
+
+    import pandas as pd
+
+tests/test_base_scraper_full.py::TestSetupBrowser::test_setup_basic
+tests/test_base_scraper_full.py::TestSetupBrowser::test_setup_with_session
+tests/test_base_scraper_full.py::TestSetupBrowser::test_setup_old_headless_retry
+tests/test_base_scraper_full.py::TestSetupBrowser::test_setup_with_proxy
+tests/test_infra_full.py::TestStealthManager::test_apply_page_stealth
+  /home/jules/.pyenv/versions/3.12.13/lib/python3.12/site-packages/playwright_stealth/stealth.py:216: UserWarning: Stealth has already been applied to this page or context. Skipping duplicate application.
+    warnings.warn(
+
+tests/test_deep_coverage10.py: 4 warnings
+tests/test_deep_coverage3.py: 1 warning
+tests/test_deep_coverage4.py: 1 warning
+tests/test_deep_coverage6.py: 1 warning
+tests/test_high_impact.py: 13 warnings
+  /home/jules/.pyenv/versions/3.12.13/lib/python3.12/site-packages/openpyxl/packaging/core.py:99: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = datetime.datetime.utcnow()
+
+tests/test_deep_coverage10.py: 3 warnings
+tests/test_deep_coverage3.py: 1 warning
+tests/test_deep_coverage4.py: 1 warning
+tests/test_deep_coverage6.py: 1 warning
+tests/test_high_impact.py: 10 warnings
+  /home/jules/.pyenv/versions/3.12.13/lib/python3.12/site-packages/openpyxl/writer/excel.py:292: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    workbook.properties.modified = datetime.datetime.utcnow()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_tagged_and_highlights.py::TestVersionInfo::test_version_updated
+====== 1 failed, 1798 passed, 4 skipped, 42 warnings in 143.10s (0:02:23) ======
