@@ -6,9 +6,12 @@ Intelligent logging with context, emojis, and performance tracking.
 import logging
 import time
 import sys
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, TYPE_CHECKING
 from contextlib import contextmanager
 from functools import wraps
+
+if TYPE_CHECKING:
+    from .config import ScraperConfig
 
 
 class SmartLogger:

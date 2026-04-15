@@ -14,10 +14,13 @@ Features:
 import random
 import time
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 from enum import Enum
+
+if TYPE_CHECKING:
+    from .config import ScraperConfig
 
 
 class RotationStrategy(Enum):

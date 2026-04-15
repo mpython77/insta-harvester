@@ -162,12 +162,12 @@ class HashtagScraper(BaseScraper):
                 break
 
             self.logger.debug(
-                f"Collected: {len(all_posts)}/{max_posts} "
+                f"Collected: {len(all_posts)}/{target_count} "
                 f"(+{new_count} new, stale={no_new_count})"
             )
 
             # Scroll down
-            if len(all_posts) < max_posts:
+            if target_count is None or len(all_posts) < target_count:
                 self.page.evaluate(
                     'window.scrollBy(0, window.innerHeight * 0.8)'
                 )

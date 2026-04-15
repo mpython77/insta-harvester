@@ -25,6 +25,8 @@ from .hashtag_scraper import HashtagScraper
 from .location_scraper import LocationScraper
 from .explore_scraper import ExploreScraper
 from .notifications import NotificationReader
+from .tagged_posts import TaggedPostsScraper, TaggedPostsResult
+from .highlight_scraper import HighlightsScraper, HighlightResult, HighlightsListResult
 from .web_api import (
     InstagramWebAPI, WebProfileData, WebSearchResult, SearchUserResult,
     FollowUserItem, FollowListResult, FriendshipStatus,
