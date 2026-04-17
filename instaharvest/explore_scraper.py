@@ -189,11 +189,11 @@ class ExploreScraper(BaseScraper):
                 no_new_count = 0
 
             self.logger.debug(
-                f"Explore: {len(all_posts)}/{max_posts} "
+                f"Explore: {len(all_posts)}/{target_count} "
                 f"(+{new_count} new)"
             )
 
-            if len(all_posts) < max_posts:
+            if target_count is None or len(all_posts) < target_count:
                 self.page.evaluate(
                     'window.scrollBy(0, window.innerHeight * 0.8)'
                 )

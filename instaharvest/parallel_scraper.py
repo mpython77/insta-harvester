@@ -27,7 +27,6 @@ _shutdown_event = None  # Will be set per-worker from args
 
 def _worker_signal_handler(signum, frame):
     """Signal handler for worker processes — sets shared Event"""
-    global _shutdown_event
     if _shutdown_event is not None:
         _shutdown_event.set()
 

@@ -1063,7 +1063,7 @@ class HighlightsScraper(BaseScraper):
             try:
                 h_result = self.scrape(
                     info.highlight_id,
-                    max_slides=max_slides_per,
+                    max_slides=target_count_slides,
                     challenge_delay=3  # Less delay for subsequent highlights
                 )
 

@@ -310,7 +310,7 @@ class FollowersCollector(BaseScraper):
 
         try:
             # Execute JS to get usernames using multiple strategies
-            raw_usernames = self.page.evaluate('''() => {
+            raw_usernames = self.page.evaluate(r'''() => {
                 const usernames = [];
                 const seen = new Set();
                 

@@ -992,27 +992,12 @@ class InstagramOrchestrator:
         finally:
             scraper.close()
 
-        # Finalize exporter
-        if comments_exporter:
-            comments_exporter.finalize()
-
-        # Build results
-        results = {
-            'username': username,
-            'total_posts': len(post_urls),
-            'total_comments': sum(c.total_comments_scraped for c in comments_data),
-            'total_replies': sum(c.total_replies_scraped for c in comments_data),
-            'comments_data': [c.to_dict() for c in comments_data]
-        }
-
         self.logger.info(f"\n{'='*60}")
-        self.logger.info("COMMENT SCRAPING COMPLETE!")
-        self.logger.info(f"Posts processed: {len(post_urls)}")
-        self.logger.info(f"Total comments: {results['total_comments']}")
-        self.logger.info(f"Total replies: {results['total_replies']}")
+        self.logger.info("REELS INTERACTION COMPLETE!")
+        self.logger.info(f"Reels watched: {reels_cnt}")
         self.logger.info(f"{'='*60}\n")
 
-        return results
+        return {"reels_watched": reels_cnt}
 
     def _export_results(self, results: Dict[str, Any]) -> None:
         """Export results to JSON file"""
