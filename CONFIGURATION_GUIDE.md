@@ -67,6 +67,8 @@ config = ScraperConfig(
 )
 ```
 
+> **Important:** Always set `headless` (and all browser options) through `ScraperConfig`, then pass `config` to `SharedBrowser(config=config)`. Do **not** pass `headless` directly to `SharedBrowser` — it has no such constructor parameter.
+
 **When to change:**
 - Set `headless=False` when debugging to see what the browser is doing
 - Keep `headless=True` in production for better performance
@@ -327,17 +329,14 @@ config = ScraperConfig(
         'млн.': 1_000_000, # Russian
     },
     
-    # Separators (can be customized for locale)
-    number_separators={
-        'thousand': ',',
-        'decimal': '.'
-    }
+    # Separators (list of characters to strip when parsing numbers, e.g. ',' '.' ' ')
+    number_separators=[',', '.', ' ']
 )
 ```
 
 **When to change:**
-- **Different Language:** Add suffixes for your Instagram language (e.g. 'mil' for Spanish)
-- **Different Locale:** Adjust separators (e.g. '.' for thousand in some regions)
+- **Different Language:** Add suffixes for your Instagram language (e.g. `'mil': 1000` for Spanish)
+- **Different Locale:** Adjust separators (e.g. add `'.'` as a thousands separator if your locale uses it)
 
 ---
 
@@ -359,6 +358,53 @@ config = ScraperConfig(
 **When to change:**
 - **Instagram updates UI:** Update selectors if private indicators change
 - **Data format preference:** Set `return_empty_list_for_no_tags=False` if you prefer ["No tags"] text
+
+---
+
+### 13. GraphQL Interceptor & Parallel Scraping
+
+#### GraphQL Interceptor
+
+`GraphQLInterceptor` (`instaharvest/graphql_interceptor.py`) automatically captures Instagram's internal GraphQL feed responses while the profile grid is being scrolled. The captured data (likes, captions, timestamps, locations, etc.) is stored in a cache keyed by post shortcode.
+
+`SharedBrowser.scrape_post(url)` and `SharedBrowser.scrape_posts_parallel(urls)` both check this cache first. A cache hit means the post page is never opened — saving 10–20x per post.
+
+**You do not need to configure the interceptor directly.** It is activated automatically when you call `browser.scrape_post_links(...)` or `browser.post_links_scraper.scrape(...)`.
+
+#### Parallel Scraping
+
+`SharedBrowser.scrape_posts_parallel(urls, max_workers=3)` scrapes multiple posts simultaneously:
+
+```python
+with SharedBrowser(config=config) as browser:
+    links = browser.scrape_post_links('username', target_count=50)
+    urls = [l['url'] for l in links]
+
+    # Cache hits resolved instantly; misses opened in up to 3 parallel tabs
+    posts = browser.scrape_posts_parallel(urls, max_workers=3)
+```
+
+- `max_workers` controls the number of simultaneous browser tabs for cache misses.
+- Result list preserves the same order as the input `urls`.
+- Failed URLs are silently skipped (logged at WARNING level).
+
+#### Smart Scroll (`date_from`)
+
+`PostLinksScraper.scrape` supports `date_from` (and `date_to`) parameters to restrict which posts are collected:
+
+```python
+links = browser.post_links_scraper.scrape(
+    username='username',
+    target_count=100,
+    date_from='2025-01-01',  # YYYY-MM-DD — scroll stops when all cached posts are older
+    date_to='2025-06-01',    # optional upper bound
+    save_to_file=False,
+)
+```
+
+When `date_from` is set, the interceptor checks the cached posts after each scroll. If all posts on the current page are older than `date_from`, scrolling stops immediately — no wasted page loads.
+
+**Important:** `date_from` requires the GraphQL interceptor to be active (it is by default when using `PostLinksScraper`).
 
 ---
 

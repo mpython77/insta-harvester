@@ -1,12 +1,47 @@
-# Session and data files
+# Session and auth data
 instagram_session.json
+cookies.json
+session_*.json
+.session/
+
+# Scraped output files
 post_links.txt
 reel_links.txt
 reel_links_*.txt
+followers_*.txt
+following_*.txt
 *.xlsx
-*.json
 *.log
-instagram_session.json
+
+# Output JSON (scrape results — keep library's own JSON like package.json)
+*_2[0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_*.json
+scraped_output*.json
+followers_snapshot.json
+comments_out*.json
+tagged_*.json
+
+# Playwright / browser artifacts
+playwright-report/
+test-results/
+.playwright/
+
+# Temp & debug files
+debug_snapshot_*.html
+full_comment_html_code.html
+debug_snapshots/
+comments_dom*.html
+*_debug_output.*
+*.tmp
+
+# graphify pipeline artifacts
+.graphify_*.json
+.graphify_*.txt
+.graphify_python
+graphify-out/
+
+# locate.py / example output
+locate.py
+test.py
 
 # Environment
 .env
@@ -67,8 +102,22 @@ followers_snapshot.json
 .coverage
 coverage_*.txt
 htmlcov/
+.pytest_cache/
 
 # Temp test output
 test_phase*.txt
-tagged_*.json
 scrape_*.py
+tests/debug_*.py
+tests/fail_output.txt
+tests/real_test_output.log
+
+# Secrets / credentials
+.env
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb

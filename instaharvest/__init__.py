@@ -238,7 +238,7 @@ from .web_api import (
     FollowUserItem, FollowListResult, FriendshipStatus,
     FeedPost, UserFeedResult, MediaInfo, CommentItem, CommentsResult,
     LikerItem, LikersResult, StoryMediaItem, StoriesTrayResult,
-    HighlightInfo, HighlightsResult, ReelItem, ReelsResult,
+    HighlightInfo as WebHighlightInfo, HighlightsResult, ReelItem, ReelsResult,
     HashtagSection, LocationSection
 )
 from .exceptions import WebAPIError
@@ -407,6 +407,7 @@ __all__ = [
     'LikersResult',
     'StoryMediaItem',
     'StoriesTrayResult',
+    'WebHighlightInfo',
     'ReelItem',
     'ReelsResult',
     'HashtagSection',

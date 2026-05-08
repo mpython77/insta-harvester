@@ -253,11 +253,15 @@ def save_session(session_file=None, headless=False):
         if session_dir and not os.path.exists(session_dir):
             os.makedirs(session_dir, exist_ok=True)
 
-        with open(session_file, 'w', encoding='utf-8') as f:
+        import tempfile
+        tmp_path = session_file + ".tmp"
+        with open(tmp_path, 'w', encoding='utf-8') as f:
             json.dump(session_data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, session_file)
 
+        cookies = session_data.get("cookies", [])
         print(f'✅ Session successfully saved: {session_file}')
-        print(f'📊 Number of cookies: {len(session_data["cookies"])}')
+        print(f'📊 Number of cookies: {len(cookies)}')
 
         browser.close()
         print('👋 Browser closed. Program finished!')

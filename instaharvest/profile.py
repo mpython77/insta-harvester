@@ -225,7 +225,7 @@ class ProfileScraper(BaseScraper):
             is_private=api_data.is_private,
             category=api_data.category_name,
             bio=api_data.biography,
-            external_links=[l.get('url', '') for l in api_data.bio_links] if api_data.bio_links else (
+            external_links=[link for link in [l.get('url', '') for l in api_data.bio_links] if link and link.strip()] if api_data.bio_links else (
                 [api_data.external_url] if api_data.external_url else []
             ),
             # Web API extended fields

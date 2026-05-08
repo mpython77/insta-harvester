@@ -17,10 +17,27 @@ import logging
 import time
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field, asdict
+from urllib.parse import urlencode
 
 from .config import ScraperConfig
 from .logging_config import get_logger
 from .exceptions import WebAPIError
+
+
+def _parse_count(text) -> int:
+    """Parse a count string like '1.2M', '500K', or '12,345' to int."""
+    if text is None:
+        return 0
+    if isinstance(text, (int, float)):
+        return int(text)
+    text = str(text).strip().replace(",", "")
+    if not text:
+        return 0
+    if text.endswith("M"):
+        return int(float(text[:-1]) * 1_000_000)
+    if text.endswith("K"):
+        return int(float(text[:-1]) * 1_000)
+    return int(float(text))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -629,8 +646,7 @@ class InstagramWebAPI:
             self.logger.error("❌ WebAPI: No page — browser not started")
             return None
         if params:
-            query_string = '&'.join(f'{k}={v}' for k, v in params.items())
-            full_url = f'{url}?{query_string}'
+            full_url = f'{url}?{urlencode(params)}'
         else:
             full_url = url
         self._apply_rate_limit()
@@ -656,10 +672,11 @@ class InstagramWebAPI:
                     return result
                 return None
             except Exception as e:
+                self.logger.warning(f"⚠️ WebAPI attempt {attempt+1}/{max_retries+1} failed: {e}")
                 if attempt < max_retries:
                     time.sleep(2 * (attempt + 1))
                 else:
-                    self.logger.error(f"❌ WebAPI failed: {e}")
+                    self.logger.error(f"❌ WebAPI failed after {max_retries+1} attempts: {e}")
                     return None
         return None
 
@@ -777,7 +794,7 @@ class InstagramWebAPI:
         p = WebProfileData(
             username=user.get('username', ''), full_name=user.get('full_name', ''),
             user_id=str(user.get('id', user.get('pk', ''))), fbid=str(user.get('fbid', '')),
-            biography=biography, follower_count=int(fc), following_count=int(foc), media_count=int(mc),
+            biography=biography, follower_count=_parse_count(fc), following_count=_parse_count(foc), media_count=_parse_count(mc),
             is_verified=bool(user.get('is_verified')), is_private=bool(user.get('is_private')),
             is_business_account=bool(user.get('is_business_account')), is_professional_account=bool(user.get('is_professional_account')),
             category_name=user.get('category_name') if user.get('category_name') != 'None' else None,
@@ -807,9 +824,11 @@ class InstagramWebAPI:
                 profile_pic_url=u.get('profile_pic_url', ''),
                 has_anonymous_profile_picture=bool(u.get('has_anonymous_profile_picture'))
             ))
+        next_max_id = data.get('next_max_id')
+        has_more = bool(next_max_id) and next_max_id != "0"
         return FollowListResult(
-            users=users, next_max_id=data.get('next_max_id'),
-            has_more=bool(data.get('next_max_id')), total_count=len(users)
+            users=users, next_max_id=next_max_id,
+            has_more=has_more, total_count=len(users)
         )
 
     def _parse_friendship(self, data: Dict, user_id: str) -> FriendshipStatus:
@@ -1001,8 +1020,8 @@ class InstagramWebAPI:
                 user_id=str(ud.get('pk', ud.get('id', ''))),
                 is_verified=bool(ud.get('is_verified')), is_private=bool(ud.get('is_private')),
                 profile_pic_url=ud.get('profile_pic_url', ''),
-                follower_count=int(ud.get('follower_count', 0)),
-                mutual_followers_count=int(ud.get('mutual_followers_count', 0))
+                follower_count=_parse_count(ud.get('follower_count', 0)),
+                mutual_followers_count=_parse_count(ud.get('mutual_followers_count', 0))
             ))
         return WebSearchResult(query=query, users=users_list, total_found=len(users_list))
 

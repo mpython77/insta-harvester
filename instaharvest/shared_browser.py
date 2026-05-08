@@ -83,6 +83,9 @@ class SharedBrowser:
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
 
+        # Track whether start() has completed successfully
+        self._started: bool = False
+
         # Manager instances (will be created after browser starts)
         self._follow_manager: Optional[FollowManager] = None
         self._message_manager: Optional[MessageManager] = None
@@ -102,6 +105,9 @@ class SharedBrowser:
         self._explore_scraper: Optional[ExploreScraper] = None
         self._notification_reader: Optional[NotificationReader] = None
         self._web_api: Optional[InstagramWebAPI] = None
+
+        # GraphQL interceptor — shared across scrapers
+        self._graphql_interceptor = None
 
         self.logger.info("✨ SharedBrowser initialized")
 
@@ -189,6 +195,7 @@ class SharedBrowser:
         # Update session
         self._update_session()
 
+        self._started = True
         self.logger.info("✅ Shared browser ready! All operations will use this browser.")
 
     def close(self) -> None:
@@ -274,6 +281,13 @@ class SharedBrowser:
                 except Exception as e:
                     self.logger.warning(f"Error closing {name}: {e}")
 
+        # BUG 4 fix: null out all browser resources and reset _started flag
+        self.page = None
+        self.context = None
+        self.browser = None
+        self.playwright = None
+        self._started = False
+
         self.logger.info("✅ Browser closed")
 
     def _update_session(self) -> None:
@@ -333,6 +347,7 @@ class SharedBrowser:
     @property
     def follow_manager(self) -> FollowManager:
         """Get FollowManager instance (lazy loading)"""
+        self._ensure_started()
         if self._follow_manager is None:
             manager = FollowManager(self.config)
             # Inject existing browser components
@@ -346,6 +361,7 @@ class SharedBrowser:
     @property
     def message_manager(self) -> MessageManager:
         """Get MessageManager instance (lazy loading)"""
+        self._ensure_started()
         if self._message_manager is None:
             manager = MessageManager(self.config)
             # Inject existing browser components
@@ -359,6 +375,7 @@ class SharedBrowser:
     @property
     def followers_collector(self) -> FollowersCollector:
         """Get FollowersCollector instance (lazy loading)"""
+        self._ensure_started()
         if self._followers_collector is None:
             collector = FollowersCollector(self.config)
             # Inject existing browser components
@@ -372,6 +389,7 @@ class SharedBrowser:
     @property
     def profile_scraper(self) -> ProfileScraper:
         """Get ProfileScraper instance (lazy loading)"""
+        self._ensure_started()
         if self._profile_scraper is None:
             scraper = ProfileScraper(self.config)
             # Inject existing browser components
@@ -385,6 +403,7 @@ class SharedBrowser:
     @property
     def post_links_scraper(self) -> PostLinksScraper:
         """Get PostLinksScraper instance (lazy loading)"""
+        self._ensure_started()
         if self._post_links_scraper is None:
             scraper = PostLinksScraper(self.config)
             # Inject existing browser components
@@ -398,6 +417,7 @@ class SharedBrowser:
     @property
     def reel_links_scraper(self) -> ReelLinksScraper:
         """Get ReelLinksScraper instance (lazy loading)"""
+        self._ensure_started()
         if self._reel_links_scraper is None:
             scraper = ReelLinksScraper(self.config)
             # Inject existing browser components
@@ -411,6 +431,7 @@ class SharedBrowser:
     @property
     def downloader(self) -> MediaDownloader:
         """Get MediaDownloader instance"""
+        self._ensure_started()
         if self._downloader is None:
             self._downloader = MediaDownloader()
         return self._downloader
@@ -428,6 +449,7 @@ class SharedBrowser:
     @property
     def post_data_scraper(self) -> PostDataScraper:
         """Get PostDataScraper instance (lazy loading)"""
+        self._ensure_started()
         if self._post_data_scraper is None:
             self._post_data_scraper = self._inject_browser(PostDataScraper(self.config))
         return self._post_data_scraper
@@ -435,6 +457,7 @@ class SharedBrowser:
     @property
     def reel_data_scraper(self) -> ReelDataScraper:
         """Get ReelDataScraper instance (lazy loading)"""
+        self._ensure_started()
         if self._reel_data_scraper is None:
             self._reel_data_scraper = self._inject_browser(ReelDataScraper(self.config))
         return self._reel_data_scraper
@@ -442,6 +465,7 @@ class SharedBrowser:
     @property
     def story_scraper(self) -> StoryScraper:
         """Get StoryScraper instance (lazy loading)"""
+        self._ensure_started()
         if self._story_scraper is None:
             self._story_scraper = self._inject_browser(StoryScraper(self.config))
         return self._story_scraper
@@ -449,6 +473,7 @@ class SharedBrowser:
     @property
     def comment_scraper(self) -> CommentScraper:
         """Get CommentScraper instance (lazy loading)"""
+        self._ensure_started()
         if self._comment_scraper is None:
             self._comment_scraper = self._inject_browser(CommentScraper(self.config))
         return self._comment_scraper
@@ -456,6 +481,7 @@ class SharedBrowser:
     @property
     def search_api(self) -> SearchAPI:
         """Get SearchAPI instance (lazy loading)"""
+        self._ensure_started()
         if self._search_api is None:
             self._search_api = self._inject_browser(SearchAPI(self.config))
         return self._search_api
@@ -463,6 +489,7 @@ class SharedBrowser:
     @property
     def hashtag_scraper(self) -> HashtagScraper:
         """Get HashtagScraper instance (lazy loading)"""
+        self._ensure_started()
         if self._hashtag_scraper is None:
             self._hashtag_scraper = self._inject_browser(HashtagScraper(self.config))
         return self._hashtag_scraper
@@ -470,6 +497,7 @@ class SharedBrowser:
     @property
     def location_scraper(self) -> LocationScraper:
         """Get LocationScraper instance (lazy loading)"""
+        self._ensure_started()
         if self._location_scraper is None:
             self._location_scraper = self._inject_browser(LocationScraper(self.config))
         return self._location_scraper
@@ -477,6 +505,7 @@ class SharedBrowser:
     @property
     def explore_scraper(self) -> ExploreScraper:
         """Get ExploreScraper instance (lazy loading)"""
+        self._ensure_started()
         if self._explore_scraper is None:
             self._explore_scraper = self._inject_browser(ExploreScraper(self.config))
         return self._explore_scraper
@@ -484,6 +513,7 @@ class SharedBrowser:
     @property
     def notification_reader(self) -> NotificationReader:
         """Get NotificationReader instance (lazy loading)"""
+        self._ensure_started()
         if self._notification_reader is None:
             self._notification_reader = self._inject_browser(NotificationReader(self.config))
         return self._notification_reader
@@ -491,6 +521,7 @@ class SharedBrowser:
     @property
     def web_api(self) -> InstagramWebAPI:
         """Get InstagramWebAPI instance (lazy loading)"""
+        self._ensure_started()
         if self._web_api is None:
             self._web_api = InstagramWebAPI(
                 page=self.page,
@@ -520,6 +551,7 @@ class SharedBrowser:
             ...     print(f"{profile.full_name}: {profile.follower_count:,}")
             Monday Swimwear: 1,069,117
         """
+        self._ensure_started()
         return self.web_api.get_profile(username)
 
     def get_user_info(self, user_id: str) -> Optional[WebProfileData]:
@@ -532,6 +564,7 @@ class SharedBrowser:
         Returns:
             WebProfileData object or None
         """
+        self._ensure_started()
         return self.web_api.get_user_info(user_id)
 
     def search_users(self, query: str, limit: int = 20) -> WebSearchResult:
@@ -551,62 +584,77 @@ class SharedBrowser:
             ...     for user in results.users:
             ...         print(f"@{user.username}")
         """
+        self._ensure_started()
         return self.web_api.search(query, limit=limit)
 
     def fetch_raw_api(self, endpoint: str, params: dict = None, method: str = 'GET', body: dict = None) -> Optional[dict]:
         """Make raw API call to any Instagram endpoint (GET or POST)."""
+        self._ensure_started()
         return self.web_api.fetch_raw(endpoint, params, method=method, body=body)
 
     def get_followers_api(self, user_id: str, count: int = 50, max_id: str = None) -> FollowListResult:
         """Get followers list via Web API (paginated)."""
+        self._ensure_started()
         return self.web_api.get_followers(user_id, count, max_id)
 
     def get_following_api(self, user_id: str, count: int = 50, max_id: str = None) -> FollowListResult:
         """Get following list via Web API (paginated)."""
+        self._ensure_started()
         return self.web_api.get_following(user_id, count, max_id)
 
     def get_friendship_status(self, user_id: str) -> FriendshipStatus:
         """Check friendship status with user."""
+        self._ensure_started()
         return self.web_api.get_friendship_status(user_id)
 
     def get_user_feed_api(self, user_id: str, count: int = 12) -> UserFeedResult:
         """Get user's posts via Web API."""
+        self._ensure_started()
         return self.web_api.get_user_feed(user_id, count)
 
     def get_media_info_api(self, media_id: str) -> Optional[MediaInfo]:
         """Get detailed post info via Web API."""
+        self._ensure_started()
         return self.web_api.get_media_info(media_id)
 
     def get_media_comments_api(self, media_id: str) -> CommentsResult:
         """Get post comments via Web API."""
+        self._ensure_started()
         return self.web_api.get_media_comments(media_id)
 
     def get_media_likers_api(self, media_id: str) -> LikersResult:
         """Get post likers via Web API."""
+        self._ensure_started()
         return self.web_api.get_media_likers(media_id)
 
     def get_stories_api(self, user_id: str) -> list:
         """Get user's active stories via Web API."""
+        self._ensure_started()
         return self.web_api.get_stories(user_id)
 
     def get_highlights_api(self, user_id: str) -> HighlightsResult:
         """Get user's highlights via Web API."""
+        self._ensure_started()
         return self.web_api.get_highlights(user_id)
 
     def get_reels_api(self, user_id: str) -> ReelsResult:
         """Get user's reels via Web API."""
+        self._ensure_started()
         return self.web_api.get_reels(user_id)
 
     def get_hashtag_feed_api(self, tag: str) -> HashtagSection:
         """Get hashtag posts via Web API."""
+        self._ensure_started()
         return self.web_api.get_hashtag_feed(tag)
 
     def get_location_feed_api(self, location_id: str) -> LocationSection:
         """Get location posts via Web API."""
+        self._ensure_started()
         return self.web_api.get_location_feed(location_id)
 
     def get_tagged_posts_api(self, user_id: str) -> UserFeedResult:
         """Get tagged posts via Web API."""
+        self._ensure_started()
         return self.web_api.get_tagged_posts(user_id)
 
     def follow(self, username: str, check_status: bool = True) -> dict:
@@ -620,6 +668,7 @@ class SharedBrowser:
         Returns:
             Result dict
         """
+        self._ensure_started()
         return self.follow_manager.follow(username, check_status=check_status)
 
     def unfollow(self, username: str, confirm: bool = True) -> dict:
@@ -633,6 +682,7 @@ class SharedBrowser:
         Returns:
             Result dict
         """
+        self._ensure_started()
         return self.follow_manager.unfollow(username, confirm=confirm)
 
     def is_following(self, username: str) -> dict:
@@ -645,6 +695,7 @@ class SharedBrowser:
         Returns:
             Result dict with 'following' key
         """
+        self._ensure_started()
         return self.follow_manager.is_following(username)
 
     def send_message(self, username: str, message: str) -> dict:
@@ -658,6 +709,7 @@ class SharedBrowser:
         Returns:
             Result dict
         """
+        self._ensure_started()
         return self.message_manager.send_message(username, message)
 
     def batch_follow(self, usernames: list, delay_between: tuple = (2, 4)) -> dict:
@@ -671,6 +723,7 @@ class SharedBrowser:
         Returns:
             Summary dict
         """
+        self._ensure_started()
         return self.follow_manager.batch_follow(usernames, delay_between=delay_between)
 
     def batch_send(self, usernames: list, message: str, delay_between: tuple = (3, 5)) -> dict:
@@ -685,6 +738,7 @@ class SharedBrowser:
         Returns:
             Summary dict
         """
+        self._ensure_started()
         return self.message_manager.batch_send(usernames, message, delay_between=delay_between)
 
     def scrape_profile(self, username: str) -> dict:
@@ -693,10 +747,11 @@ class SharedBrowser:
 
         Args:
             username: Instagram username
-        
+
         Returns:
             Profile data dict
         """
+        self._ensure_started()
         from .profile import ProfileData
         data = self.profile_scraper.scrape(username)
         if isinstance(data, ProfileData):
@@ -715,6 +770,7 @@ class SharedBrowser:
         Returns:
             List of follower usernames
         """
+        self._ensure_started()
         return self.followers_collector.get_followers(username, limit=limit, print_realtime=print_realtime)
 
     def get_following(self, username: str, limit: Optional[int] = None, print_realtime: bool = True) -> list:
@@ -729,6 +785,7 @@ class SharedBrowser:
         Returns:
             List of following usernames
         """
+        self._ensure_started()
         return self.followers_collector.get_following(username, limit=limit, print_realtime=print_realtime)
 
     def scrape_post_links(self, username: str, target_count: Optional[int] = None, save_to_file: bool = True) -> list:
@@ -743,6 +800,7 @@ class SharedBrowser:
         Returns:
             List of dictionaries with 'url' and 'type' keys
         """
+        self._ensure_started()
         return self.post_links_scraper.scrape(username, target_count=target_count, save_to_file=save_to_file)
 
     def scrape_reel_links(self, username: str, save_to_file: bool = True) -> list:
@@ -756,13 +814,16 @@ class SharedBrowser:
         Returns:
             List of reel URLs
         """
+        self._ensure_started()
         return self.reel_links_scraper.scrape(username, save_to_file=save_to_file)
 
     # ==================== PHASE 2: NEW CONVENIENCE METHODS ====================
 
     def scrape_post(self, url: str, **kwargs) -> PostData:
         """
-        Scrape data from a single post
+        Scrape data from a single post.
+        Checks GraphQL interceptor cache first — if hit, returns instantly
+        without opening the post page (10-20x faster).
 
         Args:
             url: Post URL
@@ -772,7 +833,102 @@ class SharedBrowser:
             PostData object with all extracted data
         """
         self._ensure_started()
+
+        # Try GraphQL cache first
+        cached = self._graphql_cache_lookup(url)
+        if cached is not None:
+            return cached
+
         return self.post_data_scraper.scrape(url, **kwargs)
+
+    def _graphql_cache_lookup(self, url: str) -> Optional[PostData]:
+        """
+        Extract shortcode from URL and look up in GraphQL interceptor cache.
+        Checks all scraper instances that may carry a _graphql_interceptor so
+        that cache hits are found regardless of which scraper populated them.
+        Returns PostData if found, None otherwise.
+        """
+        try:
+            # Extract shortcode: /p/DXzt5k7D9Kw/ or /reel/DXzt5k7D9Kw/
+            parts = [p for p in url.rstrip("/").split("/") if p]
+            if len(parts) < 2:
+                return None
+            shortcode = parts[-1]
+
+            # BUG 3 fix: check all scraper instances that may have an interceptor
+            _candidate_scrapers = [
+                self._post_links_scraper,
+                self._reel_links_scraper,
+                self._post_data_scraper,
+                self._reel_data_scraper,
+            ]
+
+            interceptor = None
+            for scraper in _candidate_scrapers:
+                if scraper is None:
+                    continue
+                _iceptor = getattr(scraper, "_graphql_interceptor", None)
+                if _iceptor is not None and hasattr(_iceptor, 'has') and _iceptor.has(shortcode):
+                    interceptor = _iceptor
+                    break
+
+            if interceptor is None:
+                return None
+
+            entry = interceptor.get(shortcode)
+            if not entry:
+                return None
+
+            self.logger.info(
+                f"⚡ Cache HIT [{shortcode}]: "
+                f"{entry.get('like_count')} likes, "
+                f"{entry.get('taken_at_human', '')[:10]} "
+                f"(page visit skipped)"
+            )
+
+            from datetime import datetime, timezone
+            from .post_data import PostData, PostLocation
+
+            loc_full = entry.get("location_full") or {}
+            loc_name = loc_full.get("name", "") or entry.get("location_name", "")
+            location = PostLocation(
+                name=loc_name,
+                pk=str(loc_full.get("pk", "")),
+                latitude=loc_full.get("latitude", 0.0) or 0.0,
+                longitude=loc_full.get("longitude", 0.0) or 0.0,
+                address=loc_full.get("address", ""),
+                city=loc_full.get("city", ""),
+            ) if loc_name else None
+
+            return PostData(
+                url=url,
+                tagged_accounts=[],
+                likes=str(entry.get("like_count", 0)),
+                timestamp=entry.get("timestamp", ""),
+                media_urls=entry.get("media_urls", []),
+                is_video=entry.get("is_video", False),
+                content_type="Reel" if "/reel/" in url else "Post",
+                tagged_users_per_media=[],
+                caption=entry.get("caption", ""),
+                comment_count=entry.get("comment_count", 0),
+                like_count=entry.get("like_count", 0),
+                location=location,
+                taken_at=entry.get("taken_at", 0),
+                taken_at_human=entry.get("taken_at_human", ""),
+                shortcode=shortcode,
+                pk=entry.get("pk", ""),
+                media_type=entry.get("media_type", 0),
+                product_type=entry.get("product_type", ""),
+                has_audio=entry.get("has_audio", False),
+                video_duration=entry.get("video_duration", 0.0),
+                carousel_media_count=entry.get("carousel_media_count", 0),
+                top_likers=entry.get("top_likers", []),
+                has_liked=entry.get("has_liked", False),
+                json_extracted=True,
+            )
+        except Exception as e:
+            self.logger.debug(f"Cache lookup failed for {url}: {e}")
+            return None
 
     def scrape_posts(self, urls: list, **kwargs) -> list:
         """
@@ -787,6 +943,109 @@ class SharedBrowser:
         """
         self._ensure_started()
         return self.post_data_scraper.scrape_multiple(urls, **kwargs)
+
+    def scrape_posts_parallel(self, urls: list, max_workers: int = 3, **kwargs) -> list:
+        """
+        Scrape multiple posts with parallel browser tabs for cache misses.
+
+        Cache hits (GraphQL interceptor) are resolved instantly.
+        Cache misses are opened in parallel tabs (max_workers at a time).
+
+        Tabs are pre-opened in the MAIN thread before handing off to workers
+        so that context.new_page() is never called from a background thread
+        (Playwright's sync API is not thread-safe).
+
+        Args:
+            urls: List of post URLs (preserves order in result)
+            max_workers: Max parallel tabs for cache misses (default 3)
+
+        Returns:
+            List of PostData (same order as urls, None for failed/missing)
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from queue import Queue
+        from .post_data import PostDataScraper
+        from .error_handler import ErrorHandler
+        from .performance import PerformanceMonitor
+
+        self._ensure_started()
+
+        # Check GraphQL cache first
+        results = {}
+        miss_urls = []
+        for url in urls:
+            cached = self._graphql_cache_lookup(url)
+            if cached is not None:
+                results[url] = cached
+            else:
+                miss_urls.append(url)
+
+        self.logger.info(
+            f"⚡ Parallel scrape: {len(results)} cache hits, {len(miss_urls)} page visits needed"
+        )
+
+        if not miss_urls:
+            return [results.get(u) for u in urls]
+
+        # Pre-open tabs in the MAIN thread (Playwright sync API is not thread-safe)
+        n_tabs = min(max_workers, len(miss_urls))
+        tab_queue: Queue = Queue()
+        opened_tabs = []
+        for _ in range(n_tabs):
+            tab = self.context.new_page()
+            tab.set_default_timeout(self.config.default_timeout)
+            tab_queue.put(tab)
+            opened_tabs.append(tab)
+
+        def _scrape_in_tab(url: str):
+            tab = tab_queue.get()
+            try:
+                # Bypass __init__ to avoid spawning a new browser; inject shared components.
+                scraper = PostDataScraper.__new__(PostDataScraper)
+                # BaseScraper attributes
+                scraper.config = self.config
+                scraper.logger = self.logger
+                scraper.page = tab
+                scraper.context = self.context
+                scraper.browser = self.browser
+                scraper.playwright = self.playwright
+                scraper.interrupted = False
+                scraper._web_api = None
+                # ProxyManager / NetworkClient — create lightweight stubs so scraper
+                # methods that touch them don't crash.
+                from .proxy import create_proxy_manager_from_config
+                scraper.proxy_manager = create_proxy_manager_from_config(self.config, self.logger)
+                from .network_client import NetworkClient
+                scraper.network_client = NetworkClient()
+                # PostDataScraper-specific attributes
+                scraper.error_handler = ErrorHandler(self.logger)
+                scraper.performance_monitor = PerformanceMonitor(self.logger)
+                scraper.diagnostics = None
+                scraper.enable_diagnostics = True
+                scraper.captured_media_urls = []
+                return url, scraper.scrape(url, **kwargs)
+            except Exception as e:
+                self.logger.warning(f"Failed to scrape {url}: {e}")
+                return url, None
+            finally:
+                tab_queue.put(tab)
+
+        try:
+            with ThreadPoolExecutor(max_workers=n_tabs) as pool:
+                futures = {pool.submit(_scrape_in_tab, u): u for u in miss_urls}
+                for fut in as_completed(futures):
+                    url, post = fut.result()
+                    if post is not None:
+                        results[url] = post
+        finally:
+            # Close all pre-opened tabs in the main thread
+            for tab in opened_tabs:
+                try:
+                    tab.close()
+                except Exception:
+                    pass
+
+        return [results.get(u) for u in urls]
 
     def scrape_reel(self, url: str, **kwargs) -> ReelData:
         """
@@ -987,7 +1246,7 @@ class SharedBrowser:
         Raises:
             RuntimeError: If browser cannot be started
         """
-        if self.page is None or self.browser is None:
+        if not self._started or self.page is None or self.browser is None:
             self.logger.info("🔄 Browser not started yet, auto-starting...")
             try:
                 self.start()

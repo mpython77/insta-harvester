@@ -4,6 +4,8 @@ Professional base class with error handling, logging, and retry logic
 """
 
 import json
+import os
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -160,9 +162,11 @@ class BaseScraper(ABC):
             
             storage_state = result
 
-            # Save to session file
-            with open(self.config.session_file, 'w', encoding='utf-8') as f:
+            # Save to session file atomically to prevent corruption on SIGINT
+            tmp_path = self.config.session_file + ".tmp"
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(storage_state, f, indent=2)
+            os.replace(tmp_path, self.config.session_file)
 
             cookies_count = len(storage_state.get('cookies', []))
             self.logger.info(f"✓ Session updated and saved: {cookies_count} cookies")
@@ -343,6 +347,7 @@ class BaseScraper(ABC):
         """
         self.logger.info(f"Navigating to: {url}")
 
+        rate_limit_retries = 0
         for attempt in range(self.config.max_retries):
             try:
                 self.page.goto(
@@ -358,12 +363,13 @@ class BaseScraper(ABC):
 
                 # Check if rate limited (before login check)
                 if self._is_rate_limited():
+                    rate_limit_retries += 1
                     self.logger.warning(
                         f"⚠️ Rate limit detected! "
                         f"Auto-cooldown: {self.config.rate_limit_cooldown}s "
-                        f"(attempt {attempt + 1}/{self.config.rate_limit_max_retries})"
+                        f"(attempt {rate_limit_retries}/{self.config.rate_limit_max_retries})"
                     )
-                    if attempt < self.config.rate_limit_max_retries:
+                    if rate_limit_retries < self.config.rate_limit_max_retries:
                         self.logger.info(f"⏳ Waiting {self.config.rate_limit_cooldown}s before retry...")
                         time.sleep(self.config.rate_limit_cooldown)
                         continue
@@ -439,15 +445,27 @@ class BaseScraper(ABC):
                 self.logger.debug("Login required: redirected to login URL")
                 return True
 
-            # Method 2: Check for logged-in UI elements (navigation bar, etc.)
-            # If we can find the main navigation bar or user menu, we're logged in
+            # Method 2: Check for password input — reliable login page signal.
+            # This also catches cases where Instagram renders the login link as
+            # span[role="link"] instead of <a>, which would otherwise fool the
+            # nav-element check below into thinking the user is logged in.
+            try:
+                if self.page.locator('input[type="password"]').count() > 0:
+                    self.logger.debug("Login required: found password input field")
+                    return True
+            except Exception as e:
+                self.logger.debug(f"Could not check password input: {e}")
+
+            # Method 3 (was 2): Check for logged-in UI elements (navigation bar, etc.)
+            # If we can find the main navigation bar or user menu, we're logged in.
+            # Note: span[role="link"] is intentionally excluded here because Instagram
+            # also uses it on the login page itself, making it an unreliable logged-in signal.
             try:
                 # Wait briefly for navigation elements to appear
                 nav_selectors = [
                     'nav[role="navigation"]',  # Main navigation
                     'a[href*="/direct/"]',      # Direct messages link (only visible when logged in)
                     'svg[aria-label="Home"]',   # Home icon in nav
-                    'span[role="link"]',        # User profile link in nav
                 ]
 
                 for selector in nav_selectors:
@@ -623,7 +641,7 @@ class BaseScraper(ABC):
 
             return default
 
-    def parse_number(self, text: str) -> Optional[int]:
+    def parse_number(self, text: str) -> int:
         """
         Parse number string with localization support (K, M, etc.)
         Uses config.number_suffixes and config.number_separators.
@@ -632,10 +650,10 @@ class BaseScraper(ABC):
             text: Raw text containing number (e.g. "1.5M", "10,5тыс.", "1 000")
 
         Returns:
-            Parsed integer or None if parsing failed
+            Parsed integer, or 0 if parsing failed
         """
         if not text:
-            return None
+            return 0
 
         clean_text = text.strip().upper()
         
@@ -675,7 +693,7 @@ class BaseScraper(ABC):
             
         except ValueError:
             self.logger.warning(f"Failed to parse number: '{text}'")
-            return None
+            return 0
 
     def close(self, update_session_before_close: bool = True) -> None:
         """
@@ -707,6 +725,12 @@ class BaseScraper(ABC):
                     action(resource)
                 except Exception as e:
                     self.logger.warning(f"Error closing {name}: {e}")
+
+        # Null out all resources so accidental re-use doesn't crash
+        self.page = None
+        self.context = None
+        self.browser = None
+        self.playwright = None
 
         self.logger.info("Browser closed")
 

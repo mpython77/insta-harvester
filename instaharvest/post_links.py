@@ -182,7 +182,8 @@ class _LegacyPostLinksScraper:
                 self.page.evaluate(f'window.scrollBy(0, window.innerHeight * {self.config.scroll_viewport_percentage})')
 
                 # Wait 1.5-2.5 seconds (random) - ANTI-DETECTION
-                wait_time = random.uniform(self.config.scroll_wait_range[0], self.config.scroll_wait_range[1])
+                _r = self.config.scroll_wait_range
+                wait_time = random.uniform(_r[0], _r[1]) if hasattr(_r, '__len__') and len(_r) >= 2 else float(_r)
                 time.sleep(wait_time)
 
                 scroll_attempts += 1
@@ -273,6 +274,7 @@ if LIBRARY_AVAILABLE:
         def __init__(self, config: Optional['ScraperConfig'] = None):
             """Initialize post links scraper"""
             super().__init__(config)
+            self._graphql_interceptor = None
             self.logger.info("PostLinksScraper ready (using user's proven 100% accurate method)")
 
         def scrape(
@@ -326,12 +328,23 @@ if LIBRARY_AVAILABLE:
                     target_count = self._get_posts_count()
                     self.logger.info(f"Target: {target_count} posts")
 
-                # Scroll and collect links using USER'S PROVEN METHOD
-                links = self._scroll_and_collect_proven(target_count)
+                # Attach GraphQL interceptor before scrolling
+                try:
+                    from .graphql_interceptor import GraphQLInterceptor
+                    self._graphql_interceptor = GraphQLInterceptor(self.page)
+                    self._graphql_interceptor.attach()
+                except Exception as e:
+                    self.logger.debug(f"GraphQL interceptor not attached: {e}")
+                    self._graphql_interceptor = None
 
-                # Save to file
-                if save_to_file:
-                    self._save_links(links, output_file)
+                try:
+                    # Scroll and collect links using USER'S PROVEN METHOD
+                    links = self._scroll_and_collect_proven(target_count, date_from=date_from)
+                finally:
+                    # Always detach interceptor — even on exception
+                    if self._graphql_interceptor:
+                        self._graphql_interceptor.detach()
+                        self.logger.info(f"⚡ GraphQL cache: {self._graphql_interceptor.size()} posts pre-loaded")
 
                 self.logger.info(f"Collected {len(links)} post links")
 
@@ -343,6 +356,11 @@ if LIBRARY_AVAILABLE:
                 if target_count is not None and len(links) > target_count:
                     links = links[:target_count]
                     self.logger.info(f"Trimmed to target: {len(links)} links")
+
+                # Save to file AFTER filtering so the file matches the returned set
+                if save_to_file:
+                    self._save_links(links, output_file)
+
                 return links
 
             finally:
@@ -450,12 +468,13 @@ if LIBRARY_AVAILABLE:
                 self.logger.error(f"Error extracting links: {e}")
                 return []
 
-        def _scroll_and_collect_proven(self, target_count: int) -> List[Dict[str, str]]:
+        def _scroll_and_collect_proven(self, target_count: int, date_from: Optional[str] = None) -> List[Dict[str, str]]:
             """
             Scroll and collect links using USER'S PROVEN 100% ACCURATE METHOD
 
             Args:
                 target_count: Target number of links
+                date_from: Stop scrolling when posts older than this date detected (YYYY-MM-DD)
 
             Returns:
                 List of dictionaries with 'url', 'type', 'thumbnail', 'stats' keys
@@ -466,20 +485,20 @@ if LIBRARY_AVAILABLE:
             scroll_attempts = 0
             no_new_links_count = 0
             MAX_NO_NEW = self.config.scroll_max_no_new_attempts
-
-            MAX_NO_NEW = self.config.scroll_max_no_new_attempts
+            consecutive_old = 0
+            CONSECUTIVE_OLD_LIMIT = 5  # Stop after 5 consecutive old posts in cache
 
             try:  # [NEW] Graceful Exit Wrapper
                 while True:
                     # Extract current links using proven method
                     current_items = self._extract_current_links_proven()
                     previous_count = len(all_links)
-                    
+
                     for item in current_items:
                         url = item['url']
                         if url not in all_links:
                             all_links[url] = item
-                    
+
                     new_count = len(all_links)
 
                     # Log progress
@@ -487,6 +506,36 @@ if LIBRARY_AVAILABLE:
                         f"Progress: {new_count}/{target_count} links "
                         f"(+{new_count - previous_count} new)"
                     )
+
+                    # Smart scroll: check GraphQL cache timestamps to stop early.
+                    # Count how many cached posts are newer than date_from in this
+                    # round. If zero are newer, increment the consecutive counter;
+                    # reset it whenever at least one newer post is found. Stop after
+                    # CONSECUTIVE_OLD_LIMIT rounds with no newer posts.
+                    if date_from and self._graphql_interceptor and self._graphql_interceptor.size() > 0:
+                        newer_count = 0
+                        total_checked = 0
+                        for sc, entry in self._graphql_interceptor.cache.items():
+                            taken_at_human = entry.get("taken_at_human", "")
+                            if taken_at_human:
+                                post_date = taken_at_human[:10]
+                                total_checked += 1
+                                if post_date >= date_from:
+                                    newer_count += 1
+                        if total_checked > 0 and newer_count == 0:
+                            consecutive_old += 1
+                            self.logger.debug(
+                                f"Smart scroll: no cached posts newer than {date_from} "
+                                f"({consecutive_old}/{CONSECUTIVE_OLD_LIMIT} consecutive rounds)"
+                            )
+                            if consecutive_old >= CONSECUTIVE_OLD_LIMIT:
+                                self.logger.info(
+                                    f"📅 Smart scroll: {CONSECUTIVE_OLD_LIMIT} consecutive scroll rounds "
+                                    f"found no posts newer than {date_from} — stopping early"
+                                )
+                                break
+                        else:
+                            consecutive_old = 0
 
                     # Check if no new links found
                     if new_count == previous_count:
@@ -551,7 +600,8 @@ if LIBRARY_AVAILABLE:
                 self.page.evaluate(f'window.scrollBy(0, window.innerHeight * {self.config.scroll_viewport_percentage})')
 
                 # USER'S PROVEN: Random wait 1.5-2.5 seconds (anti-detection)
-                wait_time = random.uniform(self.config.scroll_wait_range[0], self.config.scroll_wait_range[1])
+                _r = self.config.scroll_wait_range
+                wait_time = random.uniform(_r[0], _r[1]) if hasattr(_r, '__len__') and len(_r) >= 2 else float(_r)
                 time.sleep(wait_time)
 
                 self.logger.debug(f"Scrolled (waited {wait_time:.2f}s)")

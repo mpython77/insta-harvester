@@ -25,7 +25,7 @@
 | 💬 **Engagement** | Comments (with replies), likes, media download (images/videos via yt-dlp) |
 | 👥 **Social** | Followers/Following lists, Follow/Unfollow, Direct Messaging |
 | 🔍 **Discovery** | Search, Hashtag feeds, Location feeds, Explore, Notifications |
-| ⚡ **Performance** | Parallel processing, SharedBrowser (1 browser for all), Excel export |
+| ⚡ **Performance** | Parallel processing (`scrape_posts_parallel`), GraphQL interceptor cache, SharedBrowser (1 browser for all), Excel export |
 | 🛡️ **Reliability** | Rate limiting, graceful shutdown (Ctrl+C), auto-save, retry logic |
 
 ---
@@ -89,6 +89,7 @@ with SharedBrowser(config=config) as browser:
 
     # ── Batch Operations ──
     posts = browser.scrape_posts(["url1", "url2", "url3"])
+    posts_fast = browser.scrape_posts_parallel(["url1", "url2", "url3"], max_workers=3)
     files = browser.download_post("https://www.instagram.com/p/ABC/")
 
     # ── Web API (Direct JSON — exact data) ──
@@ -270,6 +271,48 @@ with SharedBrowser(config=config) as browser:
         scrape_stories=True
     )
     print(f"Scraped {len(results['posts_data'])} posts")
+```
+
+### 7b. Parallel Post Scraping (scrape_posts_parallel)
+
+`SharedBrowser.scrape_posts_parallel` scrapes multiple posts simultaneously using parallel browser tabs. It automatically checks the **GraphQL interceptor cache** first — posts already seen during profile scrolling are returned instantly without opening their pages (10–20x speed-up for cache hits). Only cache misses are opened in parallel tabs.
+
+```python
+from instaharvest import SharedBrowser
+from instaharvest.config import ScraperConfig
+
+config = ScraperConfig(headless=True)
+
+with SharedBrowser(config=config) as browser:
+    # Collect post links (GraphQL interceptor fills cache while scrolling)
+    links = browser.scrape_post_links('username', target_count=50)
+    urls = [l['url'] for l in links]
+
+    # Parallel scrape — cache hits are instant, misses open in up to 3 tabs
+    posts = browser.scrape_posts_parallel(urls, max_workers=3)
+    for post in posts:
+        print(f"{post.taken_at_human[:10]} — {post.like_count} likes")
+```
+
+### 7c. Smart Scroll with date_from
+
+`PostLinksScraper.scrape` (and `browser.post_links_scraper.scrape`) accepts a `date_from` parameter. When the GraphQL interceptor detects that all cached posts on the current page are older than `date_from`, scrolling stops early — no wasted network requests.
+
+```python
+from instaharvest import SharedBrowser
+from instaharvest.config import ScraperConfig
+
+config = ScraperConfig(headless=True)
+
+with SharedBrowser(config=config) as browser:
+    # Only collect posts from the past 7 days — scroll stops automatically when older
+    links = browser.post_links_scraper.scrape(
+        username='username',
+        target_count=100,
+        date_from='2025-01-01',   # YYYY-MM-DD — smart scroll stop
+        save_to_file=False,
+    )
+    print(f"Found {len(links)} posts since 2025-01-01")
 ```
 
 ### 8. Tagged Posts
@@ -466,6 +509,7 @@ insta-harvester/
 │   ├── notifications.py       # Notification reader
 │   ├── web_api.py             # 🔌 Web API (16+ endpoints)
 │   ├── shared_browser.py      # SharedBrowser
+│   ├── graphql_interceptor.py # GraphQL response cache (speed boost)
 │   ├── orchestrator.py        # Workflow orchestrator
 │   ├── parallel_scraper.py    # Parallel processing
 │   ├── downloader.py          # Media download
@@ -485,6 +529,8 @@ insta-harvester/
 ---
 
 ## ⚙️ Configuration
+
+> **Important:** Always configure `headless` (and all other browser settings) via `ScraperConfig`. Do **not** pass `headless` directly to `SharedBrowser` — use `ScraperConfig(headless=True/False)` and pass that as `config=`.
 
 ```python
 from instaharvest import ScraperConfig

@@ -22,7 +22,6 @@ if sys.platform == 'win32':
         pass
 
 # Robust import - works whether installed via pip or run from source
-# Robust import - works whether installed via pip or run from source
 # ALWAYS prioritize local development version if available
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)

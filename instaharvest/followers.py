@@ -84,8 +84,8 @@ class FollowersCollector(BaseScraper):
             return followers
 
         except Exception as e:
-            self.logger.error(f"❌ Error collecting followers: {e}")
-            return []
+            self.logger.warning(f"get_followers error: {e}")
+            raise
 
     def get_following(
         self,
@@ -268,8 +268,8 @@ class FollowersCollector(BaseScraper):
                     f"No new followers found (attempt {no_new_followers_count}/{max_no_new_attempts})"
                 )
 
-                # Stop if no new followers for 3 consecutive scrolls
-                if no_new_followers_count >= max_no_new_attempts:
+                # Stop if no new followers for max_no_new_attempts consecutive scrolls
+                if max_no_new_attempts > 0 and no_new_followers_count >= max_no_new_attempts:
                     self.logger.debug("✓ No new followers detected, stopping")
                     break
             else:

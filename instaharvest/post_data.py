@@ -351,7 +351,11 @@ class PostDataScraper(BaseScraper):
                     has_audio=json_data.get('has_audio', False),
                     video_duration=json_data.get('video_duration', 0.0),
                     carousel_media_count=json_data.get('carousel_media_count', 0),
-                    carousel_slides=json_data.get('carousel_slides', []),
+                    carousel_slides=[
+                        CarouselSlide(**{k: v for k, v in s.items() if k in CarouselSlide.__dataclass_fields__})
+                        if isinstance(s, dict) else s
+                        for s in json_data.get('carousel_slides', [])
+                    ],
                     tag_positions=json_data.get('tag_positions', []),
                     has_liked=json_data.get('has_liked', False),
                     json_extracted=True
@@ -1213,7 +1217,19 @@ class PostDataScraper(BaseScraper):
                 result['timestamp'] = ''
         
         # ── Engagement ──
-        result['like_count'] = item.get('like_count', 0)
+        # Instagram hides like_count for logged-out viewers on some posts;
+        # fall back to edge_media_preview_like.count (older API) or facepile count.
+        like_count = item.get('like_count', 0)
+        if not like_count:
+            preview = item.get('edge_media_preview_like') or {}
+            like_count = preview.get('count', 0)
+        if not like_count:
+            facepile = item.get('facepile_top_likers') or []
+            # facepile doesn't give total, but at least signals >0
+            # Only use facepile count when like_count is still 0 or missing
+            if facepile and not like_count:
+                like_count = len(facepile)
+        result['like_count'] = like_count
         result['likes'] = str(result['like_count'])
         result['comment_count'] = item.get('comment_count', 0)
         result['has_liked'] = item.get('has_liked', False)
@@ -1279,11 +1295,11 @@ class PostDataScraper(BaseScraper):
                         uname = u['username']
                         if uname not in tagged_accounts:
                             tagged_accounts.append(uname)
-                        pos = entry.get('position', [0, 0])
+                        pos = entry.get('position', {})
                         tag_positions.append({
                             'username': uname,
-                            'x': pos[0] if isinstance(pos, list) and len(pos) > 0 else 0,
-                            'y': pos[1] if isinstance(pos, list) and len(pos) > 1 else 0
+                            'x': pos.get('x', 0) if isinstance(pos, dict) else 0,
+                            'y': pos.get('y', 0) if isinstance(pos, dict) else 0
                         })
         
         # ── Carousel ──
@@ -1309,11 +1325,11 @@ class PostDataScraper(BaseScraper):
                                 slide_tags.append(uname)
                                 if uname not in tagged_accounts:
                                     tagged_accounts.append(uname)
-                                pos = entry.get('position', [0, 0])
+                                pos = entry.get('position', {})
                                 slide_tag_positions.append({
                                     'username': uname,
-                                    'x': pos[0] if isinstance(pos, list) and len(pos) > 0 else 0,
-                                    'y': pos[1] if isinstance(pos, list) and len(pos) > 1 else 0
+                                    'x': pos.get('x', 0) if isinstance(pos, dict) else 0,
+                                    'y': pos.get('y', 0) if isinstance(pos, dict) else 0
                                 })
                 
                 per_slide_tags.append(slide_tags)

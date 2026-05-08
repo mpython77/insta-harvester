@@ -76,7 +76,8 @@ def example_proxy_check():
     results = hub.check_proxies(verbose=True)
     
     # Show stats
-    print(f"\nHealthy: {hub.healthy_proxy_count}/{len(hub.proxy_manager._proxy_pool)}")
+    stats = hub.proxy_stats()
+    print(f"\nHealthy: {stats['healthy_proxies']}/{stats['total_proxies']}")
 
 
 def example_smart_logging():
@@ -135,6 +136,9 @@ def example_real_instagram():
     
     # Get proxy from hub
     proxy_config = hub.get_proxy()
+    if not proxy_config:
+        print("No healthy proxy available, skipping real-Instagram example.")
+        return
     print(f"Using proxy: {proxy_config['server']}")
     
     with sync_playwright() as p:
