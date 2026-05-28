@@ -295,3 +295,115 @@ class CommentsPage(_FrozenModel):
                 f"total_returned={value} disagrees with len(comments)={len(comments)}"
             )
         return value
+
+
+
+# ---------------------------------------------------------------------------
+# Followers / Following (read-only)
+# ---------------------------------------------------------------------------
+
+
+class FollowEntry(_FrozenModel):
+    """One user in a followers / following list.
+
+    A trimmed-down :class:`MediaOwner`-shaped record. We keep it
+    separate so that follower lists do not have to invent values for
+    media-only fields (and so the type system distinguishes "user
+    inside a follower list" from "user who owns a media item").
+    """
+
+    username: str = Field(min_length=1)
+    user_id: Optional[str] = None
+    full_name: Optional[str] = None
+    is_verified: bool = False
+    is_private: bool = False
+    profile_pic_url: Optional[HttpUrl] = None
+
+
+class FollowList(_FrozenModel):
+    """One page of followers or following.
+
+    Pagination is fully resolved by :class:`FollowersScraper` before
+    this object is returned: ``users`` already contains every user
+    requested (up to ``max_users``). ``has_more`` indicates whether
+    Instagram had additional users beyond the cap.
+
+    ``kind`` distinguishes a followers list from a following list so
+    the same model can serve both, with type-system protection
+    against accidental confusion.
+    """
+
+    target_user_id: str = Field(min_length=1)
+    kind: str = Field(pattern="^(followers|following)$")
+    users: Tuple[FollowEntry, ...] = ()
+    total_returned: int = Field(ge=0)
+    has_more: bool = False
+    next_cursor: Optional[str] = None
+
+    @field_validator("total_returned")
+    @classmethod
+    def _total_matches_len(cls, value: int, info) -> int:
+        users = info.data.get("users")
+        if users is not None and value != len(users):
+            raise ValueError(
+                f"total_returned={value} disagrees with len(users)={len(users)}"
+            )
+        return value
+
+
+class FriendshipStatus(_FrozenModel):
+    """The viewer's relationship with another user.
+
+    "Viewer" is the account whose session we hold. All booleans are
+    from that perspective: ``is_following`` means the viewer follows
+    ``user_id``, not vice versa.
+    """
+
+    user_id: str = Field(min_length=1)
+    is_following: bool = False
+    is_followed_by: bool = False
+    is_blocking: bool = False
+    is_muting: bool = False
+    has_outgoing_request: bool = False
+    has_incoming_request: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Actions (write operations — see _v3.actions)
+# ---------------------------------------------------------------------------
+
+
+class ActionStatus(str, Enum):
+    """Outcome of one mutation attempt."""
+
+    OK = "ok"
+    ALREADY_DONE = "already_done"     # follow → already following, etc.
+    NOT_APPLICABLE = "not_applicable" # unfollow → was not following
+    DRY_RUN = "dry_run"               # actions disabled or dry-run on
+    ERROR = "error"
+
+
+class ActionResult(_FrozenModel):
+    """Structured outcome of a single mutation.
+
+    Returned by every method on the :mod:`instaharvest._v3.actions`
+    namespace. Callers should inspect :attr:`status` rather than
+    relying on truthiness; an :attr:`ActionStatus.ALREADY_DONE` is
+    semantically a success, but ``status != ActionStatus.OK``.
+    """
+
+    action: str = Field(min_length=1)        # e.g. "follow", "send_message"
+    target: str = Field(min_length=1)         # username or user_id we acted on
+    status: ActionStatus
+    message: str = ""
+    extra: Optional[dict] = None              # provider/api response details
+
+    @property
+    def succeeded(self) -> bool:
+        """True for OK, ALREADY_DONE, NOT_APPLICABLE, and DRY_RUN.
+
+        ``ERROR`` is the only failing status — everything else means
+        Instagram is in the state the caller wanted, even if we did
+        not have to do anything to get there.
+        """
+        return self.status != ActionStatus.ERROR

@@ -16,6 +16,7 @@ Public API (stable from this point):
 """
 
 from instaharvest._v3.config import Settings
+from instaharvest._v3.config.actions import ActionsConfig
 from instaharvest._v3.config.browser import BrowserConfig
 from instaharvest._v3.config.network import NetworkConfig
 from instaharvest._v3.config.stealth import StealthConfig
@@ -47,6 +48,11 @@ from instaharvest._v3.core.models import (
     Comment,
     CommentAuthor,
     CommentsPage,
+    FollowEntry,
+    FollowList,
+    FriendshipStatus,
+    ActionResult,
+    ActionStatus,
 )
 from instaharvest._v3.core.protocols import (
     HttpClient,
@@ -69,6 +75,7 @@ __all__ = [
     "RateLimitConfig",
     "OutputConfig",
     "SelectorConfig",
+    "ActionsConfig",
     # Exceptions
     "InstaHarvestError",
     "ConfigError",
@@ -93,6 +100,11 @@ __all__ = [
     "Comment",
     "CommentAuthor",
     "CommentsPage",
+    "FollowEntry",
+    "FollowList",
+    "FriendshipStatus",
+    "ActionResult",
+    "ActionStatus",
     # Protocols
     "HttpClient",
     "BrowserSession",
