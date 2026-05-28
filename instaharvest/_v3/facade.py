@@ -40,9 +40,13 @@ from instaharvest._v3.infrastructure.http import CurlHttpClient
 from instaharvest._v3.infrastructure.logger import get_logger
 from instaharvest._v3.infrastructure.session import FileSessionStore
 from instaharvest._v3.scrapers.comments import CommentScraper
+from instaharvest._v3.scrapers.explore import ExploreScraper
 from instaharvest._v3.scrapers.followers import FollowersScraper
+from instaharvest._v3.scrapers.hashtag import HashtagScraper
+from instaharvest._v3.scrapers.location import LocationScraper
 from instaharvest._v3.scrapers.media import MediaScraper
 from instaharvest._v3.scrapers.profile import ProfileScraper
+from instaharvest._v3.scrapers.search import SearchScraper
 
 
 class InstaHarvest:
@@ -89,6 +93,10 @@ class InstaHarvest:
         self._comments: Optional[CommentScraper] = None
         self._followers: Optional[FollowersScraper] = None
         self._actions: Optional[Actions] = None
+        self._hashtag: Optional[HashtagScraper] = None
+        self._location: Optional[LocationScraper] = None
+        self._search: Optional[SearchScraper] = None
+        self._explore: Optional[ExploreScraper] = None
 
     # ------------------------------------------------------------------
     # Public properties
@@ -200,6 +208,49 @@ class InstaHarvest:
                 followers=self.followers,
             )
         return self._actions
+
+    @property
+    def hashtag(self) -> HashtagScraper:
+        """HashtagScraper for ``ih.hashtag.lookup(tag)`` and feed access."""
+        if self._hashtag is None:
+            self._hashtag = HashtagScraper(
+                http=self._http,
+                logger=self._logger,
+                rate_limit=self._settings.rate_limit,
+            )
+        return self._hashtag
+
+    @property
+    def location(self) -> LocationScraper:
+        """LocationScraper for ``ih.location.lookup(pk)`` and feed access."""
+        if self._location is None:
+            self._location = LocationScraper(
+                http=self._http,
+                logger=self._logger,
+                rate_limit=self._settings.rate_limit,
+            )
+        return self._location
+
+    @property
+    def search(self) -> SearchScraper:
+        """SearchScraper for ``ih.search.search(query)``."""
+        if self._search is None:
+            self._search = SearchScraper(
+                http=self._http,
+                logger=self._logger,
+            )
+        return self._search
+
+    @property
+    def explore(self) -> ExploreScraper:
+        """ExploreScraper for the algorithmic ``/explore/`` feed."""
+        if self._explore is None:
+            self._explore = ExploreScraper(
+                http=self._http,
+                logger=self._logger,
+                rate_limit=self._settings.rate_limit,
+            )
+        return self._explore
 
     # ------------------------------------------------------------------
     # Lifecycle

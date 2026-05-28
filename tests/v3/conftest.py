@@ -86,7 +86,13 @@ class FakeHttpClient:
         return self._lookup(url)
 
     def post(self, url: str, *, data=None, json=None, headers=None) -> FakeHttpResponse:
-        self.calls.append({"method": "POST", "url": url, "json": json, "headers": headers})
+        self.calls.append({
+            "method": "POST",
+            "url": url,
+            "data": dict(data) if data else None,
+            "json": json,
+            "headers": headers,
+        })
         return self._lookup(url)
 
     def stream_to_file(self, url: str, dest: str) -> None:

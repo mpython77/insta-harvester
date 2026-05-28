@@ -139,8 +139,8 @@ instaharvest/
 |---|---|---|
 | **1 (shipped)** | Foundation: config, core, infrastructure, ProfileScraper, facade | Everything else |
 | **2 (shipped)** | MediaScraper (posts + reels — Instagram models them with the same JSON shape, so they share one scraper), CommentScraper | Followers, follow, message, etc. |
-| **3 (this PR)** | FollowersScraper (read-only), Actions namespace (opt-in follow/unfollow/DM with dry-run on by default) | Hashtag, location, search, explore |
-| **4** | All discovery scrapers | Highlights, stories |
+| **3 (shipped)** | FollowersScraper (read-only), Actions namespace (opt-in follow/unfollow/DM with dry-run on by default) | Hashtag, location, search, explore |
+| **4 (this PR)** | HashtagScraper, LocationScraper, SearchScraper, ExploreScraper — all API-only, all reusing the shared `paginate_feed` helper | Highlights, stories |
 | **5** | Highlights, stories, notifications | Web API |
 | **6** | Web API (single source for JSON-first reads) | — |
 | **Cleanup** | Delete legacy modules, remove `_v3` namespace prefix | — |
@@ -195,6 +195,21 @@ with InstaHarvest(settings) as ih:
     # Phase 3 — followers list (read-only, always available)
     followers = ih.followers.list_followers(profile.user_id, max_users=100)
     print(f"{followers.total_returned} followers")
+
+    # Phase 4 — discovery surfaces (hashtag, location, search, explore)
+    h = ih.hashtag.lookup("fashionweek")
+    print(h.name, h.formatted_media_count)         # fashionweek 1.2M
+
+    feed = ih.hashtag.recent("fashionweek", max_items=50)
+    print(feed.total_returned, feed.has_more)      # 50  True
+
+    loc = ih.location.lookup(213385402)
+    print(loc.name, loc.media_count)
+
+    hits = ih.search.search("fashion week")
+    print(len(hits.users), len(hits.hashtags), len(hits.places))
+
+    explore_feed = ih.explore.feed(max_items=30)
 
     # Phase 3 — write operations (opt-in!)
     # By default ih.actions raises ConfigError. To enable:
