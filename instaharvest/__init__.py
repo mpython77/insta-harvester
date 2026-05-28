@@ -414,3 +414,36 @@ __all__ = [
     'LocationSection',
 ]
 
+
+
+
+# ---------------------------------------------------------------------------
+# v3 namespace alias
+# ---------------------------------------------------------------------------
+#
+# v3 is the supported, refactored API. Legacy symbols above continue to
+# work for backwards compatibility but are not maintained for new
+# features. See ARCHITECTURE.md for the design and migration plan.
+#
+# Recommended new code::
+#
+#     from instaharvest.v3 import InstaHarvest, Settings
+#
+#     with InstaHarvest(Settings.default()) as ih:
+#         profile = ih.profile.scrape("instagram")
+#
+# The leading-underscore module ``instaharvest._v3`` remains the
+# canonical location of the implementation; ``instaharvest.v3`` is a
+# clean public alias provided here.
+
+from instaharvest import _v3 as v3  # noqa: E402  (alias must follow legacy imports)
+
+# Register the alias in sys.modules so ``from instaharvest.v3 import X`` works
+# (a plain attribute alias only supports ``instaharvest.v3.X``, not the
+# ``from`` form, because Python's import machinery looks up sub-modules in
+# ``sys.modules``, not in the parent module's namespace).
+import sys as _sys  # noqa: E402
+
+_sys.modules.setdefault("instaharvest.v3", v3)
+
+__all__.append("v3")

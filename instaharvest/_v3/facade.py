@@ -1,0 +1,199 @@
+"""
+InstaHarvest facade — the single user-facing entry point for v3.
+
+Replaces legacy ``core.InstaHarvest``, which was documented as the
+"central hub" but never actually used by any scraper. This one owns
+the lifecycle of every infrastructure component and exposes scrapers
+as cached properties so users do not construct them directly.
+
+Usage::
+
+    from instaharvest._v3 import InstaHarvest, Settings
+
+    with InstaHarvest(Settings.default()) as ih:
+        profile = ih.profile.scrape("instagram")
+        print(profile.followers, profile.is_verified)
+
+Design notes:
+    * One ``InstaHarvest`` owns one browser session and one HTTP client.
+      Scrapers share both, which is the point of the facade.
+    * Lazy: nothing is started until a scraper is first accessed.
+    * Idempotent ``close()``: safe to call multiple times.
+"""
+
+from __future__ import annotations
+
+from types import TracebackType
+from typing import Optional, Type
+
+from instaharvest._v3.config.settings import Settings
+from instaharvest._v3.core.exceptions import SessionNotFoundError
+from instaharvest._v3.core.protocols import (
+    BrowserSession,
+    HttpClient,
+    Logger,
+    SessionStore,
+)
+from instaharvest._v3.infrastructure.browser import PlaywrightBrowserSession
+from instaharvest._v3.infrastructure.http import CurlHttpClient
+from instaharvest._v3.infrastructure.logger import get_logger
+from instaharvest._v3.infrastructure.session import FileSessionStore
+from instaharvest._v3.scrapers.profile import ProfileScraper
+
+
+class InstaHarvest:
+    """Composition root for the v3 API.
+
+    Hand it a :class:`Settings`; it builds and owns:
+      * :class:`Logger`           — structured stderr logger
+      * :class:`SessionStore`     — file-backed Instagram session
+      * :class:`HttpClient`       — curl_cffi-based HTTP client
+      * :class:`BrowserSession`   — Playwright browser, lazy-started
+      * scrapers, exposed as properties
+
+    Tests can substitute any of the four infrastructure dependencies
+    by passing them to the constructor. In production you typically
+    just write ``InstaHarvest(Settings.default())``.
+    """
+
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        logger: Optional[Logger] = None,
+        session_store: Optional[SessionStore] = None,
+        http: Optional[HttpClient] = None,
+        browser: Optional[BrowserSession] = None,
+    ) -> None:
+        self._settings = settings
+        self._logger: Logger = logger or get_logger("facade")
+        self._session_store: SessionStore = session_store or FileSessionStore(
+            settings.output, self._logger
+        )
+        self._http: HttpClient = http or CurlHttpClient(settings.network, self._logger)
+        # Browser is constructed eagerly but not *started*; that happens on
+        # first scraper use. This keeps unit tests cheap and import-free.
+        self._browser: BrowserSession = browser or PlaywrightBrowserSession(
+            settings.browser, self._logger
+        )
+        self._browser_started: bool = browser is not None  # injected ones are pre-started
+        self._closed: bool = False
+
+        # Scraper cache — built on first access
+        self._profile: Optional[ProfileScraper] = None
+
+    # ------------------------------------------------------------------
+    # Public properties
+    # ------------------------------------------------------------------
+
+    @property
+    def settings(self) -> Settings:
+        return self._settings
+
+    @property
+    def logger(self) -> Logger:
+        return self._logger
+
+    @property
+    def session(self) -> SessionStore:
+        """Session storage — load/save and ``temp_cookie_file()``."""
+        return self._session_store
+
+    @property
+    def http(self) -> HttpClient:
+        """HTTP client (curl_cffi) — non-browser HTTP."""
+        return self._http
+
+    @property
+    def browser(self) -> BrowserSession:
+        """Started browser session.
+
+        First access triggers Playwright launch + Instagram session load.
+        """
+        if not self._browser_started:
+            self._start_browser()
+        return self._browser
+
+    @property
+    def profile(self) -> ProfileScraper:
+        """ProfileScraper for ``ih.profile.scrape(username)``."""
+        if self._profile is None:
+            self._profile = ProfileScraper(
+                browser=self.browser,
+                http=self._http,
+                logger=self._logger,
+                rate_limit=self._settings.rate_limit,
+                selectors=self._settings.selectors.profile,
+            )
+        return self._profile
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def __enter__(self) -> "InstaHarvest":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc: Optional[BaseException],
+        tb: Optional[TracebackType],
+    ) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Release every resource. Safe to call repeatedly."""
+        if self._closed:
+            return
+        self._closed = True
+
+        for closer, name in [
+            (self._http.close, "http"),
+            (self._browser.close, "browser"),
+        ]:
+            try:
+                closer()
+            except Exception as exc:
+                self._logger.warning("close error", component=name, error=str(exc))
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    def _start_browser(self) -> None:
+        """Launch the browser and load the Instagram session if present.
+
+        We don't fail when no session exists — anonymous browsing still
+        works for many endpoints — but we log it so the operator knows
+        why they're getting login walls.
+        """
+        if self._browser_started:
+            return
+
+        session_data = None
+        if self._session_store.exists():
+            try:
+                session_data = self._session_store.load()
+                self._logger.info("session loaded", path=getattr(self._session_store, "path", None))
+            except SessionNotFoundError:
+                # Race: file disappeared between exists() and load()
+                self._logger.warning("session vanished after exists() check")
+        else:
+            self._logger.info("no session file found; browsing anonymously")
+
+        # PlaywrightBrowserSession exposes start(); other implementations
+        # are assumed to be already started when injected.
+        start = getattr(self._browser, "start", None)
+        if callable(start):
+            start(session_data)
+
+        # Wire cookies into the HTTP client so API calls share auth.
+        try:
+            cookies = self._browser.cookies()
+            if cookies:
+                self._http.import_cookies(cookies)
+        except Exception as exc:
+            self._logger.warning("could not sync browser cookies to http", error=str(exc))
+
+        self._browser_started = True

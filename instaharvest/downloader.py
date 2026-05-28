@@ -51,13 +51,17 @@ class MediaDownloader:
             self.logger.warning("yt-dlp not installed. Run: pip install yt-dlp")
             return None
         
+        cookie_file = None
         try:
             safe_timestamp = timestamp.replace(':', '-').replace('/', '-').replace('\\', '-')
             output_template = str(save_dir / f"{safe_timestamp}_{shortcode}_ytdlp.%(ext)s")
-            
-            # Create Netscape cookie file from session
+
+            # Create Netscape cookie file from session.
+            # SECURITY: this file contains live Instagram cookies; we must
+            # remove it in the finally branch even if yt-dlp raises, so it
+            # never lingers in /tmp readable by other local processes.
             cookie_file = self._create_cookie_file_from_session()
-            
+
             ydl_opts = {
                 'outtmpl': output_template,
                 'quiet': True,
@@ -65,10 +69,10 @@ class MediaDownloader:
                 'format': 'best[ext=mp4]/best',
                 'noplaylist': True,
             }
-            
+
             if cookie_file:
                 ydl_opts['cookiefile'] = cookie_file
-            
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 self.logger.info(f"🎬 Using yt-dlp for: {shortcode}")
                 info = ydl.extract_info(post_url, download=True)
@@ -79,10 +83,23 @@ class MediaDownloader:
                     if expected_path.exists():
                         self.logger.info(f"✅ yt-dlp downloaded: {expected_path.name}")
                         return str(expected_path)
-            
+
         except Exception as e:
             self.logger.warning(f"yt-dlp failed: {e}")
-        
+        finally:
+            # Always remove the cookie file — leaks here would expose the
+            # user's Instagram session to anyone with /tmp access.
+            if cookie_file:
+                try:
+                    import os as _os
+                    _os.unlink(cookie_file)
+                except FileNotFoundError:
+                    pass
+                except OSError as cleanup_err:
+                    self.logger.warning(
+                        f"Failed to remove temp cookie file {cookie_file}: {cleanup_err}"
+                    )
+
         return None
 
     def _create_cookie_file_from_session(self) -> Optional[str]:

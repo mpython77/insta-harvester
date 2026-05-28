@@ -66,6 +66,8 @@ class BaseScraper(ABC):
         # Web API client (lazy initialized)
         self._web_api = None
 
+        self.logger.info(f"{self.__class__.__name__} initialized")
+
     def sync_network_client(self):
         """
         Synchronization: Browser Cookies -> Network Client
@@ -75,8 +77,6 @@ class BaseScraper(ABC):
             cookies = self.context.cookies()
             self.network_client.set_cookies(cookies)
             self.logger.info("⚡ Synced Browser Cookies to Network Client")
-
-        self.logger.info(f"{self.__class__.__name__} initialized")
 
     @property
     def web_api(self):
