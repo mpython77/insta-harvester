@@ -1,157 +1,108 @@
-"""
-Unit Tests — ScraperConfig
-Covers: defaults, overrides, list/dict fields, immutability of defaults
-"""
+"""Tests for the v3 config split."""
 
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from __future__ import annotations
+
+from dataclasses import FrozenInstanceError, replace
 
 import pytest
-from instaharvest.config import ScraperConfig
+
+from instaharvest import (
+    BrowserConfig,
+    NetworkConfig,
+    OutputConfig,
+    RateLimitConfig,
+    Settings,
+    StealthConfig,
+)
 
 
-class TestScraperConfigDefaults:
-    """Verify all default values are correct"""
+class TestSettings:
+    def test_default_composes_all_subconfigs(self):
+        s = Settings.default()
+        assert isinstance(s.browser, BrowserConfig)
+        assert isinstance(s.network, NetworkConfig)
+        assert isinstance(s.stealth, StealthConfig)
+        assert isinstance(s.rate_limit, RateLimitConfig)
+        assert isinstance(s.output, OutputConfig)
 
-    def test_session_file(self):
-        c = ScraperConfig()
-        assert c.session_file == 'instagram_session.json'
+    def test_settings_is_frozen(self):
+        s = Settings.default()
+        with pytest.raises(FrozenInstanceError):
+            s.browser = BrowserConfig(headless=False)  # type: ignore[misc]
 
-    def test_headless_default(self):
-        c = ScraperConfig()
+    def test_replace_yields_new_settings(self):
+        s = Settings.default()
+        new_browser = replace(s.browser, headless=False)
+        s2 = replace(s, browser=new_browser)
+        assert s2.browser.headless is False
+        assert s.browser.headless is True  # original unchanged
+
+
+class TestBrowserConfig:
+    def test_default_is_headless_chrome(self):
+        c = BrowserConfig()
         assert c.headless is True
+        assert c.channel == "chrome"
 
-    def test_viewport(self):
-        c = ScraperConfig()
-        assert c.viewport_width == 1280
-        assert c.viewport_height == 720
+    def test_invalid_viewport_rejected(self):
+        with pytest.raises(ValueError, match="viewport dimensions"):
+            BrowserConfig(viewport_width=0)
 
-    def test_proxy_defaults(self):
-        c = ScraperConfig()
+    def test_invalid_channel_rejected(self):
+        with pytest.raises(ValueError, match="unsupported channel"):
+            BrowserConfig(channel="firefox")
+
+    def test_negative_timeout_rejected(self):
+        with pytest.raises(ValueError, match="timeouts"):
+            BrowserConfig(default_timeout_ms=-1)
+
+
+class TestNetworkConfig:
+    def test_default_has_no_proxy(self):
+        c = NetworkConfig()
         assert c.proxy_url is None
-        assert c.proxies == []
-        assert c.proxy_rotation is True
-        assert c.proxy_rotation_interval == 10
+        assert c.proxy_pool == ()
 
-    def test_stealth_defaults(self):
-        c = ScraperConfig()
-        assert c.enable_stealth is True
-        assert c.stealth_level == 'aggressive'
+    def test_negative_retries_rejected(self):
+        with pytest.raises(ValueError, match="max_retries"):
+            NetworkConfig(max_retries=-1)
+
+    def test_zero_timeout_rejected(self):
+        with pytest.raises(ValueError, match="timeouts"):
+            NetworkConfig(connect_timeout=0)
+
+
+class TestStealthConfig:
+    def test_default_is_off(self):
+        c = StealthConfig()
+        assert c.enabled is False
+        assert c.mask_webgl is False
+
+    def test_submask_without_enabled_rejected(self):
+        # Setting any submask while enabled=False is a configuration mistake.
+        with pytest.raises(ValueError, match="submasks set but enabled=False"):
+            StealthConfig(enabled=False, mask_webgl=True)
+
+    def test_enabled_with_submasks_ok(self):
+        c = StealthConfig(enabled=True, mask_webgl=True, humanize_typing=True)
         assert c.mask_webgl is True
-        assert c.human_like_mouse is True
-
-    def test_timeout_defaults(self):
-        c = ScraperConfig()
-        assert c.default_timeout == 60000
-        assert c.navigation_timeout == 60000
-        assert c.element_timeout == 10000
-
-    def test_delay_defaults(self):
-        c = ScraperConfig()
-        assert c.page_load_delay == 2.0
-        assert c.button_click_delay == 2.5
-        assert c.popup_open_delay == 2.5
-
-    def test_rate_limit_defaults(self):
-        c = ScraperConfig()
-        assert c.rate_limit_cooldown == 300.0
-        assert c.rate_limit_max_retries == 2
-        assert len(c.rate_limit_indicators) > 5
-
-    def test_number_suffixes(self):
-        c = ScraperConfig()
-        assert c.number_suffixes['K'] == 1000
-        assert c.number_suffixes['M'] == 1000000
-        assert c.number_suffixes['ming'] == 1000  # Uzbek
-
-    def test_url_patterns(self):
-        c = ScraperConfig()
-        assert '{username}' in c.profile_url_pattern
-        assert '{username}' in c.reels_url_pattern
-
-    def test_comment_scraping_defaults(self):
-        c = ScraperConfig()
-        assert c.scrape_comments is False
-        assert c.scrape_comment_replies is True
-        assert c.max_comments_per_post is None
-
-    def test_log_defaults(self):
-        c = ScraperConfig()
-        assert c.log_level == 'INFO'
-        assert c.log_emoji_enabled is True
 
 
-class TestScraperConfigOverrides:
-    """Test custom config creation"""
+class TestRateLimitConfig:
+    def test_swap_min_max_rejected(self):
+        with pytest.raises(ValueError, match="request_delay_max must be >="):
+            RateLimitConfig(request_delay_min=5, request_delay_max=1)
 
-    def test_custom_headless(self):
-        c = ScraperConfig(headless=False)
-        assert c.headless is False
-
-    def test_custom_proxy(self):
-        c = ScraperConfig(proxy_url='http://user:pass@1.2.3.4:8080')
-        assert c.proxy_url == 'http://user:pass@1.2.3.4:8080'
-
-    def test_custom_delays(self):
-        c = ScraperConfig(page_load_delay=5.0, button_click_delay=3.0)
-        assert c.page_load_delay == 5.0
-        assert c.button_click_delay == 3.0
-
-    def test_custom_timeout(self):
-        c = ScraperConfig(default_timeout=120000)
-        assert c.default_timeout == 120000
-
-    def test_custom_session_file(self):
-        c = ScraperConfig(session_file='my_session.json')
-        assert c.session_file == 'my_session.json'
+    def test_negative_cooldown_rejected(self):
+        with pytest.raises(ValueError, match="cooldown_seconds"):
+            RateLimitConfig(cooldown_seconds=-1)
 
 
-class TestScraperConfigListIsolation:
-    """Ensure list/dict defaults don't share between instances"""
+class TestOutputConfig:
+    def test_empty_session_filename_rejected(self):
+        with pytest.raises(ValueError, match="session_filename"):
+            OutputConfig(session_filename="")
 
-    def test_rate_limit_indicators_isolated(self):
-        c1 = ScraperConfig()
-        c2 = ScraperConfig()
-        c1.rate_limit_indicators.append('Custom Block Text')
-        assert 'Custom Block Text' not in c2.rate_limit_indicators
-
-    def test_proxies_isolated(self):
-        c1 = ScraperConfig()
-        c2 = ScraperConfig()
-        c1.proxies.append('http://proxy1:8080')
-        assert len(c2.proxies) == 0
-
-    def test_number_suffixes_isolated(self):
-        c1 = ScraperConfig()
-        c2 = ScraperConfig()
-        c1.number_suffixes['X'] = 999
-        assert 'X' not in c2.number_suffixes
-
-
-class TestScraperConfigSelectors:
-    """CSS selectors should be non-empty strings"""
-
-    def test_profile_selectors(self):
-        c = ScraperConfig()
-        assert len(c.selector_posts_count) > 0
-        assert len(c.selector_followers_link) > 0
-        assert len(c.selector_following_link) > 0
-
-    def test_comment_selectors(self):
-        c = ScraperConfig()
-        assert len(c.selector_comment_thread) > 0
-        assert len(c.selector_comment_username_link) > 0
-
-    def test_like_selectors(self):
-        c = ScraperConfig()
-        assert len(c.selector_likes_options) > 0
-        assert len(c.selector_like_svg) > 0
-
-    def test_notification_selectors(self):
-        c = ScraperConfig()
-        assert len(c.selector_notif_item) > 0
-        assert len(c.notification_url) > 0
-
-
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '--tb=short'])
+    def test_negative_indent_rejected(self):
+        with pytest.raises(ValueError, match="json_indent"):
+            OutputConfig(json_indent=-1)

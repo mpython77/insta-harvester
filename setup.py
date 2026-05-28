@@ -11,7 +11,7 @@ long_description = (this_directory / "README.md").read_text(encoding='utf-8')
 
 setup(
     name="instaharvest",
-    version='3.0.0-alpha',
+    version='4.0.0',
     author="Muydinov Doston",
     author_email="kelajak054@gmail.com",
     description="Professional Instagram data collection toolkit with automation features",
@@ -20,18 +20,16 @@ setup(
     url="https://github.com/mpython77/insta-harvester",
     packages=find_packages(),
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=[
         "playwright>=1.40.0",
         "playwright-stealth>=1.0.6",  # Anti-detection / Stealth mode

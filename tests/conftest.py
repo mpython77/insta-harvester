@@ -1,169 +1,201 @@
 """
-Shared pytest fixtures for instaharvest test suite.
-Provides mock objects for Playwright, NetworkClient, Config, and BaseScraper factory.
+In-memory fakes for v3 protocols.
+
+These fakes implement the protocols from ``instaharvest.core.protocols``
+faithfully — they record calls, let tests pre-program responses, and
+have observable side effects. They are not :class:`MagicMock`: a test
+that uses them is exercising real code paths through the protocol
+boundary.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-from instaharvest.config import ScraperConfig
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 
-# ═══════════════════════════════════════════════════════════
-# Core Fixtures
-# ═══════════════════════════════════════════════════════════
-
-@pytest.fixture
-def mock_config():
-    """Default ScraperConfig for testing"""
-    return ScraperConfig()
+# ---------------------------------------------------------------------------
+# Logger
+# ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def mock_logger():
-    """MagicMock logger"""
-    logger = MagicMock()
-    logger.info = MagicMock()
-    logger.debug = MagicMock()
-    logger.warning = MagicMock()
-    logger.error = MagicMock()
-    logger.critical = MagicMock()
-    return logger
+@dataclass
+class FakeLogger:
+    """Captures every log call so tests can assert on them."""
+
+    records: List[tuple] = field(default_factory=list)
+
+    def debug(self, message: str, **context: Any) -> None:
+        self.records.append(("debug", message, context))
+
+    def info(self, message: str, **context: Any) -> None:
+        self.records.append(("info", message, context))
+
+    def warning(self, message: str, **context: Any) -> None:
+        self.records.append(("warning", message, context))
+
+    def error(self, message: str, **context: Any) -> None:
+        self.records.append(("error", message, context))
+
+    def messages_at(self, level: str) -> List[str]:
+        return [msg for lvl, msg, _ in self.records if lvl == level]
 
 
-# ═══════════════════════════════════════════════════════════
-# Playwright Mock Fixtures
-# ═══════════════════════════════════════════════════════════
-
-@pytest.fixture
-def mock_locator():
-    """Mock Playwright Locator"""
-    locator = MagicMock()
-    locator.count.return_value = 0
-    locator.first = locator
-    locator.inner_text.return_value = ''
-    locator.get_attribute.return_value = None
-    locator.is_visible.return_value = True
-    locator.text_content.return_value = ''
-    locator.all_inner_texts.return_value = []
-    locator.all_text_contents.return_value = []
-    locator.nth.return_value = locator
-    return locator
+# ---------------------------------------------------------------------------
+# HTTP
+# ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def mock_page(mock_locator):
-    """Mock Playwright Page"""
-    page = MagicMock()
-    page.url = 'https://www.instagram.com/testuser/'
-    page.title.return_value = 'testuser • Instagram'
-    page.content.return_value = '<html><body>Test</body></html>'
-    page.locator.return_value = mock_locator
-    page.query_selector.return_value = None
-    page.query_selector_all.return_value = []
-    page.goto.return_value = None
-    page.evaluate.return_value = None
-    page.wait_for_selector.return_value = mock_locator
-    page.wait_for_timeout.return_value = None
-    page.set_default_timeout.return_value = None
-    page.keyboard = MagicMock()
-    page.mouse = MagicMock()
-    page.close.return_value = None
-    page.screenshot.return_value = b'fake_screenshot'
-    return page
+class FakeHttpResponse:
+    def __init__(self, *, status_code: int = 200, json_data: Any = None, text: str = "") -> None:
+        self.status_code = status_code
+        self._json = json_data
+        self.text = text or ""
+        self.content = self.text.encode()
+
+    def json(self) -> Any:
+        if self._json is None:
+            raise ValueError("no json configured")
+        return self._json
 
 
-@pytest.fixture
-def mock_context(mock_page):
-    """Mock Playwright BrowserContext"""
-    context = MagicMock()
-    context.new_page.return_value = mock_page
-    context.cookies.return_value = [
-        {'name': 'sessionid', 'value': 'test123', 'domain': '.instagram.com', 'path': '/'}
-    ]
-    context.storage_state.return_value = {
-        'cookies': [{'name': 'sessionid', 'value': 'test123'}],
-        'origins': []
-    }
-    context.close.return_value = None
-    context.add_init_script.return_value = None
-    return context
+@dataclass
+class FakeHttpClient:
+    """Programmable HTTP client. Returns canned responses by URL prefix."""
+
+    responses: Dict[str, FakeHttpResponse] = field(default_factory=dict)
+    raise_for_url: Dict[str, Exception] = field(default_factory=dict)
+    calls: List[Dict[str, Any]] = field(default_factory=list)
+    imported_cookies: List[Mapping[str, Any]] = field(default_factory=list)
+    closed: bool = False
+
+    def _lookup(self, url: str) -> FakeHttpResponse:
+        # Exception lookups are prefix-matched, mirroring ``responses``,
+        # so tests can program "any URL starting with X raises" without
+        # having to know the exact ``user_id``-suffix the scraper builds.
+        for prefix, exc in self.raise_for_url.items():
+            if url.startswith(prefix):
+                raise exc
+        for prefix, resp in self.responses.items():
+            if url.startswith(prefix):
+                return resp
+        raise AssertionError(f"FakeHttpClient: no response programmed for {url!r}")
+
+    def get(self, url: str, *, params=None, headers=None) -> FakeHttpResponse:
+        self.calls.append({"method": "GET", "url": url, "headers": headers})
+        return self._lookup(url)
+
+    def post(self, url: str, *, data=None, json=None, headers=None) -> FakeHttpResponse:
+        self.calls.append({
+            "method": "POST",
+            "url": url,
+            "data": dict(data) if data else None,
+            "json": json,
+            "headers": headers,
+        })
+        return self._lookup(url)
+
+    def stream_to_file(self, url: str, dest: str) -> None:
+        self.calls.append({"method": "STREAM", "url": url, "dest": dest})
+        with open(dest, "wb") as fh:
+            fh.write(self._lookup(url).content)
+
+    def import_cookies(self, cookies: Iterable[Mapping[str, Any]]) -> None:
+        self.imported_cookies = list(cookies)
+
+    def close(self) -> None:
+        self.closed = True
 
 
-@pytest.fixture
-def mock_browser(mock_context):
-    """Mock Playwright Browser"""
-    browser = MagicMock()
-    browser.new_context.return_value = mock_context
-    browser.close.return_value = None
-    return browser
+# ---------------------------------------------------------------------------
+# Browser
+# ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def mock_playwright(mock_browser):
-    """Mock Playwright instance"""
-    pw = MagicMock()
-    pw.chromium.launch.return_value = mock_browser
-    pw.stop.return_value = None
-    return pw
+@dataclass
+class FakeBrowserSession:
+    """Programmable browser. Tests set ``url``/``content``/``elements``.
 
-
-# ═══════════════════════════════════════════════════════════
-# BaseScraper Factory
-# ═══════════════════════════════════════════════════════════
-
-@pytest.fixture
-def make_scraper(mock_page, mock_context, mock_browser, mock_playwright, mock_logger, mock_config):
+    ``elements`` maps a CSS selector to a dict ``{"text": ..., "attrs": {...}}``.
     """
-    Factory fixture: creates any BaseScraper subclass with mocked browser stack.
-    
-    Usage:
-        scraper = make_scraper(ProfileScraper)
-        # or with custom config:
-        scraper = make_scraper(ProfileScraper, config=my_config)
-    """
-    def _factory(scraper_class, config=None):
-        cfg = config or mock_config
-        with patch('instaharvest.base.sync_playwright'), \
-             patch('instaharvest.base.create_proxy_manager_from_config') as mock_proxy_mgr:
-            mock_proxy_mgr.return_value = MagicMock(has_proxies=False, get_for_curl=MagicMock(return_value=None))
-            scraper = scraper_class(config=cfg)
-        scraper.playwright = mock_playwright
-        scraper.browser = mock_browser
-        scraper.context = mock_context
-        scraper.page = mock_page
-        scraper.logger = mock_logger
-        scraper._web_api = None
-        return scraper
-    return _factory
+
+    url: str = "https://www.instagram.com/"
+    content: str = ""
+    elements: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    cookies_data: List[Mapping[str, Any]] = field(default_factory=list)
+    visited: List[str] = field(default_factory=list)
+    closed: bool = False
+    raise_on_goto: Optional[Exception] = None
+
+    # Sequence of (url, content, elements) tuples to apply after each goto.
+    # Used to simulate redirects / state changes.
+    goto_sequence: List[Dict[str, Any]] = field(default_factory=list)
+
+    def goto(self, url: str, *, wait_until: str = "domcontentloaded") -> None:
+        if self.raise_on_goto is not None:
+            raise self.raise_on_goto
+        self.visited.append(url)
+        if self.goto_sequence:
+            step = self.goto_sequence.pop(0)
+            self.url = step.get("url", url)
+            self.content = step.get("content", self.content)
+            if "elements" in step:
+                self.elements = step["elements"]
+        else:
+            self.url = url
+
+    def page_url(self) -> str:
+        return self.url
+
+    def page_content(self) -> str:
+        return self.content
+
+    def query_text(self, selector: str) -> Optional[str]:
+        elem = self.elements.get(selector)
+        if elem is None:
+            return None
+        return elem.get("text")
+
+    def query_attribute(self, selector: str, attribute: str) -> Optional[str]:
+        elem = self.elements.get(selector)
+        if elem is None:
+            return None
+        return (elem.get("attrs") or {}).get(attribute)
+
+    def cookies(self) -> List[Mapping[str, Any]]:
+        return list(self.cookies_data)
+
+    def screenshot(self, dest: str) -> None:
+        with open(dest, "wb") as fh:
+            fh.write(b"png-stub")
+
+    def close(self) -> None:
+        self.closed = True
 
 
-# ═══════════════════════════════════════════════════════════
-# Network Mock
-# ═══════════════════════════════════════════════════════════
-
-@pytest.fixture
-def mock_network_client():
-    """Mock NetworkClient"""
-    client = MagicMock()
-    client.get.return_value = MagicMock(status_code=200, json=MagicMock(return_value={}), text='{}')
-    client.post.return_value = MagicMock(status_code=200, json=MagicMock(return_value={}))
-    client.download_media.return_value = True
-    client.set_cookies.return_value = None
-    return client
+# ---------------------------------------------------------------------------
+# Session store
+# ---------------------------------------------------------------------------
 
 
-# ═══════════════════════════════════════════════════════════
-# Session Data Fixtures
-# ═══════════════════════════════════════════════════════════
+@dataclass
+class FakeSessionStore:
+    """In-memory session store. Tests set ``data`` directly."""
 
-@pytest.fixture
-def sample_session_data():
-    """Sample session data dict"""
-    return {
-        'cookies': [
-            {'name': 'sessionid', 'value': 'test_session_123', 'domain': '.instagram.com', 'path': '/'},
-            {'name': 'csrftoken', 'value': 'csrf_test_456', 'domain': '.instagram.com', 'path': '/'},
-            {'name': 'ds_user_id', 'value': '12345678', 'domain': '.instagram.com', 'path': '/'},
-        ],
-        'origins': []
-    }
+    data: Optional[Mapping[str, Any]] = None
+
+    def exists(self) -> bool:
+        return self.data is not None
+
+    def load(self) -> Mapping[str, Any]:
+        if self.data is None:
+            from instaharvest.core.exceptions import SessionNotFoundError
+            raise SessionNotFoundError("(in-memory)")
+        return self.data
+
+    def save(self, data: Mapping[str, Any]) -> None:
+        self.data = dict(data)
+
+    def temp_cookie_file(self) -> Any:
+        # Tests that need this should use the real FileSessionStore.
+        raise NotImplementedError("use FileSessionStore for temp_cookie_file")

@@ -1,8 +1,7 @@
-# InstaHarvest — Target Architecture (v3)
+# InstaHarvest — Architecture (v4)
 
-> **Status:** Migration in progress (Strangler Fig pattern).
-> Legacy modules at `instaharvest/*.py` continue to work.
-> New code lives under `instaharvest/_v3/` and is the supported path going forward.
+> **Status:** v4.0.0 released. Legacy modules removed. Clean API at top-level.
+> New code lives directly under `instaharvest/`.
 
 ---
 
@@ -22,8 +21,9 @@ new feature can no longer paper over:
 | Aspirational dead code | `core.InstaHarvest` | Documented as the central hub; no scraper ever calls it. |
 | Test padding | `tests/test_deep_coverage*.py` (16 files, ~10K LOC) | High coverage number, near-zero behavioral signal. |
 
-Rather than continue piling features onto this, we are building a clean
-foundation in `instaharvest/_v3/` and migrating one component at a time.
+Rather than continue piling features onto this, we built a clean
+foundation (originally in `instaharvest/_v3/`, now promoted to top-level)
+and migrated one component at a time.
 
 ---
 
@@ -60,28 +60,28 @@ foundation in `instaharvest/_v3/` and migrating one component at a time.
 
 ```
 +-------------------------------------------------------------+
-|                     instaharvest._v3.facade                 |
+|                     instaharvest.facade                      |
 |       InstaHarvest — single user-facing entry point         |
 +-------------------------------------------------------------+
                            |
 +-------------------------------------------------------------+
-|                  instaharvest._v3.scrapers                  |
+|                  instaharvest.scrapers                       |
 |   ProfileScraper, PostScraper, ...  (one job per class)     |
 +-------------------------------------------------------------+
                            |
 +-------------------------------------------------------------+
-|                   instaharvest._v3.core                     |
+|                   instaharvest.core                          |
 |   exceptions, models, protocols  (no I/O, no frameworks)    |
 +-------------------------------------------------------------+
                            |
 +-------------------------------------------------------------+
-|              instaharvest._v3.infrastructure                |
+|              instaharvest.infrastructure                     |
 |   HttpClient, BrowserSession, SessionStore, Logger          |
 |   (the only modules allowed to import Playwright/curl_cffi) |
 +-------------------------------------------------------------+
                            |
 +-------------------------------------------------------------+
-|                 instaharvest._v3.config                     |
+|                 instaharvest.config                          |
 |  BrowserConfig, NetworkConfig, StealthConfig, ..., Settings |
 +-------------------------------------------------------------+
 ```
@@ -95,48 +95,44 @@ Imports may go **down only**. `core` may not import `infrastructure`.
 
 ```
 instaharvest/
-├── _v3/
-│   ├── __init__.py                  # Public re-exports for v3
-│   ├── facade.py                    # InstaHarvest (real central hub)
-│   │
-│   ├── config/
-│   │   ├── __init__.py              # Settings.default(), composition
-│   │   ├── browser.py               # BrowserConfig
-│   │   ├── network.py               # NetworkConfig (proxy, timeouts, retries)
-│   │   ├── stealth.py               # StealthConfig
-│   │   ├── rate_limit.py            # RateLimitConfig
-│   │   ├── output.py                # OutputConfig (export paths)
-│   │   ├── selectors.py             # SelectorConfig (Instagram-specific CSS)
-│   │   └── settings.py              # Settings (composes all above)
-│   │
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── exceptions.py            # InstaHarvestError + typed subclasses
-│   │   ├── models.py                # Pydantic data models
-│   │   └── protocols.py             # HttpClient, BrowserSession, SessionStore, Logger
-│   │
-│   ├── infrastructure/
-│   │   ├── __init__.py
-│   │   ├── http.py                  # CurlHttpClient (the single HTTP stack)
-│   │   ├── browser.py               # PlaywrightBrowserSession
-│   │   ├── session.py               # FileSessionStore (atomic writes, optional encryption)
-│   │   └── logger.py                # StructuredLogger (no emoji, key=value)
-│   │
-│   └── scrapers/
-│       ├── __init__.py
-│       ├── base.py                  # AbstractScraper (uses protocols only)
-│       └── profile.py               # ProfileScraper (reference implementation)
+├── __init__.py                  # Public re-exports
+├── facade.py                    # InstaHarvest (real central hub)
 │
-│   ├── evasion/
-│   │   ├── __init__.py              # Opt-in re-exports
-│   │   ├── config.py                # EvasionConfig (frozen dataclass)
-│   │   ├── facade.py                # EvasionManager
-│   │   ├── stealth_adapter.py       # StealthAdapter wraps legacy stealth.py
-│   │   ├── captcha_adapter.py       # CaptchaAdapter wraps legacy captcha_solver.py
-│   │   └── multi_session.py         # MultiSessionAdapter wraps legacy session_manager.py
+├── config/
+│   ├── __init__.py              # Settings.default(), composition
+│   ├── browser.py               # BrowserConfig
+│   ├── network.py               # NetworkConfig (proxy, timeouts, retries)
+│   ├── stealth.py               # StealthConfig
+│   ├── rate_limit.py            # RateLimitConfig
+│   ├── output.py                # OutputConfig (export paths)
+│   ├── selectors.py             # SelectorConfig (Instagram-specific CSS)
+│   └── settings.py              # Settings (composes all above)
 │
-├── (legacy modules — kept until migrated)
-└── __init__.py                      # Exports both v3 and legacy
+├── core/
+│   ├── __init__.py
+│   ├── exceptions.py            # InstaHarvestError + typed subclasses
+│   ├── models.py                # Pydantic data models
+│   └── protocols.py             # HttpClient, BrowserSession, SessionStore, Logger
+│
+├── infrastructure/
+│   ├── __init__.py
+│   ├── http.py                  # CurlHttpClient (the single HTTP stack)
+│   ├── browser.py               # PlaywrightBrowserSession
+│   ├── session.py               # FileSessionStore (atomic writes, optional encryption)
+│   └── logger.py                # StructuredLogger (no emoji, key=value)
+│
+├── scrapers/
+│   ├── __init__.py
+│   ├── base.py                  # AbstractScraper (uses protocols only)
+│   └── profile.py               # ProfileScraper (reference implementation)
+│
+└── evasion/
+    ├── __init__.py              # Opt-in re-exports
+    ├── config.py                # EvasionConfig (frozen dataclass)
+    ├── facade.py                # EvasionManager
+    ├── stealth_adapter.py       # StealthAdapter (legacy stealth removed in 4.0)
+    ├── captcha_adapter.py       # CaptchaAdapter (legacy captcha_solver removed in 4.0)
+    └── multi_session.py         # MultiSessionAdapter (legacy session_manager removed in 4.0)
 ```
 
 ---
@@ -151,12 +147,16 @@ instaharvest/
 | **4 (shipped)** | HashtagScraper, LocationScraper, SearchScraper, ExploreScraper — all API-only, all reusing the shared `paginate_feed` helper | Highlights, stories |
 | **5 (shipped)** | StoryScraper, HighlightScraper, NotificationsScraper, opt-in evasion package (stealth + CAPTCHA + multi-session) | Web API |
 | **6 (shipped)** | Web API (single source for JSON-first reads) | — |
-| **Cleanup (in progress)** | Legacy modules deprecated (``PendingDeprecationWarning``), removal deferred to 4.0. ``instaharvest.v3`` is the canonical import path. | — |
+| **Cleanup (shipped)** | Legacy modules removed. `_v3` namespace promoted to top-level. v4.0.0 released. | — |
 
-Each phase ships independently. `instaharvest.__init__` always re-exports
-both, with a one-line deprecation note for legacy paths. The public API
-in `instaharvest._v3` is stable from phase 1 onward — only the *internal*
-implementation grows.
+Each phase shipped independently. As of 4.0, legacy modules have been removed
+and `instaharvest` directly exports the clean API. The public API (now at
+`instaharvest.*` since 4.0) is stable from phase 1 onward.
+
+> **v4.0.0 (current stable):** The `_v3` namespace no longer exists as a
+> separate subpackage. All v3 modules have been promoted to top-level
+> (`instaharvest.config`, `instaharvest.core`, etc.). Legacy modules have
+> been deleted. Import directly from `instaharvest`.
 
 ---
 
@@ -166,20 +166,18 @@ implementation grows.
   improves engineering quality; it does not turn it into a different
   product.
 - **Legal/ethical posture.** Stealth, captcha-bypass, and multi-account
-  rotation are still in the legacy tree. They are *not* migrated to v3
-  by default — using them remains the operator's choice and risk.
-  Phase 5 will move them into an opt-in `instaharvest._v3.evasion`
-  subpackage so they can be excluded from a build.
-- **Backwards compatibility for one major version.** v2.x imports keep
-  working until v4.0.0.
+  rotation are in the opt-in `instaharvest.evasion` subpackage. Using
+  them remains the operator's choice and risk.
+- **Backwards compatibility was maintained for one major version.** v2.x
+  imports worked through 3.x; they were removed in 4.0.0.
 
 ---
 
-## 7. How to use v3 (preview)
+## 7. How to use (v4.0)
 
 ```python
 from dataclasses import replace
-from instaharvest._v3 import InstaHarvest, Settings
+from instaharvest import InstaHarvest, Settings
 
 settings = Settings.default()
 settings = replace(settings, browser=replace(settings.browser, headless=True))

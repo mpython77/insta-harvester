@@ -17,7 +17,7 @@ import logging
 from pathlib import Path
 from typing import Optional, List, Callable
 from playwright.sync_api import sync_playwright
-from .config import ScraperConfig
+from ._legacy_config import ScraperConfig
 
 # Module-level logger
 _logger = logging.getLogger(__name__)
