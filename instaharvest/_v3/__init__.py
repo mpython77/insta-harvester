@@ -39,6 +39,14 @@ from instaharvest._v3.core.models import (
     Profile,
     BioLink,
     BusinessInfo,
+    Media,
+    MediaKind,
+    MediaOwner,
+    MediaLocation,
+    CarouselItem,
+    Comment,
+    CommentAuthor,
+    CommentsPage,
 )
 from instaharvest._v3.core.protocols import (
     HttpClient,
@@ -48,6 +56,7 @@ from instaharvest._v3.core.protocols import (
 )
 
 from instaharvest._v3.facade import InstaHarvest
+from instaharvest._v3.scrapers.media import MediaNotFoundError
 
 __all__ = [
     # Facade
@@ -69,12 +78,21 @@ __all__ = [
     "NetworkError",
     "RateLimitedError",
     "ProfileNotFoundError",
+    "MediaNotFoundError",
     "HtmlStructureChangedError",
     "ParseError",
     # Models
     "Profile",
     "BioLink",
     "BusinessInfo",
+    "Media",
+    "MediaKind",
+    "MediaOwner",
+    "MediaLocation",
+    "CarouselItem",
+    "Comment",
+    "CommentAuthor",
+    "CommentsPage",
     # Protocols
     "HttpClient",
     "BrowserSession",

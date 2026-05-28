@@ -6,15 +6,21 @@ Design rules:
       ConfigDict(frozen=True)``. Users cannot mutate them after the
       scraper returns.
     * Models are pure data: no methods that touch I/O, no log calls.
-    * Models converge on ``Profile`` etc.; v3 does not duplicate
-      "WebProfileData vs ProfileData" the way legacy did.
+    * Models converge on ``Profile``, ``Media``, ``Comment``; v3 does
+      not duplicate "WebProfileData vs ProfileData" the way legacy did.
+    * Where Instagram exposes both an exact value (API) and a
+      rendered string (DOM), we model the exact form and let scrapers
+      parse the rendered form into it. ``data_source`` records which
+      path the value came from.
 """
 
 from __future__ import annotations
 
-from typing import List, Optional
+from datetime import datetime, timezone
+from enum import Enum
+from typing import List, Optional, Tuple
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 
 class _FrozenModel(BaseModel):
@@ -70,3 +76,222 @@ class Profile(_FrozenModel):
     business: Optional[BusinessInfo] = None
 
     data_source: str = Field(default="api", pattern="^(api|dom)$")
+
+
+
+# ---------------------------------------------------------------------------
+# Media (posts, reels — Instagram models them with the same shape)
+# ---------------------------------------------------------------------------
+
+
+class MediaKind(str, Enum):
+    """What kind of media this is.
+
+    Instagram's internal API uses two fields to encode this:
+
+      * ``media_type`` — int: ``1`` image, ``2`` video, ``8`` carousel.
+      * ``product_type`` — str: ``"clips"`` for reels, ``"feed"`` for
+        regular feed posts, ``"carousel_container"`` etc.
+
+    v3 collapses the two into a single enum. ``REEL`` wins over
+    ``VIDEO`` when both apply (i.e. a video with ``product_type=clips``
+    is a reel).
+    """
+
+    IMAGE = "image"
+    VIDEO = "video"
+    REEL = "reel"
+    CAROUSEL = "carousel"
+
+
+class MediaOwner(_FrozenModel):
+    """Author of a post/reel."""
+
+    username: str = Field(min_length=1)
+    user_id: Optional[str] = None
+    full_name: Optional[str] = None
+    is_verified: bool = False
+    profile_pic_url: Optional[HttpUrl] = None
+
+
+class MediaLocation(_FrozenModel):
+    """Tagged location."""
+
+    name: str = Field(min_length=1)
+    pk: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class CarouselItem(_FrozenModel):
+    """One slide of a multi-image/video carousel post."""
+
+    index: int = Field(ge=0)
+    kind: MediaKind
+    width: int = Field(ge=0)
+    height: int = Field(ge=0)
+    image_url: Optional[HttpUrl] = None
+    video_url: Optional[HttpUrl] = None
+    video_duration: Optional[float] = Field(default=None, ge=0)
+    has_audio: bool = False
+    accessibility_caption: Optional[str] = None
+    tagged_usernames: Tuple[str, ...] = ()
+
+    @field_validator("kind")
+    @classmethod
+    def _kind_must_be_atomic(cls, value: MediaKind) -> MediaKind:
+        # A carousel slide is always a single image or video; it cannot
+        # itself be a carousel or a reel.
+        if value in (MediaKind.CAROUSEL, MediaKind.REEL):
+            raise ValueError(
+                f"CarouselItem.kind must be IMAGE or VIDEO, got {value}"
+            )
+        return value
+
+
+class Media(_FrozenModel):
+    """A post or a reel.
+
+    Returned by :class:`instaharvest._v3.scrapers.MediaScraper`.
+
+    A few invariants:
+
+      * ``shortcode`` and ``url`` always agree — the URL is derived
+        from the shortcode by the scraper; users do not construct
+        ``Media`` directly in normal use.
+      * ``kind == CAROUSEL`` iff ``carousel`` is non-empty.
+      * For non-carousel video/reel media, ``video_url`` is set.
+    """
+
+    shortcode: str = Field(min_length=1)
+    url: HttpUrl
+    kind: MediaKind
+
+    owner: MediaOwner
+    taken_at: datetime
+    caption: Optional[str] = None
+
+    like_count: int = Field(ge=0)
+    comment_count: int = Field(ge=0)
+
+    # Top-level media (None for carousels — see ``carousel`` instead)
+    image_url: Optional[HttpUrl] = None
+    video_url: Optional[HttpUrl] = None
+    video_duration: Optional[float] = Field(default=None, ge=0)
+    has_audio: bool = False
+    width: int = Field(default=0, ge=0)
+    height: int = Field(default=0, ge=0)
+    accessibility_caption: Optional[str] = None
+
+    # Optional structured side-data
+    location: Optional[MediaLocation] = None
+    tagged_usernames: Tuple[str, ...] = ()
+    carousel: Tuple[CarouselItem, ...] = ()
+
+    data_source: str = Field(default="api", pattern="^(api|dom)$")
+
+    # ----- invariants ----------------------------------------------------
+
+    @field_validator("taken_at", mode="before")
+    @classmethod
+    def _coerce_taken_at(cls, value):
+        # Instagram returns Unix epoch seconds; accept that and bare
+        # datetimes interchangeably, normalise to UTC.
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+    @field_validator("carousel")
+    @classmethod
+    def _carousel_indices_unique_and_dense(
+        cls,
+        value: Tuple[CarouselItem, ...],
+    ) -> Tuple[CarouselItem, ...]:
+        if not value:
+            return value
+        indices = sorted(item.index for item in value)
+        if indices != list(range(len(indices))):
+            raise ValueError(
+                "CarouselItem.index values must form 0..n-1 with no gaps "
+                f"or duplicates, got {indices}"
+            )
+        return value
+
+
+# ---------------------------------------------------------------------------
+# Comments
+# ---------------------------------------------------------------------------
+
+
+class CommentAuthor(_FrozenModel):
+    """Author of a comment or reply."""
+
+    username: str = Field(min_length=1)
+    user_id: Optional[str] = None
+    full_name: Optional[str] = None
+    is_verified: bool = False
+    profile_pic_url: Optional[HttpUrl] = None
+
+
+class Comment(_FrozenModel):
+    """A single comment.
+
+    Replies are themselves ``Comment`` objects nested under
+    :attr:`replies`. Top-level comments have :attr:`parent_id` set to
+    ``None``; replies set it to the id of their parent comment.
+
+    The replies tree is at most one level deep — Instagram only
+    supports comment → reply, not reply → reply — but the model itself
+    permits arbitrary nesting so future product changes do not require
+    a model change.
+    """
+
+    id: str = Field(min_length=1)
+    text: str
+    author: CommentAuthor
+    created_at: datetime
+    like_count: int = Field(default=0, ge=0)
+    reply_count: int = Field(default=0, ge=0)
+    parent_id: Optional[str] = None
+    replies: Tuple["Comment", ...] = ()
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _coerce_created_at(cls, value):
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+
+# Allow the recursive ``replies: Tuple[Comment, ...]`` self-reference.
+Comment.model_rebuild()
+
+
+class CommentsPage(_FrozenModel):
+    """Result of one comment-scrape call.
+
+    Pagination is fully-resolved by ``CommentScraper.scrape`` — by the
+    time you see this object, ``comments`` already contains every
+    comment requested (up to ``max_comments``). ``has_more`` indicates
+    whether Instagram had additional comments beyond the cap.
+    """
+
+    media_shortcode: str = Field(min_length=1)
+    comments: Tuple[Comment, ...] = ()
+    total_returned: int = Field(ge=0)
+    has_more: bool = False
+    next_cursor: Optional[str] = None
+
+    @field_validator("total_returned")
+    @classmethod
+    def _total_matches_len(cls, value: int, info) -> int:
+        comments = info.data.get("comments")
+        if comments is not None and value != len(comments):
+            raise ValueError(
+                f"total_returned={value} disagrees with len(comments)={len(comments)}"
+            )
+        return value

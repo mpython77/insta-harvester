@@ -8,10 +8,15 @@ own their parsing and their domain checks.
 """
 
 from instaharvest._v3.scrapers.base import AbstractScraper, NavigationOutcome
+from instaharvest._v3.scrapers.comments import CommentScraper
+from instaharvest._v3.scrapers.media import MediaNotFoundError, MediaScraper
 from instaharvest._v3.scrapers.profile import ProfileScraper
 
 __all__ = [
     "AbstractScraper",
     "NavigationOutcome",
     "ProfileScraper",
+    "MediaScraper",
+    "MediaNotFoundError",
+    "CommentScraper",
 ]

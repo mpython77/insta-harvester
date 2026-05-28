@@ -137,8 +137,8 @@ instaharvest/
 
 | Phase | What moves to v3 | What stays in legacy |
 |---|---|---|
-| **1 (this PR)** | Foundation: config, core, infrastructure, ProfileScraper, facade | Everything else |
-| **2** | PostScraper, ReelScraper, CommentScraper | Followers, follow, message, etc. |
+| **1 (shipped)** | Foundation: config, core, infrastructure, ProfileScraper, facade | Everything else |
+| **2 (this PR)** | MediaScraper (posts + reels — Instagram models them with the same JSON shape, so they share one scraper), CommentScraper | Followers, follow, message, etc. |
 | **3** | FollowersCollector, FollowManager, MessageManager | Hashtag, location, search, explore |
 | **4** | All discovery scrapers | Highlights, stories |
 | **5** | Highlights, stories, notifications | Web API |
@@ -179,6 +179,22 @@ settings.network.proxy_url = "http://user:pass@host:8080"
 with InstaHarvest(settings) as ih:
     profile = ih.profile.scrape("instagram")
     print(profile.followers, profile.is_verified)
+
+    # Phase 2 — posts and reels share one scraper
+    media = ih.media.scrape("https://www.instagram.com/p/ABC1234/")
+    print(media.kind, media.like_count)        # MediaKind.IMAGE  4521
+    print(media.owner.username, media.caption)
+
+    reel = ih.media.scrape("https://www.instagram.com/reel/XYZ4567/")
+    print(reel.kind, reel.video_duration)      # MediaKind.REEL   12.5
+
+    # Phase 2 — comments with replies, fully paginated
+    page = ih.comments.scrape(media, max_comments=200, include_replies=True)
+    print(page.total_returned, page.has_more)
+    for comment in page.comments:
+        print(f"@{comment.author.username}: {comment.text}")
+        for reply in comment.replies:
+            print(f"  ↳ @{reply.author.username}: {reply.text}")
 ```
 
 No god-config. No 70-method facade. No four HTTP stacks. One way in,

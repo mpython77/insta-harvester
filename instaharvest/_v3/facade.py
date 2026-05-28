@@ -38,6 +38,8 @@ from instaharvest._v3.infrastructure.browser import PlaywrightBrowserSession
 from instaharvest._v3.infrastructure.http import CurlHttpClient
 from instaharvest._v3.infrastructure.logger import get_logger
 from instaharvest._v3.infrastructure.session import FileSessionStore
+from instaharvest._v3.scrapers.comments import CommentScraper
+from instaharvest._v3.scrapers.media import MediaScraper
 from instaharvest._v3.scrapers.profile import ProfileScraper
 
 
@@ -81,6 +83,8 @@ class InstaHarvest:
 
         # Scraper cache — built on first access
         self._profile: Optional[ProfileScraper] = None
+        self._media: Optional[MediaScraper] = None
+        self._comments: Optional[CommentScraper] = None
 
     # ------------------------------------------------------------------
     # Public properties
@@ -126,6 +130,39 @@ class InstaHarvest:
                 selectors=self._settings.selectors.profile,
             )
         return self._profile
+
+    @property
+    def media(self) -> MediaScraper:
+        """MediaScraper for ``ih.media.scrape(url_or_shortcode)``.
+
+        Returns a :class:`Media` covering posts and reels (Instagram
+        models them with the same JSON shape; v3 mirrors that).
+        """
+        if self._media is None:
+            self._media = MediaScraper(
+                browser=self.browser,
+                http=self._http,
+                logger=self._logger,
+                rate_limit=self._settings.rate_limit,
+                selectors=self._settings.selectors.media,
+            )
+        return self._media
+
+    @property
+    def comments(self) -> CommentScraper:
+        """CommentScraper for ``ih.comments.scrape(media_or_shortcode)``.
+
+        API-only path; pagination is resolved internally and returned
+        as a single :class:`CommentsPage`.
+        """
+        if self._comments is None:
+            self._comments = CommentScraper(
+                http=self._http,
+                logger=self._logger,
+                rate_limit=self._settings.rate_limit,
+                selectors=self._settings.selectors.comments,
+            )
+        return self._comments
 
     # ------------------------------------------------------------------
     # Lifecycle
