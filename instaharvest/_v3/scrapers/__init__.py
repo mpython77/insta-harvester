@@ -22,6 +22,7 @@ from instaharvest._v3.scrapers.notifications import NotificationsScraper
 from instaharvest._v3.scrapers.profile import ProfileScraper
 from instaharvest._v3.scrapers.search import SearchScraper
 from instaharvest._v3.scrapers.stories import StoryScraper
+from instaharvest._v3.scrapers.web_api import WebAPI
 
 __all__ = [
     "AbstractScraper",
@@ -40,4 +41,5 @@ __all__ = [
     "SearchScraper",
     "StoryScraper",
     "ExploreScraper",
+    "WebAPI",
 ]

@@ -150,8 +150,8 @@ instaharvest/
 | **3 (shipped)** | FollowersScraper (read-only), Actions namespace (opt-in follow/unfollow/DM with dry-run on by default) | Hashtag, location, search, explore |
 | **4 (shipped)** | HashtagScraper, LocationScraper, SearchScraper, ExploreScraper — all API-only, all reusing the shared `paginate_feed` helper | Highlights, stories |
 | **5 (shipped)** | StoryScraper, HighlightScraper, NotificationsScraper, opt-in evasion package (stealth + CAPTCHA + multi-session) | Web API |
-| **6** | Web API (single source for JSON-first reads) | — |
-| **Cleanup** | Delete legacy modules, remove `_v3` namespace prefix | — |
+| **6 (shipped)** | Web API (single source for JSON-first reads) | — |
+| **Cleanup (in progress)** | Legacy modules deprecated (``PendingDeprecationWarning``), removal deferred to 4.0. ``instaharvest.v3`` is the canonical import path. | — |
 
 Each phase ships independently. `instaharvest.__init__` always re-exports
 both, with a one-line deprecation note for legacy paths. The public API
