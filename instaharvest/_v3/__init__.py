@@ -53,6 +53,14 @@ from instaharvest._v3.core.models import (
     FriendshipStatus,
     ActionResult,
     ActionStatus,
+    Hashtag,
+    Location,
+    MediaFeed,
+    FeedSource,
+    SearchResult,
+    SearchUserHit,
+    SearchHashtagHit,
+    SearchPlaceHit,
 )
 from instaharvest._v3.core.protocols import (
     HttpClient,
@@ -62,6 +70,8 @@ from instaharvest._v3.core.protocols import (
 )
 
 from instaharvest._v3.facade import InstaHarvest
+from instaharvest._v3.scrapers.hashtag import HashtagNotFoundError
+from instaharvest._v3.scrapers.location import LocationNotFoundError
 from instaharvest._v3.scrapers.media import MediaNotFoundError
 
 __all__ = [
@@ -86,6 +96,8 @@ __all__ = [
     "RateLimitedError",
     "ProfileNotFoundError",
     "MediaNotFoundError",
+    "HashtagNotFoundError",
+    "LocationNotFoundError",
     "HtmlStructureChangedError",
     "ParseError",
     # Models
@@ -105,6 +117,14 @@ __all__ = [
     "FriendshipStatus",
     "ActionResult",
     "ActionStatus",
+    "Hashtag",
+    "Location",
+    "MediaFeed",
+    "FeedSource",
+    "SearchResult",
+    "SearchUserHit",
+    "SearchHashtagHit",
+    "SearchPlaceHit",
     # Protocols
     "HttpClient",
     "BrowserSession",

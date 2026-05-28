@@ -407,3 +407,133 @@ class ActionResult(_FrozenModel):
         not have to do anything to get there.
         """
         return self.status != ActionStatus.ERROR
+
+
+
+# ---------------------------------------------------------------------------
+# Discovery (hashtag, location, search, explore)
+# ---------------------------------------------------------------------------
+
+
+class Hashtag(_FrozenModel):
+    """Metadata for an Instagram hashtag (``#fashionweek``).
+
+    Returned by :meth:`HashtagScraper.lookup`. Does not include the
+    media feed — request that separately via
+    :meth:`HashtagScraper.recent` / :meth:`HashtagScraper.top`.
+    """
+
+    name: str = Field(min_length=1)
+    media_count: int = Field(default=0, ge=0)
+    formatted_media_count: Optional[str] = None  # e.g. "1.2M"
+    profile_pic_url: Optional[HttpUrl] = None
+    is_top_media_only: bool = False
+    allow_following: bool = True
+    is_following: bool = False
+
+
+class Location(_FrozenModel):
+    """Metadata for a tagged Instagram location.
+
+    Returned by :meth:`LocationScraper.lookup`. Like :class:`Hashtag`,
+    media feeds are fetched separately.
+    """
+
+    pk: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    slug: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    short_name: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    media_count: int = Field(default=0, ge=0)
+
+
+class FeedSource(str, Enum):
+    """Where a :class:`MediaFeed` came from.
+
+    ``MediaFeed`` is reused across hashtag, location, and explore so
+    callers know in one type-checked field which API populated it.
+    """
+
+    HASHTAG_TOP = "hashtag_top"
+    HASHTAG_RECENT = "hashtag_recent"
+    LOCATION_RECENT = "location_recent"
+    LOCATION_RANKED = "location_ranked"
+    EXPLORE = "explore"
+
+
+class MediaFeed(_FrozenModel):
+    """A paginated list of :class:`Media`.
+
+    Used by hashtag/location/explore scrapers. ``source_id`` is the
+    tag name, location pk, or the literal ``"explore"`` depending on
+    :attr:`source`.
+    """
+
+    source: FeedSource
+    source_id: str = Field(min_length=1)
+    media: Tuple[Media, ...] = ()
+    total_returned: int = Field(ge=0)
+    has_more: bool = False
+    next_cursor: Optional[str] = None
+
+    @field_validator("total_returned")
+    @classmethod
+    def _total_matches_len(cls, value: int, info) -> int:
+        media = info.data.get("media")
+        if media is not None and value != len(media):
+            raise ValueError(
+                f"total_returned={value} disagrees with len(media)={len(media)}"
+            )
+        return value
+
+
+# Search ----------------------------------------------------------------
+
+
+class SearchUserHit(_FrozenModel):
+    """A user appearing in :class:`SearchResult.users`."""
+
+    username: str = Field(min_length=1)
+    user_id: Optional[str] = None
+    full_name: Optional[str] = None
+    is_verified: bool = False
+    is_private: bool = False
+    profile_pic_url: Optional[HttpUrl] = None
+    follower_count: int = Field(default=0, ge=0)
+
+
+class SearchHashtagHit(_FrozenModel):
+    """A hashtag appearing in :class:`SearchResult.hashtags`."""
+
+    name: str = Field(min_length=1)
+    media_count: int = Field(default=0, ge=0)
+    formatted_media_count: Optional[str] = None
+
+
+class SearchPlaceHit(_FrozenModel):
+    """A place / location appearing in :class:`SearchResult.places`."""
+
+    pk: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    short_name: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+class SearchResult(_FrozenModel):
+    """Aggregated topsearch result.
+
+    Mirrors Instagram's ``topsearch_flat`` response: three buckets of
+    typed hits keyed by category, plus the original query text for
+    diagnostics.
+    """
+
+    query: str = Field(min_length=1)
+    users: Tuple[SearchUserHit, ...] = ()
+    hashtags: Tuple[SearchHashtagHit, ...] = ()
+    places: Tuple[SearchPlaceHit, ...] = ()
