@@ -502,9 +502,14 @@ class CaptchaSolver:
                     key = src.split('k=')[1].split('&')[0]
                     return key
 
-            # Use known Instagram keys
-            for key in self.INSTAGRAM_SITE_KEYS:
-                return key  # Return first known key
+            # Use known Instagram keys.
+            # We pick the first known key as a best-effort fallback when
+            # the page does not expose its own data-sitekey/iframe src.
+            # The original code wrote ``for key in ...: return key`` which
+            # made the loop dead — replace with an explicit ``[0]`` so the
+            # intent is unambiguous and the linter does not warn.
+            if self.INSTAGRAM_SITE_KEYS:
+                return self.INSTAGRAM_SITE_KEYS[0]
 
         except Exception:
             pass

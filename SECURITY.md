@@ -1,58 +1,108 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-InstaHarvest is currently supporting the following versions with security updates:
+| Version | Status |
+| ------- | ------ |
+| 2.x     | Active. Security patches accepted. |
+| < 2.0   | Unsupported. |
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 2.6.x   | :white_check_mark: |
-| 2.5.x   | :white_check_mark: |
-| < 2.5   | :x:                |
+The latest release is on [PyPI](https://pypi.org/project/instaharvest/).
+We do not maintain a long list of patched minor versions; users should
+update to the most recent 2.x release to receive fixes.
 
+## Reporting a vulnerability
 
-We recommend always using the latest version available on [PyPI](https://pypi.org/project/instaharvest/).
+Please **do not** file a public GitHub issue for security problems.
+Instead, email <kelajak054@gmail.com> with:
 
-## Reporting a Vulnerability
+- a clear description of the issue,
+- steps (or a minimal proof of concept) to reproduce,
+- the version/commit you tested against,
+- whatever impact assessment you have,
+- whether you would like to be credited and how.
 
-We take security seriously. If you discover a security vulnerability in InstaHarvest, please report it responsibly.
+We aim to acknowledge reports within 5 business days. Coordinated
+disclosure timelines are negotiable; we will not credit you without
+your consent.
 
-### How to Report
+## Threat model — what this library exposes
 
-1. **Email**: Send details to [kelajak054@gmail.com](mailto:kelajak054@gmail.com)
-2. **GitHub Issues**: For non-critical issues, you can also [open an issue](https://github.com/mpython77/insta-harvester/issues)
+InstaHarvest drives a real Instagram session through a browser. Anyone
+who can read your filesystem while it is running can read your session.
+You are responsible for the operational hygiene around it. In
+particular:
 
-### What to Include
+### Session data is sensitive
 
-When reporting a vulnerability, please include:
+`instagram_session.json` (and any encrypted variant) contains live
+Instagram authentication cookies. Anyone with that file can act as you
+on Instagram until the session is invalidated. Treat it like a
+password file:
 
-- Description of the vulnerability
-- Steps to reproduce the issue
-- Potential impact
-- Suggested fix (if available)
-- Your contact information
+- never commit it to a repository (it is in `.gitignore`; keep it
+  there);
+- restrict its filesystem permissions on shared hosts;
+- delete it when you are done.
 
-### What to Expect
+### Temporary cookie files
 
-- **Initial Response**: Within 48 hours of your report
-- **Status Updates**: We'll keep you informed as we investigate and address the issue
-- **Resolution Timeline**: We aim to resolve critical vulnerabilities within 7 days
-- **Credit**: If you wish, we'll acknowledge your contribution in the fix release notes
+Older releases (≤ 2.16) wrote a Netscape-format cookie file under
+`/tmp` for `yt-dlp` and never removed it. That bug is fixed in
+the v3 infrastructure (`FileSessionStore.temp_cookie_file()` always
+unlinks on context-manager exit, including on exception) and in the
+legacy `downloader.py` path (try/finally cleanup). If you have older
+output directories from earlier runs, audit them for leftover
+`ig_cookies_*.txt` files and remove them.
 
-### Security Best Practices
+### Proxy lists and `proxy.load_from_url`
 
-When using InstaHarvest:
+The legacy `ProxyManager.load_from_url(url)` fetches a proxy list from
+an arbitrary URL with no validation. If the URL is attacker-controlled,
+your traffic can be silently routed through their infrastructure. Only
+load proxy lists from sources you trust.
 
-1. **Session Files**: Keep your `instagram_session.json` file secure and never commit it to version control
-2. **Rate Limiting**: Always use `ScraperConfig` with appropriate delays to avoid Instagram rate limiting
-3. **Account Safety**: Use dedicated accounts for automation, not your personal account
-4. **Updates**: Regularly update to the latest version to get security patches
-5. **Terms of Service**: Follow Instagram's Terms of Service and use responsibly
+### Anti-detection capabilities
 
-## Disclosure Policy
+The legacy tree contains modules whose explicit purpose is to evade
+Instagram's automated abuse detection: `stealth.py` (fingerprint
+masking, humanised input), `captcha_solver.py` (paid third-party
+CAPTCHA bypass), `proxy.py` (rotating proxies), and `session_manager.py`
+(multi-account rotation). These features are off by default in v3 and
+must be opted into. Using them is your decision and your legal risk;
+we accept security reports about *implementation flaws* in these
+modules, but a report whose only finding is "this library can scrape
+Instagram" is not a vulnerability.
 
-- We request that you do not publicly disclose the vulnerability until we've had a chance to address it
-- Once fixed, we'll coordinate with you on the disclosure timeline
-- We'll credit researchers who responsibly disclose vulnerabilities (unless you prefer to remain anonymous)
+### Debug snapshots
 
-Thank you for helping keep InstaHarvest and its users safe!
+Both legacy and v3 may write HTML snapshots of pages they could not
+parse, to help you diagnose breakage. Those snapshots can contain
+content you were logged in to view (DM previews, private posts, etc.).
+The default snapshot directory is in `.gitignore`; if you change it,
+make sure your new path is also ignored.
+
+## Operational guidance
+
+- **Use a dedicated Instagram account.** Automation increases the
+  chance of bans. Don't risk your personal or business primary
+  account.
+- **Use realistic pacing.** The defaults in v3 (`RateLimitConfig`)
+  err on the conservative side. Lowering them aggressively is the
+  single most reliable way to get rate-limited or banned.
+- **Update regularly.** Instagram changes its DOM and JSON shapes
+  often. We patch selectors and parsers in response; running an old
+  release is the most common source of user-visible breakage.
+- **Pin a known-good version in production.** v3 is the supported
+  API surface; legacy v2 is kept for backwards compatibility but
+  is not the path forward.
+
+## Disclosure policy
+
+- We ask that you do not publicly disclose a vulnerability before we
+  have had a chance to address it.
+- Once a fix is released, we will reference your report in the
+  release notes (with credit, if you accept it).
+- We do not currently offer monetary rewards for security reports.
+
+Thank you for helping keep InstaHarvest safer for everyone who uses it.
