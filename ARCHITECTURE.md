@@ -127,6 +127,14 @@ instaharvest/
 │       ├── base.py                  # AbstractScraper (uses protocols only)
 │       └── profile.py               # ProfileScraper (reference implementation)
 │
+│   ├── evasion/
+│   │   ├── __init__.py              # Opt-in re-exports
+│   │   ├── config.py                # EvasionConfig (frozen dataclass)
+│   │   ├── facade.py                # EvasionManager
+│   │   ├── stealth_adapter.py       # StealthAdapter wraps legacy stealth.py
+│   │   ├── captcha_adapter.py       # CaptchaAdapter wraps legacy captcha_solver.py
+│   │   └── multi_session.py         # MultiSessionAdapter wraps legacy session_manager.py
+│
 ├── (legacy modules — kept until migrated)
 └── __init__.py                      # Exports both v3 and legacy
 ```
@@ -140,8 +148,8 @@ instaharvest/
 | **1 (shipped)** | Foundation: config, core, infrastructure, ProfileScraper, facade | Everything else |
 | **2 (shipped)** | MediaScraper (posts + reels — Instagram models them with the same JSON shape, so they share one scraper), CommentScraper | Followers, follow, message, etc. |
 | **3 (shipped)** | FollowersScraper (read-only), Actions namespace (opt-in follow/unfollow/DM with dry-run on by default) | Hashtag, location, search, explore |
-| **4 (this PR)** | HashtagScraper, LocationScraper, SearchScraper, ExploreScraper — all API-only, all reusing the shared `paginate_feed` helper | Highlights, stories |
-| **5** | Highlights, stories, notifications | Web API |
+| **4 (shipped)** | HashtagScraper, LocationScraper, SearchScraper, ExploreScraper — all API-only, all reusing the shared `paginate_feed` helper | Highlights, stories |
+| **5 (shipped)** | StoryScraper, HighlightScraper, NotificationsScraper, opt-in evasion package (stealth + CAPTCHA + multi-session) | Web API |
 | **6** | Web API (single source for JSON-first reads) | — |
 | **Cleanup** | Delete legacy modules, remove `_v3` namespace prefix | — |
 
@@ -210,6 +218,25 @@ with InstaHarvest(settings) as ih:
     print(len(hits.users), len(hits.hashtags), len(hits.places))
 
     explore_feed = ih.explore.feed(max_items=30)
+
+    # Phase 5 — stories, highlights, notifications
+    stories = ih.stories.get_stories(["12345678"])
+    for slide in stories.slides:
+        print(slide.media_type, slide.image_url)
+
+    highlights = ih.highlights.list_highlights("12345678")
+    for h in highlights.highlights:
+        slides = ih.highlights.get_highlight(h.pk)
+        print(f"{h.title}: {len(slides)} slides")
+
+    activity = ih.notifications.feed(max_items=20)
+    for n in activity.notifications:
+        print(f"{n.notification_type.value}: {n.text}")
+
+    # Phase 5 — evasion (opt-in, disabled by default)
+    # settings = replace(settings, evasion=EvasionConfig(
+    #     enabled=True, stealth_enabled=True,
+    # ))
 
     # Phase 3 — write operations (opt-in!)
     # By default ih.actions raises ConfigError. To enable:

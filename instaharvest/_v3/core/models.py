@@ -537,3 +537,188 @@ class SearchResult(_FrozenModel):
     users: Tuple[SearchUserHit, ...] = ()
     hashtags: Tuple[SearchHashtagHit, ...] = ()
     places: Tuple[SearchPlaceHit, ...] = ()
+
+
+# ---------------------------------------------------------------------------
+# Stories
+# ---------------------------------------------------------------------------
+
+
+class StorySlide(_FrozenModel):
+    """One slide of an active Instagram story."""
+
+    id: str = Field(min_length=1)
+    user_id: str
+    username: str = Field(min_length=1)
+    taken_at: datetime
+    expiring_at: datetime
+    media_type: str = Field(pattern="^(image|video)$")
+    image_url: Optional[HttpUrl] = None
+    video_url: Optional[HttpUrl] = None
+    video_duration: Optional[float] = Field(default=None, ge=0)
+    width: int = Field(default=0, ge=0)
+    height: int = Field(default=0, ge=0)
+    has_audio: bool = False
+    mentions: Tuple[str, ...] = ()
+    link_stickers: Tuple[str, ...] = ()
+    is_reel_mention: bool = False
+
+    @field_validator("taken_at", "expiring_at", mode="before")
+    @classmethod
+    def _coerce_timestamps(cls, value):
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+
+class StoryFeed(_FrozenModel):
+    """All active story slides for a user."""
+
+    user_id: str = Field(min_length=1)
+    username: str = Field(min_length=1)
+    slides: Tuple[StorySlide, ...] = ()
+    total_returned: int = Field(ge=0)
+    has_expired: bool = False
+
+    @field_validator("total_returned")
+    @classmethod
+    def _total_matches_len(cls, value: int, info) -> int:
+        slides = info.data.get("slides")
+        if slides is not None and value != len(slides):
+            raise ValueError(
+                f"total_returned={value} disagrees with len(slides)={len(slides)}"
+            )
+        return value
+
+
+# ---------------------------------------------------------------------------
+# Highlights
+# ---------------------------------------------------------------------------
+
+
+class Highlight(_FrozenModel):
+    """Metadata for a single highlight reel."""
+
+    pk: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    cover_url: Optional[HttpUrl] = None
+    created_at: Optional[datetime] = None
+    media_count: int = Field(default=0, ge=0)
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _coerce_created_at(cls, value):
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+
+class HighlightSlide(_FrozenModel):
+    """One slide within a highlight reel."""
+
+    id: str = Field(min_length=1)
+    user_id: str
+    username: str = Field(min_length=1)
+    taken_at: datetime
+    expiring_at: datetime
+    media_type: str = Field(pattern="^(image|video)$")
+    image_url: Optional[HttpUrl] = None
+    video_url: Optional[HttpUrl] = None
+    video_duration: Optional[float] = Field(default=None, ge=0)
+    width: int = Field(default=0, ge=0)
+    height: int = Field(default=0, ge=0)
+    has_audio: bool = False
+    mentions: Tuple[str, ...] = ()
+    link_stickers: Tuple[str, ...] = ()
+    is_reel_mention: bool = False
+    highlight_pk: str = Field(min_length=1)
+
+    @field_validator("taken_at", "expiring_at", mode="before")
+    @classmethod
+    def _coerce_timestamps(cls, value):
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+
+class HighlightsList(_FrozenModel):
+    """All highlights for a user."""
+
+    user_id: str = Field(min_length=1)
+    highlights: Tuple[Highlight, ...] = ()
+    total_returned: int = Field(ge=0)
+
+    @field_validator("total_returned")
+    @classmethod
+    def _total_matches_len(cls, value: int, info) -> int:
+        highlights = info.data.get("highlights")
+        if highlights is not None and value != len(highlights):
+            raise ValueError(
+                f"total_returned={value} disagrees with len(highlights)={len(highlights)}"
+            )
+        return value
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+
+class NotificationType(str, Enum):
+    """Category of an Instagram notification."""
+
+    LIKE = "like"
+    COMMENT = "comment"
+    FOLLOW = "follow"
+    MENTION = "mention"
+    COMMENT_LIKE = "comment_like"
+    FOLLOW_REQUEST = "follow_request"
+    OTHER = "other"
+
+
+class Notification(_FrozenModel):
+    """A single notification entry."""
+
+    id: str = Field(min_length=1)
+    notification_type: NotificationType
+    text: str
+    timestamp: datetime
+    usernames: Tuple[str, ...] = ()
+    profile_pic_url: Optional[HttpUrl] = None
+    media_shortcode: Optional[str] = None
+    is_grouped: bool = False
+    group_count: int = Field(default=0, ge=0)
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _coerce_timestamp(cls, value):
+        if isinstance(value, (int, float)):
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+
+class NotificationFeed(_FrozenModel):
+    """Paginated notification feed."""
+
+    notifications: Tuple[Notification, ...] = ()
+    total_returned: int = Field(ge=0)
+    has_more: bool = False
+    next_cursor: Optional[str] = None
+
+    @field_validator("total_returned")
+    @classmethod
+    def _total_matches_len(cls, value: int, info) -> int:
+        notifications = info.data.get("notifications")
+        if notifications is not None and value != len(notifications):
+            raise ValueError(
+                f"total_returned={value} disagrees with len(notifications)={len(notifications)}"
+            )
+        return value

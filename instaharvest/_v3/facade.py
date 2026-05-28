@@ -39,14 +39,18 @@ from instaharvest._v3.infrastructure.browser import PlaywrightBrowserSession
 from instaharvest._v3.infrastructure.http import CurlHttpClient
 from instaharvest._v3.infrastructure.logger import get_logger
 from instaharvest._v3.infrastructure.session import FileSessionStore
+from instaharvest._v3.evasion import EvasionManager
 from instaharvest._v3.scrapers.comments import CommentScraper
 from instaharvest._v3.scrapers.explore import ExploreScraper
 from instaharvest._v3.scrapers.followers import FollowersScraper
 from instaharvest._v3.scrapers.hashtag import HashtagScraper
+from instaharvest._v3.scrapers.highlights import HighlightScraper
 from instaharvest._v3.scrapers.location import LocationScraper
 from instaharvest._v3.scrapers.media import MediaScraper
+from instaharvest._v3.scrapers.notifications import NotificationsScraper
 from instaharvest._v3.scrapers.profile import ProfileScraper
 from instaharvest._v3.scrapers.search import SearchScraper
+from instaharvest._v3.scrapers.stories import StoryScraper
 
 
 class InstaHarvest:
@@ -97,6 +101,10 @@ class InstaHarvest:
         self._location: Optional[LocationScraper] = None
         self._search: Optional[SearchScraper] = None
         self._explore: Optional[ExploreScraper] = None
+        self._stories: Optional[StoryScraper] = None
+        self._highlights: Optional[HighlightScraper] = None
+        self._notifications: Optional[NotificationsScraper] = None
+        self._evasion: Optional[EvasionManager] = None
 
     # ------------------------------------------------------------------
     # Public properties
@@ -251,6 +259,48 @@ class InstaHarvest:
                 rate_limit=self._settings.rate_limit,
             )
         return self._explore
+
+    @property
+    def stories(self) -> StoryScraper:
+        """StoryScraper for ``ih.stories.get_stories(user_ids)``."""
+        if self._stories is None:
+            self._stories = StoryScraper(
+                http=self._http,
+                logger=self._logger,
+                rate_limit=self._settings.rate_limit,
+            )
+        return self._stories
+
+    @property
+    def highlights(self) -> HighlightScraper:
+        """HighlightScraper for ``ih.highlights.list_highlights(user_id)``."""
+        if self._highlights is None:
+            self._highlights = HighlightScraper(
+                http=self._http,
+                logger=self._logger,
+                rate_limit=self._settings.rate_limit,
+            )
+        return self._highlights
+
+    @property
+    def notifications(self) -> NotificationsScraper:
+        """NotificationsScraper for ``ih.notifications.feed()``."""
+        if self._notifications is None:
+            self._notifications = NotificationsScraper(
+                http=self._http,
+                logger=self._logger,
+            )
+        return self._notifications
+
+    @property
+    def evasion(self) -> EvasionManager:
+        """Opt-in evasion features (stealth, CAPTCHA, multi-session)."""
+        if self._evasion is None:
+            self._evasion = EvasionManager(
+                config=self._settings.evasion,
+                logger=self._logger,
+            )
+        return self._evasion
 
     # ------------------------------------------------------------------
     # Lifecycle
