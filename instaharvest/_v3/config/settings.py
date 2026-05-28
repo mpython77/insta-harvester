@@ -17,6 +17,7 @@ from instaharvest._v3.config.stealth import StealthConfig
 from instaharvest._v3.config.rate_limit import RateLimitConfig
 from instaharvest._v3.config.output import OutputConfig
 from instaharvest._v3.config.selectors import SelectorConfig
+from instaharvest._v3.evasion.config import EvasionConfig
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class Settings:
     output: OutputConfig = field(default_factory=OutputConfig)
     selectors: SelectorConfig = field(default_factory=SelectorConfig)
     actions: ActionsConfig = field(default_factory=ActionsConfig)
+    evasion: EvasionConfig = field(default_factory=EvasionConfig)
 
     @classmethod
     def default(cls) -> "Settings":

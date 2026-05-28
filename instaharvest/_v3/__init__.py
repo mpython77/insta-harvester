@@ -61,6 +61,14 @@ from instaharvest._v3.core.models import (
     SearchUserHit,
     SearchHashtagHit,
     SearchPlaceHit,
+    StorySlide,
+    StoryFeed,
+    Highlight,
+    HighlightSlide,
+    HighlightsList,
+    NotificationType,
+    Notification,
+    NotificationFeed,
 )
 from instaharvest._v3.core.protocols import (
     HttpClient,
@@ -70,6 +78,7 @@ from instaharvest._v3.core.protocols import (
 )
 
 from instaharvest._v3.facade import InstaHarvest
+from instaharvest._v3.evasion.config import EvasionConfig
 from instaharvest._v3.scrapers.hashtag import HashtagNotFoundError
 from instaharvest._v3.scrapers.location import LocationNotFoundError
 from instaharvest._v3.scrapers.media import MediaNotFoundError
@@ -86,6 +95,7 @@ __all__ = [
     "OutputConfig",
     "SelectorConfig",
     "ActionsConfig",
+    "EvasionConfig",
     # Exceptions
     "InstaHarvestError",
     "ConfigError",
@@ -125,6 +135,14 @@ __all__ = [
     "SearchUserHit",
     "SearchHashtagHit",
     "SearchPlaceHit",
+    "StorySlide",
+    "StoryFeed",
+    "Highlight",
+    "HighlightSlide",
+    "HighlightsList",
+    "NotificationType",
+    "Notification",
+    "NotificationFeed",
     # Protocols
     "HttpClient",
     "BrowserSession",
