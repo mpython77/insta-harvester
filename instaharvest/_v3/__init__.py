@@ -82,6 +82,7 @@ from instaharvest._v3.evasion.config import EvasionConfig
 from instaharvest._v3.scrapers.hashtag import HashtagNotFoundError
 from instaharvest._v3.scrapers.location import LocationNotFoundError
 from instaharvest._v3.scrapers.media import MediaNotFoundError
+from instaharvest._v3.scrapers.web_api import WebAPI
 
 __all__ = [
     # Facade
@@ -148,4 +149,6 @@ __all__ = [
     "BrowserSession",
     "SessionStore",
     "Logger",
+    # Web API
+    "WebAPI",
 ]

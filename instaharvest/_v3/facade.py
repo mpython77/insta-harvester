@@ -51,6 +51,7 @@ from instaharvest._v3.scrapers.notifications import NotificationsScraper
 from instaharvest._v3.scrapers.profile import ProfileScraper
 from instaharvest._v3.scrapers.search import SearchScraper
 from instaharvest._v3.scrapers.stories import StoryScraper
+from instaharvest._v3.scrapers.web_api import WebAPI
 
 
 class InstaHarvest:
@@ -105,6 +106,7 @@ class InstaHarvest:
         self._highlights: Optional[HighlightScraper] = None
         self._notifications: Optional[NotificationsScraper] = None
         self._evasion: Optional[EvasionManager] = None
+        self._web_api: Optional[WebAPI] = None
 
     # ------------------------------------------------------------------
     # Public properties
@@ -301,6 +303,21 @@ class InstaHarvest:
                 logger=self._logger,
             )
         return self._evasion
+
+    @property
+    def api(self) -> WebAPI:
+        """Unified low-level Web API client for direct endpoint access.
+
+        Note: WebAPI does not enforce rate limiting. Callers using this
+        in a loop should implement their own pacing to avoid 429
+        responses.
+        """
+        if self._web_api is None:
+            self._web_api = WebAPI(
+                http=self._http,
+                logger=self._logger,
+            )
+        return self._web_api
 
     # ------------------------------------------------------------------
     # Lifecycle

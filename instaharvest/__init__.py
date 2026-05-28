@@ -176,75 +176,194 @@ Quick Start:
         print(f"  {r.highlight_title}: {r.slide_count} slides")
 
 Author: Muydinov Doston
-Version: 2.16.0
+Version: 3.0.0-alpha
 License: MIT
 """
 
-from .config import ScraperConfig
-from .exceptions import (
-    InstagramScraperError,
-    SessionNotFoundError,
-    ProfileNotFoundError,
-    HTMLStructureChangedError,
-    PageLoadError,
-    RateLimitError,
-    LoginRequiredError
-)
-from .base import BaseScraper
-from .profile import ProfileScraper, ProfileData
-from .post_links import InstagramPostLinksScraper, PostLinksScraper
-from .post_data import PostDataScraper, PostData, PostLocation, PostOwner, CarouselSlide
-from .reel_links import ReelLinksScraper
-from .reel_data import ReelDataScraper, ReelData
-from .parallel_scraper import ParallelPostDataScraper
+import warnings as _warnings
+import importlib as _importlib
 
-from .comment_scraper import CommentScraper, PostCommentsData
-from .models import CommentData, CommentAuthor, Collaborator, Comment
-from .exporters import CommentsExporter, RealTimeCommentsExporter, export_comments_to_json, export_comments_to_excel, ExcelExporter
-from .follow import FollowManager
-from .message import MessageManager
-from .followers import FollowersCollector
-from .shared_browser import SharedBrowser
-from .orchestrator import InstagramOrchestrator, quick_scrape
-from .session_utils import (
-    save_session, 
-    check_session_exists, 
-    load_session_data, 
-    get_default_session_path,
-    find_session_file,
-    get_session_save_path,
-    SESSION_FILENAME
-)
-from .stealth import StealthManager
-from .proxy import ProxyManager
-from .logging_config import SmartLogger, get_logger
-from .core import InstaHarvest
-from .notifications import NotificationReader, NotificationItem
-from .webhooks import EventEmitter, FollowerWatcher, Event, EventTypes
-from .batch_downloader import BatchDownloader, DownloadTask, DownloadResult, BatchResult, ProgressTracker
-from .async_engine import AsyncBaseScraper, AsyncProfileScraper, AsyncBatchScraper
-from .hashtag_scraper import HashtagScraper, HashtagResult
-from .story_scraper import StoryScraper, StoryResult, StoryItem, StorySlideInfo
-from .location_scraper import LocationScraper, LocationResult
-from .search_api import SearchAPI, SearchResult
-from .explore_scraper import ExploreScraper, ExploreResult
-from .data_export import DataExporter
-from .tagged_posts import TaggedPostsScraper, TaggedPostData, TaggedPostsResult
-from .highlight_scraper import HighlightsScraper, HighlightResult, HighlightSlide, HighlightSticker, HighlightMusic, HighlightInfo, HighlightsListResult
-from .session_manager import SessionManager, SessionRotationStrategy
-from .captcha_solver import CaptchaSolver, CaptchaProvider
-from .web_api import (
-    InstagramWebAPI, WebProfileData, WebSearchResult, SearchUserResult,
-    FollowUserItem, FollowListResult, FriendshipStatus,
-    FeedPost, UserFeedResult, MediaInfo, CommentItem, CommentsResult,
-    LikerItem, LikersResult, StoryMediaItem, StoriesTrayResult,
-    HighlightInfo as WebHighlightInfo, HighlightsResult, ReelItem, ReelsResult,
-    HashtagSection, LocationSection
-)
-from .exceptions import WebAPIError
+# ---------------------------------------------------------------------------
+# Legacy import mapping: name -> (module_path, attribute_name)
+# These are loaded lazily via __getattr__ with a deprecation warning.
+# ---------------------------------------------------------------------------
+
+_LEGACY_IMPORTS = {
+    # config
+    'ScraperConfig': ('.config', 'ScraperConfig'),
+    # exceptions
+    'InstagramScraperError': ('.exceptions', 'InstagramScraperError'),
+    'SessionNotFoundError': ('.exceptions', 'SessionNotFoundError'),
+    'ProfileNotFoundError': ('.exceptions', 'ProfileNotFoundError'),
+    'HTMLStructureChangedError': ('.exceptions', 'HTMLStructureChangedError'),
+    'PageLoadError': ('.exceptions', 'PageLoadError'),
+    'RateLimitError': ('.exceptions', 'RateLimitError'),
+    'LoginRequiredError': ('.exceptions', 'LoginRequiredError'),
+    'WebAPIError': ('.exceptions', 'WebAPIError'),
+    # base
+    'BaseScraper': ('.base', 'BaseScraper'),
+    # profile
+    'ProfileScraper': ('.profile', 'ProfileScraper'),
+    'ProfileData': ('.profile', 'ProfileData'),
+    # post_links
+    'InstagramPostLinksScraper': ('.post_links', 'InstagramPostLinksScraper'),
+    'PostLinksScraper': ('.post_links', 'PostLinksScraper'),
+    # post_data
+    'PostDataScraper': ('.post_data', 'PostDataScraper'),
+    'PostData': ('.post_data', 'PostData'),
+    'PostLocation': ('.post_data', 'PostLocation'),
+    'PostOwner': ('.post_data', 'PostOwner'),
+    'CarouselSlide': ('.post_data', 'CarouselSlide'),
+    # reel_links
+    'ReelLinksScraper': ('.reel_links', 'ReelLinksScraper'),
+    # reel_data
+    'ReelDataScraper': ('.reel_data', 'ReelDataScraper'),
+    'ReelData': ('.reel_data', 'ReelData'),
+    # parallel_scraper
+    'ParallelPostDataScraper': ('.parallel_scraper', 'ParallelPostDataScraper'),
+    # comment_scraper
+    'CommentScraper': ('.comment_scraper', 'CommentScraper'),
+    'PostCommentsData': ('.comment_scraper', 'PostCommentsData'),
+    # models
+    'CommentData': ('.models', 'CommentData'),
+    'CommentAuthor': ('.models', 'CommentAuthor'),
+    'Collaborator': ('.models', 'Collaborator'),
+    'Comment': ('.models', 'Comment'),
+    # exporters
+    'CommentsExporter': ('.exporters', 'CommentsExporter'),
+    'RealTimeCommentsExporter': ('.exporters', 'RealTimeCommentsExporter'),
+    'export_comments_to_json': ('.exporters', 'export_comments_to_json'),
+    'export_comments_to_excel': ('.exporters', 'export_comments_to_excel'),
+    'ExcelExporter': ('.exporters', 'ExcelExporter'),
+    # follow
+    'FollowManager': ('.follow', 'FollowManager'),
+    # message
+    'MessageManager': ('.message', 'MessageManager'),
+    # followers
+    'FollowersCollector': ('.followers', 'FollowersCollector'),
+    # shared_browser
+    'SharedBrowser': ('.shared_browser', 'SharedBrowser'),
+    # orchestrator
+    'InstagramOrchestrator': ('.orchestrator', 'InstagramOrchestrator'),
+    'quick_scrape': ('.orchestrator', 'quick_scrape'),
+    # session_utils
+    'save_session': ('.session_utils', 'save_session'),
+    'check_session_exists': ('.session_utils', 'check_session_exists'),
+    'load_session_data': ('.session_utils', 'load_session_data'),
+    'get_default_session_path': ('.session_utils', 'get_default_session_path'),
+    'find_session_file': ('.session_utils', 'find_session_file'),
+    'get_session_save_path': ('.session_utils', 'get_session_save_path'),
+    'SESSION_FILENAME': ('.session_utils', 'SESSION_FILENAME'),
+    # stealth
+    'StealthManager': ('.stealth', 'StealthManager'),
+    # proxy
+    'ProxyManager': ('.proxy', 'ProxyManager'),
+    # logging_config
+    'SmartLogger': ('.logging_config', 'SmartLogger'),
+    'get_logger': ('.logging_config', 'get_logger'),
+    # core
+    'InstaHarvest': ('.core', 'InstaHarvest'),
+    # notifications
+    'NotificationReader': ('.notifications', 'NotificationReader'),
+    'NotificationItem': ('.notifications', 'NotificationItem'),
+    # webhooks
+    'EventEmitter': ('.webhooks', 'EventEmitter'),
+    'FollowerWatcher': ('.webhooks', 'FollowerWatcher'),
+    'Event': ('.webhooks', 'Event'),
+    'EventTypes': ('.webhooks', 'EventTypes'),
+    # batch_downloader
+    'BatchDownloader': ('.batch_downloader', 'BatchDownloader'),
+    'DownloadTask': ('.batch_downloader', 'DownloadTask'),
+    'DownloadResult': ('.batch_downloader', 'DownloadResult'),
+    'BatchResult': ('.batch_downloader', 'BatchResult'),
+    'ProgressTracker': ('.batch_downloader', 'ProgressTracker'),
+    # async_engine
+    'AsyncBaseScraper': ('.async_engine', 'AsyncBaseScraper'),
+    'AsyncProfileScraper': ('.async_engine', 'AsyncProfileScraper'),
+    'AsyncBatchScraper': ('.async_engine', 'AsyncBatchScraper'),
+    # hashtag_scraper
+    'HashtagScraper': ('.hashtag_scraper', 'HashtagScraper'),
+    'HashtagResult': ('.hashtag_scraper', 'HashtagResult'),
+    # story_scraper
+    'StoryScraper': ('.story_scraper', 'StoryScraper'),
+    'StoryResult': ('.story_scraper', 'StoryResult'),
+    'StoryItem': ('.story_scraper', 'StoryItem'),
+    'StorySlideInfo': ('.story_scraper', 'StorySlideInfo'),
+    # location_scraper
+    'LocationScraper': ('.location_scraper', 'LocationScraper'),
+    'LocationResult': ('.location_scraper', 'LocationResult'),
+    # search_api
+    'SearchAPI': ('.search_api', 'SearchAPI'),
+    'SearchResult': ('.search_api', 'SearchResult'),
+    # explore_scraper
+    'ExploreScraper': ('.explore_scraper', 'ExploreScraper'),
+    'ExploreResult': ('.explore_scraper', 'ExploreResult'),
+    # data_export
+    'DataExporter': ('.data_export', 'DataExporter'),
+    # tagged_posts
+    'TaggedPostsScraper': ('.tagged_posts', 'TaggedPostsScraper'),
+    'TaggedPostData': ('.tagged_posts', 'TaggedPostData'),
+    'TaggedPostsResult': ('.tagged_posts', 'TaggedPostsResult'),
+    # highlight_scraper
+    'HighlightsScraper': ('.highlight_scraper', 'HighlightsScraper'),
+    'HighlightResult': ('.highlight_scraper', 'HighlightResult'),
+    'HighlightSlide': ('.highlight_scraper', 'HighlightSlide'),
+    'HighlightSticker': ('.highlight_scraper', 'HighlightSticker'),
+    'HighlightMusic': ('.highlight_scraper', 'HighlightMusic'),
+    'HighlightInfo': ('.highlight_scraper', 'HighlightInfo'),
+    'HighlightsListResult': ('.highlight_scraper', 'HighlightsListResult'),
+    # session_manager
+    'SessionManager': ('.session_manager', 'SessionManager'),
+    'SessionRotationStrategy': ('.session_manager', 'SessionRotationStrategy'),
+    # captcha_solver
+    'CaptchaSolver': ('.captcha_solver', 'CaptchaSolver'),
+    'CaptchaProvider': ('.captcha_solver', 'CaptchaProvider'),
+    # web_api (legacy)
+    'InstagramWebAPI': ('.web_api', 'InstagramWebAPI'),
+    'WebProfileData': ('.web_api', 'WebProfileData'),
+    'WebSearchResult': ('.web_api', 'WebSearchResult'),
+    'SearchUserResult': ('.web_api', 'SearchUserResult'),
+    'FollowUserItem': ('.web_api', 'FollowUserItem'),
+    'FollowListResult': ('.web_api', 'FollowListResult'),
+    'FriendshipStatus': ('.web_api', 'FriendshipStatus'),
+    'FeedPost': ('.web_api', 'FeedPost'),
+    'UserFeedResult': ('.web_api', 'UserFeedResult'),
+    'MediaInfo': ('.web_api', 'MediaInfo'),
+    'CommentItem': ('.web_api', 'CommentItem'),
+    'CommentsResult': ('.web_api', 'CommentsResult'),
+    'LikerItem': ('.web_api', 'LikerItem'),
+    'LikersResult': ('.web_api', 'LikersResult'),
+    'StoryMediaItem': ('.web_api', 'StoryMediaItem'),
+    'StoriesTrayResult': ('.web_api', 'StoriesTrayResult'),
+    'WebHighlightInfo': ('.web_api', 'HighlightInfo'),
+    'HighlightsResult': ('.web_api', 'HighlightsResult'),
+    'ReelItem': ('.web_api', 'ReelItem'),
+    'ReelsResult': ('.web_api', 'ReelsResult'),
+    'HashtagSection': ('.web_api', 'HashtagSection'),
+    'LocationSection': ('.web_api', 'LocationSection'),
+}
 
 
-__version__ = '2.16.0'
+def __getattr__(name):
+    if name in _LEGACY_IMPORTS:
+        module_path, attr_name = _LEGACY_IMPORTS[name]
+        mod = _importlib.import_module(module_path, package=__name__)
+        value = getattr(mod, attr_name)
+        _warnings.warn(
+            f"Importing '{name}' directly from 'instaharvest' is deprecated. "
+            f"Use 'from instaharvest.v3 import ...' for the v3 API or "
+            f"'from instaharvest{module_path} import {attr_name}' for legacy code. "
+            f"Legacy imports will be removed in 4.0.",
+            PendingDeprecationWarning,
+            stacklevel=2,
+        )
+        # Cache in module namespace so __getattr__ is not called again
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module 'instaharvest' has no attribute {name!r}")
+
+
+__version__ = '3.0.0-alpha'
 __author__ = 'Muydinov Doston'
 __email__ = 'kelajak054@gmail.com'
 __url__ = 'https://github.com/mpython77/insta-harvester'
@@ -401,6 +520,7 @@ __all__ = [
     'FeedPost',
     'UserFeedResult',
     'MediaInfo',
+    'Comment',
     'CommentItem',
     'CommentsResult',
     'LikerItem',
@@ -408,6 +528,7 @@ __all__ = [
     'StoryMediaItem',
     'StoriesTrayResult',
     'WebHighlightInfo',
+    'HighlightsResult',
     'ReelItem',
     'ReelsResult',
     'HashtagSection',
