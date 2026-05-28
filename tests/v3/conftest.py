@@ -70,8 +70,12 @@ class FakeHttpClient:
     closed: bool = False
 
     def _lookup(self, url: str) -> FakeHttpResponse:
-        if url in self.raise_for_url:
-            raise self.raise_for_url[url]
+        # Exception lookups are prefix-matched, mirroring ``responses``,
+        # so tests can program "any URL starting with X raises" without
+        # having to know the exact ``user_id``-suffix the scraper builds.
+        for prefix, exc in self.raise_for_url.items():
+            if url.startswith(prefix):
+                raise exc
         for prefix, resp in self.responses.items():
             if url.startswith(prefix):
                 return resp

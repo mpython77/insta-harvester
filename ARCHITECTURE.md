@@ -138,8 +138,8 @@ instaharvest/
 | Phase | What moves to v3 | What stays in legacy |
 |---|---|---|
 | **1 (shipped)** | Foundation: config, core, infrastructure, ProfileScraper, facade | Everything else |
-| **2 (this PR)** | MediaScraper (posts + reels — Instagram models them with the same JSON shape, so they share one scraper), CommentScraper | Followers, follow, message, etc. |
-| **3** | FollowersCollector, FollowManager, MessageManager | Hashtag, location, search, explore |
+| **2 (shipped)** | MediaScraper (posts + reels — Instagram models them with the same JSON shape, so they share one scraper), CommentScraper | Followers, follow, message, etc. |
+| **3 (this PR)** | FollowersScraper (read-only), Actions namespace (opt-in follow/unfollow/DM with dry-run on by default) | Hashtag, location, search, explore |
 | **4** | All discovery scrapers | Highlights, stories |
 | **5** | Highlights, stories, notifications | Web API |
 | **6** | Web API (single source for JSON-first reads) | — |
@@ -170,11 +170,11 @@ implementation grows.
 ## 7. How to use v3 (preview)
 
 ```python
+from dataclasses import replace
 from instaharvest._v3 import InstaHarvest, Settings
 
 settings = Settings.default()
-settings.browser.headless = True
-settings.network.proxy_url = "http://user:pass@host:8080"
+settings = replace(settings, browser=replace(settings.browser, headless=True))
 
 with InstaHarvest(settings) as ih:
     profile = ih.profile.scrape("instagram")
@@ -183,19 +183,30 @@ with InstaHarvest(settings) as ih:
     # Phase 2 — posts and reels share one scraper
     media = ih.media.scrape("https://www.instagram.com/p/ABC1234/")
     print(media.kind, media.like_count)        # MediaKind.IMAGE  4521
-    print(media.owner.username, media.caption)
 
     reel = ih.media.scrape("https://www.instagram.com/reel/XYZ4567/")
     print(reel.kind, reel.video_duration)      # MediaKind.REEL   12.5
 
     # Phase 2 — comments with replies, fully paginated
     page = ih.comments.scrape(media, max_comments=200, include_replies=True)
-    print(page.total_returned, page.has_more)
-    for comment in page.comments:
-        print(f"@{comment.author.username}: {comment.text}")
-        for reply in comment.replies:
-            print(f"  ↳ @{reply.author.username}: {reply.text}")
+    for c in page.comments:
+        print(f"@{c.author.username}: {c.text}")
+
+    # Phase 3 — followers list (read-only, always available)
+    followers = ih.followers.list_followers(profile.user_id, max_users=100)
+    print(f"{followers.total_returned} followers")
+
+    # Phase 3 — write operations (opt-in!)
+    # By default ih.actions raises ConfigError. To enable:
+    #
+    # settings = replace(settings, actions=replace(
+    #     settings.actions, enabled=True, dry_run=False,
+    # ))
+    #
+    # And only THEN:
+    # result = ih.actions.follow("instagram")
+    # print(result.status, result.message)
 ```
 
 No god-config. No 70-method facade. No four HTTP stacks. One way in,
-one way out.
+one way out — and write operations require *explicit* opt-in.

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from instaharvest._v3.config.actions import ActionsConfig
 from instaharvest._v3.config.browser import BrowserConfig
 from instaharvest._v3.config.network import NetworkConfig
 from instaharvest._v3.config.stealth import StealthConfig
@@ -38,6 +39,7 @@ class Settings:
     rate_limit: RateLimitConfig = field(default_factory=RateLimitConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     selectors: SelectorConfig = field(default_factory=SelectorConfig)
+    actions: ActionsConfig = field(default_factory=ActionsConfig)
 
     @classmethod
     def default(cls) -> "Settings":

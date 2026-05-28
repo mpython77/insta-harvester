@@ -27,6 +27,7 @@ from types import TracebackType
 from typing import Optional, Type
 
 from instaharvest._v3.config.settings import Settings
+from instaharvest._v3.actions import Actions
 from instaharvest._v3.core.exceptions import SessionNotFoundError
 from instaharvest._v3.core.protocols import (
     BrowserSession,
@@ -39,6 +40,7 @@ from instaharvest._v3.infrastructure.http import CurlHttpClient
 from instaharvest._v3.infrastructure.logger import get_logger
 from instaharvest._v3.infrastructure.session import FileSessionStore
 from instaharvest._v3.scrapers.comments import CommentScraper
+from instaharvest._v3.scrapers.followers import FollowersScraper
 from instaharvest._v3.scrapers.media import MediaScraper
 from instaharvest._v3.scrapers.profile import ProfileScraper
 
@@ -85,6 +87,8 @@ class InstaHarvest:
         self._profile: Optional[ProfileScraper] = None
         self._media: Optional[MediaScraper] = None
         self._comments: Optional[CommentScraper] = None
+        self._followers: Optional[FollowersScraper] = None
+        self._actions: Optional[Actions] = None
 
     # ------------------------------------------------------------------
     # Public properties
@@ -163,6 +167,39 @@ class InstaHarvest:
                 selectors=self._settings.selectors.comments,
             )
         return self._comments
+
+    @property
+    def followers(self) -> FollowersScraper:
+        """FollowersScraper for ``ih.followers.list_followers(user_id)``.
+
+        Read-only. Returns paginated :class:`FollowList`. Use
+        :meth:`FollowersScraper.friendship_status` to check the
+        viewer's relationship with another user.
+        """
+        if self._followers is None:
+            self._followers = FollowersScraper(
+                http=self._http,
+                logger=self._logger,
+                rate_limit=self._settings.rate_limit,
+            )
+        return self._followers
+
+    @property
+    def actions(self) -> Actions:
+        """Write-operation namespace.
+
+        Off by default. See :mod:`instaharvest._v3.actions` package
+        docstring for the two-step opt-in (``Settings.actions.enabled``
+        and ``Settings.actions.dry_run``).
+        """
+        if self._actions is None:
+            self._actions = Actions(
+                http=self._http,
+                logger=self._logger,
+                config=self._settings.actions,
+                followers=self.followers,
+            )
+        return self._actions
 
     # ------------------------------------------------------------------
     # Lifecycle
